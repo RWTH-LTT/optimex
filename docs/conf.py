@@ -207,8 +207,8 @@ html_theme_options = {
     "use_edit_page_button": True,
     "navigation_with_keys": True,
     "logo": {
-        "image_light": "bw_timex_light_rtd.svg",
-        "image_dark": "bw_timex_dark_rtd.svg",
+        "image_light": "optimex_light_rtd.svg",
+        "image_dark": "optimex_dark_rtd.svg",
     },
 }
 
