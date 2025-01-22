@@ -130,4 +130,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# sensitive files
 notebooks/import_ecoinvent.ipynb
+notebooks/premise_usage.ipynb
