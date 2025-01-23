@@ -6,7 +6,7 @@ import bw2calc as bc
 import bw2data as bd
 import numpy as np
 import pandas as pd
-from dynamic_characterization import characterize_dynamic_inventory
+from dynamic_characterization import characterize
 from tqdm import tqdm
 
 
@@ -560,7 +560,7 @@ class Optimex:
             df["date"] = df["date"].astype("datetime64[s]")
 
             # dynamic characterization needs dates in datetime64 format
-            df_characterized = characterize_dynamic_inventory(
+            df_characterized = characterize(
                 df,
                 metric=metric,
                 fixed_time_horizon=True,
