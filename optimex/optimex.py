@@ -320,17 +320,14 @@ class Optimex:
         db = bd.Database(name=db_name)
         inventory_tensor = {}
         elementary_flows = {}
+        activity_cache = {}
 
         # Cache activity objects by looking up intermediate flows in the database
-        try:
-            activity_cache = {
-                key: db.get(code=key) for key in intermediate_flows.keys()
-            }
-        except Exception as e:
-            logging.error(
-                f"Error fetching activities from database {db_name}: {str(e)}"
-            )
-            return {}, {}  # Return empty tensors in case of error
+        for key in intermediate_flows.keys():
+            try:
+                activity_cache[key] = db.get(code=key)
+            except Exception as e:  # Catch exceptions (e.g., if key is not valid)
+                logging.warning(f"Failed to get activity for key '{key}': {e}")
         function_unit_dict = {activity: 1 for activity in activity_cache.values()}
 
         lca = bc.LCA(function_unit_dict, method)
