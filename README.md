@@ -19,6 +19,12 @@
 [pre-commit]: https://github.com/pre-commit/pre-commit
 [black]: https://github.com/psf/black
 
+## Overview
+
+This is a python package for time-explicit Life Cylce Optimization that helps you identify transition pathways of systems with minimal environmental impacts.
+
+*Please note that this is an early access version developed during my master thesis. While it's functional, it’s not fully configured to handle all use cases yet.*
+
 ## Installation
 
 You can install _optimex_ via [pip] from [PyPI]:
@@ -70,3 +76,21 @@ and [running the build command](https://www.sphinx-doc.org/en/master/man/sphinx-
 ```bash
 sphinx-build docs _build/html --builder=html --jobs=auto --write-all; open _build/html/index.html
 ```
+
+## Acknowledgments
+
+We’d like to thank the authors and contributors of the following key packages that _optimex_ is based on:
+
+- [**pyomo**](https://github.com/Pyomo/pyomo)
+- [**brightway2.5**](https://github.com/brightway-lca/brightway25)
+
+Additionally, we want to give a shoutout to the pioneering ideas and contributions from the following works:
+
+- [**bw_timex**](https://github.com/brightway-lca/bw_timex)
+- [**pulpo**](https://github.com/flechtenberg/pulpo)
+- [**premise**](https://github.com/polca/premise)
+
+## Support
+If you have any questions or need help, do not hesitate to contact us:
+- Jan Tautorus ([jan.tautorus@rwth-aachen.de](mailto:jan.tautorus@rwth-aachen.de))
+- Timo Diepers ([timo.diepers@ltt.rwth-aachen.de](mailto:timo.diepers@ltt.rwth-aachen.de))
