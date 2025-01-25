@@ -13,11 +13,11 @@ from optimex.converter import ModelInputs
 
 def create_model(inputs: ModelInputs, name: str) -> pyo.ConcreteModel:
     """
-    Build an abstract model with all elements required to solve the optimization
+    Build a concrete model with all elements required to solve the optimization
     problem.
 
     Returns:
-        pyo.AbstractModel: Abstract model for optimization problem
+        pyo.ConcreteModel: Concrete model for optimization problem
     """
     model = pyo.ConcreteModel(name=name)
 

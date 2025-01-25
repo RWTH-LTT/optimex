@@ -10,6 +10,9 @@ class PostProcessor:
         self.df_production = None
         self.df_demand = None
 
+    def get_impact(self) -> float:
+        return self.m.OBJ()
+
     def get_scaling(self) -> pd.DataFrame:
         scaling_matrix = {
             (t, p): self.m.scaling[p, t].value

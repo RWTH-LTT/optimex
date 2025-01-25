@@ -242,10 +242,10 @@ class Optimex:
                 self._process_time.update(
                     year for year in years if year not in self._process_time
                 )
-                amounts = temporal_dist.amount
+                temporal_factor = temporal_dist.amount
 
                 # Skip if temporal distribution is missing or invalid
-                if not years.any() or not amounts.any():
+                if not years.any() or not temporal_factor.any():
                     continue
 
                 # Determine the tensor type (technosphere or biosphere)
@@ -257,24 +257,25 @@ class Optimex:
                 if type == "technosphere":
                     technosphere_tensor.update(
                         {
-                            (act["code"], input_code, year): amount
-                            for year, amount in zip(years, amounts)
+                            (act["code"], input_code, year): exc["amount"] * factor
+                            for year, factor in zip(years, temporal_factor)
                         }
                     )
                     self._intermediate_flows.setdefault(input_code, input_name)
                 elif type == "biosphere":
                     biosphere_tensor.update(
                         {
-                            (act["code"], input_code, year): amount
-                            for year, amount in zip(years, amounts)
+                            (act["code"], input_code, year): exc["amount"] * factor
+                            for year, factor in zip(years, temporal_factor)
                         }
                     )
                     self._elementary_flows.setdefault(input_code, input_name)
                 elif type == "production":
                     production_tensor.update(
                         {
-                            (act["code"], act["functional flow"], year): amount
-                            for year, amount in zip(years, amounts)
+                            (act["code"], act["functional flow"], year): exc["amount"]
+                            * factor
+                            for year, factor in zip(years, temporal_factor)
                         }
                     )
 
