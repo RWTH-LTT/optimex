@@ -1,4 +1,5 @@
 import logging
+import pickle
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 
@@ -374,16 +375,7 @@ class Optimex:
 
     def parallel_inventory_tensor_calculation(self, cutoff=1e4, n_jobs=None) -> dict:
         """
-        Calculate the inventory tensor for the background databases in parallel using
-        ProcessPoolExecutor.
-
-        Parameters
-        ----------
-        cutoff : float, optional
-            The cutoff value based on lca.to_dataframe(), by default 1e4
-        n_jobs : int, optional
-            The number of jobs to run in parallel, by default None
-            (use all available cores)
+        Not yet implemented. Could improve performance significantly by parallelizing
         """
         raise NotImplementedError("This method is not yet functionally implemented.")
 
@@ -435,7 +427,8 @@ class Optimex:
         Parameters
         ----------
         cutoff : float, optional
-            The cutoff value based on lca.to_dataframe(), by default 1e4
+            The cutoff value based on lca.to_dataframe(). Defaults to 1e4 meaning
+            only the top 10,000 flows orderer by impact will be considered.
         """
         results = []
 
@@ -462,14 +455,46 @@ class Optimex:
 
         return self._background_inventory
 
-    def load_inventory_tensors(self, inventory_tensor: dict):
+    def load_inventory_tensors(self, file_path: str) -> None:
+        """
+
+        Load the inventory tensors from a pickle file and update the background
+        inventory and elementary flows. WARNING: Don't try to unpickle untrusted data,
+        only use this for reloading pre-calculated inventory tensors from yourself.
+
+        Parameters
+        ----------
+        file_path : str
+            The path to the pickle file containing the inventory tensors.
+        """
+
+        # Load the inventory tensor from the pickle file
+        with open(file_path, "rb") as file:
+            inventory_tensor = pickle.load(file)
+
+        # Update the background inventory with the loaded tensor
         self._background_inventory = inventory_tensor
+
+        # Update the elementary flows dictionary with names from the biosphere database
         for key in inventory_tensor.keys():
             _, _, elementary_flow_code = key
             if elementary_flow_code not in self._elementary_flows:
                 self._elementary_flows[elementary_flow_code] = self.biosphere_db.get(
                     code=elementary_flow_code
                 )["name"]
+        return self._background_inventory
+
+    def save_inventory_tensors(self, file_path: str) -> None:
+        """
+        Save the inventory tensors to a pickle file for later use.
+
+        Parameters
+        ----------
+        file_path : str
+            The path to the pickle file where the inventory tensors will be saved.
+        """
+        with open(file_path, "wb") as file:
+            pickle.dump(self._background_inventory, file)
 
     def construct_mapping_matrix(self) -> dict:
         """
