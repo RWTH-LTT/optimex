@@ -23,7 +23,6 @@ class PostProcessor:
         df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process"])
         df = df.reset_index()
         df_pivot = df.pivot(index="Time", columns="Process", values="Value")
-        df_pivot = df_pivot[(df_pivot.T != 0).any()]
         self.df_scaling = df_pivot
         return self.df_scaling
 
@@ -126,7 +125,6 @@ class PostProcessor:
             df.index = pd.MultiIndex.from_tuples(df.index, names=["Process", "Time"])
             df = df.reset_index()
             df_pivot = df.pivot(index="Time", columns="Process", values="Value")
-            df_pivot = df_pivot[(df_pivot.T != 0).any()]
             self.dfs_production[f] = df_pivot
         return self.dfs_production
 
