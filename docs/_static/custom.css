@@ -2,6 +2,16 @@
     margin: 0px !important; /* Prevents unnecessary scroll bars in the navigation */
 }
 
+html[data-theme="light"] {
+    --pst-color-primary: #00549f;
+    --pst-color-secondary: #f6a800;
+}
+
+html[data-theme="dark"] {
+    --pst-color-primary: #8ebae5;
+    --pst-color-secondary: #fdd48f;
+}
+
 body {
     width: 100vw;
     margin-right: calc(100vw - 100%);
