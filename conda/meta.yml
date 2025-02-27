@@ -1,0 +1,53 @@
+# The regex used is a bit different from original documenation:
+# https://docs.conda.io/projects/conda-build/en/latest/resources/define-metadata.html#loading-data-from-other-files
+# Originald documentation implies that the __init__.py only has one line with __version__
+{% set version_match = load_file_regex(load_file="bw_timex_app/__init__.py",
+regex_pattern='(?:.*)__version__ = "(.+)"') %}
+{% set version = version_match[1] %}
+# conda build --output-folder ./conda-out/ ./conda/ -c conda-forge -c cmutel -c diepers
+
+package:
+  name: "optimex"
+  version: {{ version }}
+
+about:
+  summary: "Python Package for Time-Explicit Life Cycle Optimization"
+  home: "https://github.com/TimoDiepers/optimex"
+  license: "BSD-3-Clause"
+  license_family: "BSD"
+  license_file: "LICENSE"
+  license_url: "https://github.com/TimoDiepers/optimex/blob/main/LICENSE"
+  doc_url: "https://optimex.readthedocs.io"
+
+
+requirements:
+  build:
+    - python
+    - setuptools
+  run:
+    - dynamic_characterization
+    - premise
+    - brightway25
+    - tqdm
+    - pyomo
+
+
+source:
+  path: ..
+
+build:
+  noarch: python
+  script:
+    - rm -rf $SRC_DIR/docs
+    - rm -rf $SRC_DIR/notebooks
+    - rm -rf $SRC_DIR/dev
+    - {{ PYTHON }} -m pip install . --no-deps -vv
+  exclude_files:
+    - docs/*
+    - dev/*
+    - notebooks/*
+    - archive/*
+    
+files:
+  include:
+    - optimex/**
