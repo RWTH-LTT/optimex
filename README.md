@@ -1,29 +1,18 @@
-# optimex
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/optimex_dark_nomargins.svg" height="50">
+    <img alt="optimex logo" src="docs/_static/optimex_light_nomargins.svg" height="50">
+  </picture>
+</h1>
 
-[![PyPI](https://img.shields.io/pypi/v/optimex.svg)][pypi status]
-[![Status](https://img.shields.io/pypi/status/optimex.svg)][pypi status]
-[![Python Version](https://img.shields.io/pypi/pyversions/optimex)][pypi status]
-[![License](https://img.shields.io/pypi/l/optimex)][license]
+> *Please note that this is an early access version developed during the master thesis of [@JanTautorus](https://github.com/JanTautorus). While it's functional, it’s not fully configured to handle all use cases yet.*
 
-[![Read the documentation at https://optimex.readthedocs.io/](https://img.shields.io/readthedocs/optimex/latest.svg?label=Read%20the%20Docs)][read the docs]
-[![Tests](https://github.com/TimoDiepers/optimex/actions/workflows/python-test.yml/badge.svg)][tests]
-[![Codecov](https://codecov.io/gh/TimoDiepers/optimex/branch/main/graph/badge.svg)][codecov]
-
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)][pre-commit]
-[![Black](https://img.shields.io/badge/code%20style-black-000000.svg)][black]
-
-[pypi status]: https://pypi.org/project/optimex/
-[read the docs]: https://optimex.readthedocs.io/
-[tests]: https://github.com/TimoDiepers/optimex/actions?workflow=Tests
-[codecov]: https://app.codecov.io/gh/TimoDiepers/optimex
-[pre-commit]: https://github.com/pre-commit/pre-commit
-[black]: https://github.com/psf/black
-
-## Overview
+[![Read the Docs](https://img.shields.io/readthedocs/optimex?label=documentation)](https://optimex.readthedocs.io/)
+[![PyPI - Version](https://img.shields.io/pypi/v/optimex?color=%2300549f)](https://pypi.org/project/optimex/)
+[![Conda Version](https://img.shields.io/conda/v/diepers/optimex?label=conda)](https://anaconda.org/diepers/optimex)
+[![Conda - License](https://img.shields.io/conda/l/diepers/optimex)](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
 
 This is a python package for time-explicit Life Cylce Optimization that helps you identify transition pathways of systems with minimal environmental impacts.
-
-*Please note that this is an early access version developed during my master thesis. While it's functional, it’s not fully configured to handle all use cases yet.*
 
 ## Installation
 
