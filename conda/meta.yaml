@@ -1,7 +1,7 @@
 # The regex used is a bit different from original documenation:
 # https://docs.conda.io/projects/conda-build/en/latest/resources/define-metadata.html#loading-data-from-other-files
 # Originald documentation implies that the __init__.py only has one line with __version__
-{% set version_match = load_file_regex(load_file="bw_timex_app/__init__.py",
+{% set version_match = load_file_regex(load_file="optimex/__init__.py",
 regex_pattern='(?:.*)__version__ = "(.+)"') %}
 {% set version = version_match[1] %}
 # conda build --output-folder ./conda-out/ ./conda/ -c conda-forge -c cmutel -c diepers
