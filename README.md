@@ -5,14 +5,15 @@
   </picture>
 </h1>
 
-> *Please note that this is an early access version developed during the master thesis of [@JanTautorus](https://github.com/JanTautorus). While it's functional, it’s not fully configured to handle all use cases yet.*
-
 [![Read the Docs](https://img.shields.io/readthedocs/optimex?label=documentation)](https://optimex.readthedocs.io/)
 [![PyPI - Version](https://img.shields.io/pypi/v/optimex?color=%2300549f)](https://pypi.org/project/optimex/)
 [![Conda Version](https://img.shields.io/conda/v/diepers/optimex?label=conda)](https://anaconda.org/diepers/optimex)
 [![Conda - License](https://img.shields.io/conda/l/diepers/optimex)](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
 
 This is a python package for time-explicit Life Cylce Optimization that helps you identify transition pathways of systems with minimal environmental impacts.
+
+>[!WARNING]
+> This is an early access version of the package developed during [@JanTautorus](https://github.com/JanTautorus)' master thesis. While it's functional, it’s not fully configured to handle all use cases yet.
 
 ## Installation
 
