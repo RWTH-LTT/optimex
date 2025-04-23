@@ -10,3 +10,74 @@ def test_dict_converts_to_modelinputs(abstract_system_model_inputs):
 
 def test_pyomo_model_generation(abstract_system_model):
     assert isinstance(abstract_system_model, pyo.ConcreteModel)
+
+
+def test_all_sets_init(abstract_system_model, abstract_system_model_inputs):
+    # List of sets to test
+    sets_to_test = [
+        ("PROCESS", "PROCESS"),
+        ("FUNCTIONAL_FLOW", "FUNCTIONAL_FLOW"),
+        ("INTERMEDIATE_FLOW", "INTERMEDIATE_FLOW"),
+        ("ELEMENTARY_FLOW", "ELEMENTARY_FLOW"),
+        ("BACKGROUND_ID", "BACKGROUND_ID"),
+        ("PROCESS_TIME", "PROCESS_TIME"),
+        ("SYSTEM_TIME", "SYSTEM_TIME"),
+    ]
+
+    for model_set_name, input_set_name in sets_to_test:
+        model_set = getattr(abstract_system_model, model_set_name)
+        input_set = abstract_system_model_inputs[input_set_name]
+
+        assert set(model_set) == set(
+            input_set
+        ), f"Set {model_set_name} does not match expected input {input_set_name}"
+
+
+def test_all_params(abstract_system_model, abstract_system_model_inputs):
+    model = abstract_system_model
+    inputs = abstract_system_model_inputs
+
+    # List of param names that should be checked
+    param_names = [
+        "demand",
+        "foreground_technosphere",
+        "foreground_biosphere",
+        "foreground_production",
+        "background_inventory",
+        "mapping",
+        "characterization",
+        "process_limits_max",
+        "process_limits_min",
+        "cumulative_process_limits_max",
+        "cumulative_process_limits_min",
+        "process_coupling",
+    ]
+
+    for name in param_names:
+        param = getattr(model, name)
+        input_data = inputs.get(name, {})
+
+        # Check initialized values
+        if input_data:
+            for key, value in input_data.items():
+                assert (
+                    pyo.value(param[key]) == value
+                ), f"Param '{name}' at {key} does not match input value."
+
+        # Check if default zero values are properly filled for other entries
+        if not input_data:  # No data in input for this parameter
+            if name in [
+                "process_limits_max",
+                "cumulative_process_limits_max",
+            ]:
+                for key in param:
+                    assert pyo.value(param[key]) == float("inf"), (
+                        f"Param '{name}' at {key} should be 'inf' but was "
+                        f"{pyo.value(param[key])}."
+                    )
+            else:
+                for key in param:
+                    assert pyo.value(param[key]) == 0, (
+                        f"Param '{name}' at {key} should be 0 but was "
+                        f"{pyo.value(param[key])}."
+                    )
