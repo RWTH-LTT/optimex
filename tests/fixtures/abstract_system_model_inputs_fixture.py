@@ -1,9 +1,12 @@
 import pytest
 
+from optimex import converter, optimizer
 
-@pytest.fixture
-def minimal_viable_abstract():
-    """Fixture for the minimal viable abstract system model."""
+
+@pytest.fixture(scope="module")
+def abstract_system_model_inputs():
+    """Viable model inputs for optimization of transition pathway
+    of an abstract system."""
     return {
         "PROCESS": ["P1", "P2"],
         "FUNCTIONAL_FLOW": ["F1"],
@@ -34,7 +37,7 @@ def minimal_viable_abstract():
             ("F1", 2029): 10,
         },
         "foreground_technosphere": {
-            ("P1", "I1", 0): 1,
+            ("P1", "I1", 0): 27.5,
             ("P1", "I1", 1): 0,
             ("P1", "I1", 2): 0,
             ("P1", "I1", 3): 0,
@@ -42,17 +45,17 @@ def minimal_viable_abstract():
             ("P1", "I2", 1): 1,
             ("P1", "I2", 2): 1,
             ("P1", "I2", 3): 0,
-            ("P2", "I1", 0): 2,
+            ("P2", "I1", 0): 0,
             ("P2", "I1", 1): 0,
             ("P2", "I1", 2): 0,
             ("P2", "I1", 3): 0,
-            ("P2", "I2", 0): 0,
-            ("P2", "I2", 1): 0.5,
-            ("P2", "I2", 2): 0.5,
+            ("P2", "I2", 0): 1,
+            ("P2", "I2", 1): 1,
+            ("P2", "I2", 2): 1,
             ("P2", "I2", 3): 0,
         },
         "foreground_biosphere": {
-            ("P1", "CO2", 0): 1,
+            ("P1", "CO2", 0): 0,
             ("P1", "CO2", 1): 0,
             ("P1", "CO2", 2): 0,
             ("P1", "CO2", 3): 0,
@@ -64,7 +67,7 @@ def minimal_viable_abstract():
             ("P2", "CO2", 1): 0,
             ("P2", "CO2", 2): 0,
             ("P2", "CO2", 3): 0,
-            ("P2", "CH4", 0): 1,
+            ("P2", "CH4", 0): 0,
             ("P2", "CH4", 1): 0,
             ("P2", "CH4", 2): 0,
             ("P2", "CH4", 3): 0,
@@ -135,3 +138,14 @@ def minimal_viable_abstract():
             ("CH4", 2029): 2.364552528630073e-12,
         },
     }
+
+
+@pytest.fixture(scope="module")
+def abstract_system_model(abstract_system_model_inputs):
+    """Fixture to generate a model from the abstract system model inputs."""
+    model_inputs = converter.ModelInputs(**abstract_system_model_inputs)
+    model = optimizer.create_model(
+        inputs=model_inputs,
+        name="abstract_system_model",
+    )
+    return model
