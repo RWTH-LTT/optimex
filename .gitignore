@@ -9,6 +9,8 @@ __pycache__/
 # C extensions
 *.so
 
+# IDE
+.vscode
 # Distribution / packaging
 .Python
 build/
@@ -134,3 +136,4 @@ dmypy.json
 # sensitive files
 notebooks/import_ecoinvent.ipynb
 notebooks/premise_usage.ipynb
+notebooks/results
