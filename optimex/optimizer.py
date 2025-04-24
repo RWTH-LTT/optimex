@@ -339,7 +339,6 @@ def solve_model(model: pyo.ConcreteModel, tee=True, compute_iis=False):
     Args:
         model (pyo.ConcreteModel): Model to solve
         tee (bool, optional): Print solver output. Defaults to True.
-        gap (float, optional): MIP gap tolerance. Defaults to 0.01.
         compute_iis (bool, optional): Compute Irreducible Infeasible Set.
         Defaults to False.
 

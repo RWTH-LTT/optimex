@@ -108,7 +108,7 @@ def test_model_solution_is_optimal(solved_system_model):
     ), "Solution is not optimal."
 
 
-def test_model_objective_in_tolarance(solved_system_model):
+def test_model_objective_in_tolerance(solved_system_model):
     model, _ = solved_system_model
 
     expected_objective = 1.79920e03
@@ -117,7 +117,7 @@ def test_model_objective_in_tolarance(solved_system_model):
     assert_relative_error(actual_objective, expected_objective)
 
 
-def test_model_scaling_values_within_tolarance(solved_system_model):
+def test_model_scaling_values_within_tolerance(solved_system_model):
     model, _ = solved_system_model
 
     expected_values = {
