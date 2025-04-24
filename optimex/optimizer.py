@@ -332,7 +332,7 @@ def create_model(inputs: ModelInputs, name: str) -> pyo.ConcreteModel:
     return model
 
 
-def solve_model(model: pyo.ConcreteModel, tee=True, gap=0.01, compute_iis=False):
+def solve_model(model: pyo.ConcreteModel, tee=True, compute_iis=False):
     """
     Solve the provided model.
 
@@ -347,7 +347,6 @@ def solve_model(model: pyo.ConcreteModel, tee=True, gap=0.01, compute_iis=False)
         pyo.SolverResults: Results of the optimization
     """
     solver = pyo.SolverFactory("gurobi")
-    solver.options["MIPGap"] = gap
 
     results = solver.solve(model, tee=tee)
     if (
