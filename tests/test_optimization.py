@@ -1,23 +1,7 @@
 import pyomo.environ as pyo
+import pytest
 
 from optimex import converter
-
-
-def assert_relative_error(actual, expected, tolerance=1e-2):
-    epsilon = 1e-5
-    if abs(expected) < epsilon:
-        # Near-zero expected value, fall back to absolute error check
-        assert abs(actual) < tolerance, (
-            f"Expected near zero (|{expected:.5e}| < {epsilon}), "
-            f"but actual value {actual:.5f} exceeds absolute tolerance {tolerance:.5f}."
-        )
-    else:
-        # Use relative error check otherwise
-        relative_error = abs(actual - expected) / abs(expected)
-        assert relative_error < tolerance, (
-            f"Relative error {relative_error:.5%} exceeds tolerance {tolerance:.5%}. "
-            f"Expected {expected:.5f}, got {actual:.5f}."
-        )
 
 
 def test_dict_converts_to_modelinputs(abstract_system_model_inputs):
@@ -102,19 +86,29 @@ def test_all_params(abstract_system_model, abstract_system_model_inputs):
 
 def test_model_solution_is_optimal(solved_system_model):
     _, results = solved_system_model
-    assert results.solver.status == pyo.SolverStatus.ok, "Solver did not exit normally."
-    assert (
-        results.solver.termination_condition == pyo.TerminationCondition.optimal
-    ), "Solution is not optimal."
+    assert results.solver.status == pyo.SolverStatus.ok, (
+        f"Solver status is '{results.solver.status}', expected 'ok'. "
+        "The solver did not exit normally."
+    )
+    assert results.solver.termination_condition == pyo.TerminationCondition.optimal, (
+        f"Solver termination condition is '{results.solver.termination_condition}', "
+        "expected 'optimal'. The solution is not optimal."
+    )
 
 
-def test_model_objective_in_tolerance(solved_system_model):
+@pytest.mark.parametrize(
+    "flexible, expected_obj_value",
+    [
+        (False, 8.99602e02),  # expected objective value for fixed
+        (True, 67.89),  # expected objective value for flexible
+    ],
+    ids=["fixed", "flexible"],
+)
+def test_model_objective_in_tolerance(
+    flexible, expected_obj_value, solved_system_model
+):
     model, _ = solved_system_model
-
-    expected_objective = 8.99602e02
-    actual_objective = pyo.value(model.OBJ)
-
-    assert_relative_error(actual_objective, expected_objective)
+    assert pytest.approx(pyo.value(model.OBJ()), rel=1e-2) == expected_obj_value
 
 
 def test_model_scaling_values_within_tolerance(solved_system_model):
@@ -130,11 +124,17 @@ def test_model_scaling_values_within_tolerance(solved_system_model):
     # Check non-zero expected values are within tolerance
     for (process, start_time), expected in expected_values.items():
         actual = pyo.value(model.var_installation[process, start_time])
-        assert_relative_error(actual, expected)
+        assert pytest.approx(actual, rel=1e-2) == expected, (
+            f"Installation value for {process} at {start_time} "
+            f"should be {expected} but was {actual}."
+        )
 
     # Check all other values are close to zero
     for process in model.PROCESS:
         for time in model.SYSTEM_TIME:
             if (process, time) not in expected_values:
                 actual = pyo.value(model.var_installation[process, time])
-                assert_relative_error(actual, 0)
+                assert pytest.approx(actual, rel=1e-2) == 0, (
+                    f"Installation value for {process} at {time} "
+                    f"should be 0 but was {actual}."
+                )

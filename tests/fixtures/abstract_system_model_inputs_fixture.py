@@ -102,19 +102,19 @@ def abstract_system_model_inputs():
     }
 
 
-@pytest.fixture(scope="module")
-def abstract_system_model(abstract_system_model_inputs):
+@pytest.fixture(scope="module", params=[False, True], ids=["fixed", "flexible"])
+def abstract_system_model(request, abstract_system_model_inputs):
     """Fixture to generate a model from the abstract system model inputs."""
     model_inputs = converter.ModelInputs(**abstract_system_model_inputs)
     model = optimizer.create_model(
         inputs=model_inputs,
-        name="abstract_system_model",
-        flexible_operation=False,
+        name=f"abstract_system_model_{'flexible' if request.param else 'fixed'}",
+        flexible_operation=request.param,
     )
     return model
 
 
 @pytest.fixture(scope="module")
 def solved_system_model(abstract_system_model):
-    """Fixture to generate a solved model from the abstract system model."""
-    return optimizer.solve_model(abstract_system_model)
+    """Fixture to solve the abstract system model (fixed or flexible)."""
+    return optimizer.solve_model(abstract_system_model, compute_iis=True)

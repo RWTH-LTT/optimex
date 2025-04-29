@@ -5,190 +5,10 @@ It provides functionality to perform optimization using Pyomo.
 
 import logging
 
-import pyomo.contrib.iis as iis
 import pyomo.environ as pyo
+from pyomo.contrib.iis import write_iis
 
 from optimex.converter import ModelInputs
-
-
-class InstallOnlyBlock(pyo.Block):
-    def build(self):
-        m = self.model()
-
-        # scaled technosphere (original)
-        def scaled_tech_orig(p, i, t):
-            return sum(
-                m.foreground_technosphere[p, i, tau] * m.var_installation[p, t - tau]
-                for tau in m.PROCESS_TIME
-                if (t - tau in m.SYSTEM_TIME)
-            )
-
-        self.scaled_technosphere = pyo.Expression(
-            m.PROCESS, m.INTERMEDIATE_FLOW, m.SYSTEM_TIME, rule=scaled_tech_orig
-        )
-
-        # scaled biosphere (original)
-        def scaled_bio_orig(p, e, t):
-            return sum(
-                m.foreground_biosphere[p, e, tau] * m.var_installation[p, t - tau]
-                for tau in m.PROCESS_TIME
-                if (t - tau in m.SYSTEM_TIME)
-            )
-
-        self.scaled_biosphere = pyo.Expression(
-            m.PROCESS, m.ELEMENTARY_FLOW, m.SYSTEM_TIME, rule=scaled_bio_orig
-        )
-
-        # time‐specific impact (original)
-        def time_process_specific_impact(p, t):
-            return sum(
-                m.characterization[e, t]
-                * (
-                    sum(
-                        self.scaled_technosphere[p, i, t]
-                        * sum(
-                            m.background_inventory[b, i, e] * m.mapping[b, t]
-                            for b in m.BACKGROUND_ID
-                        )
-                        for i in m.INTERMEDIATE_FLOW
-                    )
-                    + self.scaled_biosphere[p, e, t]
-                )
-                for e in m.ELEMENTARY_FLOW
-            )
-
-        self.time_process_specific_impact = pyo.Expression(
-            m.PROCESS, m.SYSTEM_TIME, rule=time_process_specific_impact
-        )
-
-        # demand (original)
-        def demand_orig(f, t):
-            return (
-                sum(
-                    m.foreground_production[p, f, tau] * m.var_installation[p, t - tau]
-                    for p in m.PROCESS
-                    for tau in m.PROCESS_TIME
-                    if (t - tau in m.SYSTEM_TIME)
-                )
-                >= m.demand[f, t]
-            )
-
-        self.DemandConstraint = pyo.Constraint(
-            m.FUNCTIONAL_FLOW, m.SYSTEM_TIME, rule=demand_orig
-        )
-
-
-class OperationBlock(pyo.Block):
-    def build(self):
-        m = self.model()
-        # operation variable
-        self.var_operation = pyo.Var(
-            m.PROCESS,
-            m.SYSTEM_TIME,
-            within=pyo.NonNegativeReals,
-            doc="Operation of the process",
-        )
-
-        # membership test
-        def in_op_phase(p, tau):
-            return m.process_operation_start[p] <= tau <= m.process_operation_end[p]
-
-        # capacity-phase technosphere
-        def tech_cap(p, i, t):
-            return sum(
-                m.foreground_technosphere[p, i, tau] * m.var_installation[p, t - tau]
-                for tau in m.PROCESS_TIME
-                if (t - tau in m.SYSTEM_TIME) and not in_op_phase(p, tau)
-            )
-
-        self.scaled_tech_cap = pyo.Expression(
-            m.PROCESS, m.INTERMEDIATE_FLOW, m.SYSTEM_TIME, rule=tech_cap
-        )
-
-        # operation-phase technosphere
-        def tech_op(p, i, t):
-            tau0 = m.process_operation_start[p]
-            return m.foreground_technosphere[p, i, tau0] * self.var_operation[p, t]
-
-        self.scaled_tech_op = pyo.Expression(
-            m.PROCESS, m.INTERMEDIATE_FLOW, m.SYSTEM_TIME, rule=tech_op
-        )
-
-        def bio_cap(p, e, t):
-            return sum(
-                m.foreground_biosphere[p, e, tau] * m.var_installation[p, t - tau]
-                for tau in m.PROCESS_TIME
-                if (t - tau in m.SYSTEM_TIME) and not in_op_phase(p, tau)
-            )
-
-        self.scaled_bio_cap = pyo.Expression(
-            m.PROCESS, m.ELEMENTARY_FLOW, m.SYSTEM_TIME, rule=bio_cap
-        )
-
-        def bio_op(p, e, t):
-            tau0 = m.process_operation_start[p]
-            return m.foreground_biosphere[p, e, tau0] * self.var_operation[p, t]
-
-        self.scaled_bio_op = pyo.Expression(
-            m.PROCESS, m.ELEMENTARY_FLOW, m.SYSTEM_TIME, rule=bio_op
-        )
-
-        def time_process_specific_impact_rule(p, t):
-            return sum(
-                m.characterization[e, t]
-                * (
-                    # intermediate flows
-                    sum(
-                        (
-                            m.scaled_technosphere_cap[p, i, t]
-                            + m.scaled_technosphere_op[p, i, t]
-                        )
-                        * sum(
-                            m.background_inventory[b, i, e] * m.mapping[b, t]
-                            for b in m.BACKGROUND_ID
-                        )
-                        for i in m.INTERMEDIATE_FLOW
-                    )
-                    # elementary flows
-                    + (m.scaled_biosphere_cap[p, e, t] + m.scaled_biosphere_op[p, e, t])
-                )
-                for e in m.ELEMENTARY_FLOW
-            )
-
-        self.time_process_specific_impact = pyo.Expression(
-            m.PROCESS, m.SYSTEM_TIME, rule=time_process_specific_impact_rule
-        )
-
-        # operation limit
-        def op_limit(p, t):
-            return self.var_operation[p, t] <= sum(
-                m.foreground_production[p, f, tau] * m.var_installation[p, t - tau]
-                for f in m.FUNCTIONAL_FLOW
-                for tau in m.PROCESS_TIME
-                if (t - tau in m.SYSTEM_TIME) and not in_op_phase(p, tau)
-            )
-
-        self.OperationLimit = pyo.Constraint(m.PROCESS, m.SYSTEM_TIME, rule=op_limit)
-
-        # demand driven by operation
-        def demand_op(f, t):
-            return (
-                sum(
-                    self.var_operation[p, t]
-                    * sum(
-                        m.foreground_production[p, f, tau]
-                        * m.var_installation[p, t - tau]
-                        for tau in m.PROCESS_TIME
-                        if (t - tau in m.SYSTEM_TIME) and in_op_phase(p, tau)
-                    )
-                    for p in m.PROCESS
-                )
-                >= m.demand[f, t]
-            )
-
-        self.DemandConstraint = pyo.Constraint(
-            m.FUNCTIONAL_FLOW, m.SYSTEM_TIME, rule=demand_op
-        )
 
 
 def create_model(
@@ -427,7 +247,7 @@ def create_model(
             doc="Operation of the process",
         )
 
-        def in_op_phase(model, p, tau):
+        def in_operation_phase(p, tau):
             return (
                 model.process_operation_start[p]
                 <= tau
@@ -440,7 +260,7 @@ def create_model(
                 model.foreground_technosphere[p, i, tau]
                 * model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME) and not in_op_phase(p, tau)
+                if (t - tau in model.SYSTEM_TIME) and not in_operation_phase(p, tau)
             )
 
         model.scaled_technosphere_cap = pyo.Expression(
@@ -461,7 +281,7 @@ def create_model(
                 model.foreground_biosphere[p, e, tau]
                 * model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME) and not in_op_phase(p, tau)
+                if (t - tau in model.SYSTEM_TIME) and not in_operation_phase(p, tau)
             )
 
         model.scaled_biosphere_cap = pyo.Expression(
@@ -512,7 +332,7 @@ def create_model(
                 * model.var_installation[p, t - tau]
                 for f in model.FUNCTIONAL_FLOW
                 for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME) and not in_op_phase(p, tau)
+                if (t - tau in model.SYSTEM_TIME) and not in_operation_phase(p, tau)
             )
 
         model.OperationLimit = pyo.Constraint(
@@ -528,7 +348,7 @@ def create_model(
                         model.foreground_production[p, f, tau]
                         * model.var_installation[p, t - tau]
                         for tau in model.PROCESS_TIME
-                        if (t - tau in model.SYSTEM_TIME) and in_op_phase(p, tau)
+                        if (t - tau in model.SYSTEM_TIME) and in_operation_phase(p, tau)
                     )
                     for p in model.PROCESS
                 )
@@ -639,14 +459,17 @@ def solve_model(model: pyo.ConcreteModel, tee=True, compute_iis=False):
         pyo.SolverResults: Results of the optimization
     """
     solver = pyo.SolverFactory("gurobi")
+    solver.options["logfile"] = "gurobi.log"  # Explicitly set a log file
+    solver.options["OutputFlag"] = 1  # This might help debug the issu
 
-    results = solver.solve(model, tee=tee)
+    results = solver.solve(model, tee=tee, compute_iis=compute_iis)
+    logging.info(f"Solver status: {results.solver.termination_condition}")
     if (
         results.solver.termination_condition == pyo.TerminationCondition.infeasible
         and compute_iis
     ):
         try:
-            iis.write_iis(model, iis_file_name="model_iis.ilp", solver="gurobi")
+            write_iis(model, iis_file_name="model_iis.ilp", solver=solver)
         except Exception as e:
             logging.info(f"Failed to compute IIS: {e}")
     return model, results
