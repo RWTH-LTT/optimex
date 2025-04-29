@@ -18,6 +18,7 @@ class ModelInputs:
     PROCESS_TIME: list[int]
     SYSTEM_TIME: list[int]
     demand: Dict[Tuple[str, int], float]  # (functional_flow, system_time): amount
+    process_operation_time: Dict[str, Tuple[int, int]]  # process: (start, end)
     foreground_technosphere: Dict[
         Tuple[str, str, int], float
     ]  # (process, intermediate_flow, process_time): amount
@@ -70,6 +71,9 @@ class Converter:
         system_time = kwargs.get("system_time", list(self.optimex.system_time))
 
         demand = kwargs.get("demand", self.optimex.demand)
+        process_operation_time = kwargs.get(
+            "process_operation_time", self.optimex.process_operation_time
+        )
         foreground_technosphere = kwargs.get(
             "foreground_technosphere", self.optimex.foreground_technosphere
         )
@@ -176,6 +180,7 @@ class Converter:
             PROCESS_TIME=process_time,
             SYSTEM_TIME=system_time,
             demand=demand,
+            process_operation_time=process_operation_time,
             foreground_technosphere=foreground_technosphere,
             foreground_biosphere=foreground_biosphere,
             foreground_production=foreground_production,
@@ -237,6 +242,7 @@ class Converter:
             "PROCESS_TIME": model_inputs.PROCESS_TIME,
             "SYSTEM_TIME": model_inputs.SYSTEM_TIME,
             "demand": model_inputs.demand,
+            "process_operation_time": model_inputs.process_operation_time,
             "foreground_technosphere": model_inputs.foreground_technosphere,
             "foreground_biosphere": model_inputs.foreground_biosphere,
             "foreground_production": model_inputs.foreground_production,

@@ -15,26 +15,19 @@ def abstract_system_model_inputs():
         "BACKGROUND_ID": ["db_2020", "db_2030"],
         "PROCESS_TIME": [0, 1, 2, 3],
         "SYSTEM_TIME": [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029],
-        # "process_phaseend_map":
-        #     {
-        #         ("P1", "pre-production"): 0,
-        #         ("P1", "production"): 2,
-        #         ("P1", "post-production"): 3,
-        #         ("P2", "pre-production"): 0,
-        #         ("P2", "production"): 2,
-        #         ("P2", "post-production"): 3
-        #     },
+        "process_operation_time": {
+            "P1": (1, 2),
+            "P2": (1, 2),
+        },
         "demand": {
-            ("F1", 2020): 0,
-            ("F1", 2021): 0,
             ("F1", 2022): 10,
-            ("F1", 2023): 10,
+            ("F1", 2023): 5,
             ("F1", 2024): 10,
-            ("F1", 2025): 10,
+            ("F1", 2025): 5,
             ("F1", 2026): 10,
-            ("F1", 2027): 10,
+            ("F1", 2027): 5,
             ("F1", 2028): 10,
-            ("F1", 2029): 10,
+            ("F1", 2029): 5,
         },
         "foreground_technosphere": {
             ("P1", "I1", 0): 27.5,
@@ -47,10 +40,10 @@ def abstract_system_model_inputs():
             ("P2", "CO2", 2): 0.1,
         },
         "foreground_production": {
-            ("P1", "F1", 1): 0.5,
-            ("P1", "F1", 2): 0.5,
-            ("P2", "F1", 1): 0.5,
-            ("P2", "F1", 2): 0.5,
+            ("P1", "F1", 1): 1,
+            ("P1", "F1", 2): 1,
+            ("P2", "F1", 1): 1,
+            ("P2", "F1", 2): 1,
         },
         "background_inventory": {
             ("db_2020", "I1", "CO2"): 1,
@@ -116,6 +109,7 @@ def abstract_system_model(abstract_system_model_inputs):
     model = optimizer.create_model(
         inputs=model_inputs,
         name="abstract_system_model",
+        flexible_operation=False,
     )
     return model
 

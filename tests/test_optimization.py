@@ -111,7 +111,7 @@ def test_model_solution_is_optimal(solved_system_model):
 def test_model_objective_in_tolerance(solved_system_model):
     model, _ = solved_system_model
 
-    expected_objective = 1.79920e03
+    expected_objective = 8.99602e02
     actual_objective = pyo.value(model.OBJ)
 
     assert_relative_error(actual_objective, expected_objective)
@@ -121,20 +121,20 @@ def test_model_scaling_values_within_tolerance(solved_system_model):
     model, _ = solved_system_model
 
     expected_values = {
-        ("P1", 2025): 20.00,
-        ("P1", 2027): 20.00,
-        ("P2", 2021): 20.00,
-        ("P2", 2023): 20.00,
+        ("P1", 2025): 10.00,
+        ("P1", 2027): 10.00,
+        ("P2", 2021): 10.00,
+        ("P2", 2023): 10.00,
     }
 
     # Check non-zero expected values are within tolerance
     for (process, start_time), expected in expected_values.items():
-        actual = pyo.value(model.scaling[process, start_time])
+        actual = pyo.value(model.var_installation[process, start_time])
         assert_relative_error(actual, expected)
 
     # Check all other values are close to zero
     for process in model.PROCESS:
         for time in model.SYSTEM_TIME:
             if (process, time) not in expected_values:
-                actual = pyo.value(model.scaling[process, time])
+                actual = pyo.value(model.var_installation[process, time])
                 assert_relative_error(actual, 0)
