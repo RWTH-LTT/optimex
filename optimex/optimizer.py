@@ -7,12 +7,13 @@ import logging
 
 import pyomo.environ as pyo
 from pyomo.contrib.iis import write_iis
+from pyomo.opt import ProblemFormat
 
 from optimex.converter import ModelInputs
 
 
 def create_model(
-    inputs: ModelInputs, name: str, flexible_operation: bool = False
+    inputs: ModelInputs, name: str, flexible_operation: bool = False, path: str = None
 ) -> pyo.ConcreteModel:
     """
     Build a concrete model with all elements required to solve the optimization
@@ -332,7 +333,7 @@ def create_model(
                 * model.var_installation[p, t - tau]
                 for f in model.FUNCTIONAL_FLOW
                 for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME) and not in_operation_phase(p, tau)
+                if (t - tau in model.SYSTEM_TIME)
             )
 
         model.OperationLimit = pyo.Constraint(
@@ -341,18 +342,10 @@ def create_model(
 
         # Demand driven by operation
         def demand_op(model, f, t):
-            return (
-                sum(
-                    model.var_operation[p, t]
-                    * sum(
-                        model.foreground_production[p, f, tau]
-                        * model.var_installation[p, t - tau]
-                        for tau in model.PROCESS_TIME
-                        if (t - tau in model.SYSTEM_TIME) and in_operation_phase(p, tau)
-                    )
-                    for p in model.PROCESS
-                )
-                >= model.demand[f, t]
+            return model.demand[f, t] == sum(
+                model.foreground_production[p, f, model.process_operation_start[p]]
+                * model.var_operation[p, t]
+                for p in model.PROCESS
             )
 
         model.DemandConstraint = pyo.Constraint(
@@ -442,28 +435,30 @@ def create_model(
         )
 
     model.OBJ = pyo.Objective(sense=pyo.minimize, rule=expression_objective_function)
+
+    if path is not None:
+        model.write(path, format=ProblemFormat.cpxlp)
     return model
 
 
-def solve_model(model: pyo.ConcreteModel, tee=True, compute_iis=False):
+def solve_model(model: pyo.ConcreteModel, tee: bool = True, compute_iis: bool = False):
     """
     Solve the provided model.
 
     Args:
         model (pyo.ConcreteModel): Model to solve
-        tee (bool, optional): Print solver output. Defaults to True.
+        tee (bool, optional): Print solver output.
         compute_iis (bool, optional): Compute Irreducible Infeasible Set.
-        Defaults to False.
 
     Returns:
-        pyo.SolverResults: Results of the optimization
+        Tuple[pyo.ConcreteModel, pyo.SolverResults]: Solved model and results
     """
     solver = pyo.SolverFactory("gurobi")
-    solver.options["logfile"] = "gurobi.log"  # Explicitly set a log file
-    solver.options["OutputFlag"] = 1  # This might help debug the issu
+    solver.options["logfile"] = "gurobi.log"
 
-    results = solver.solve(model, tee=tee, compute_iis=compute_iis)
+    results = solver.solve(model, tee=tee)
     logging.info(f"Solver status: {results.solver.termination_condition}")
+
     if (
         results.solver.termination_condition == pyo.TerminationCondition.infeasible
         and compute_iis
@@ -472,4 +467,5 @@ def solve_model(model: pyo.ConcreteModel, tee=True, compute_iis=False):
             write_iis(model, iis_file_name="model_iis.ilp", solver=solver)
         except Exception as e:
             logging.info(f"Failed to compute IIS: {e}")
+
     return model, results

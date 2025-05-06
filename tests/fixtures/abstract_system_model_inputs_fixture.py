@@ -34,10 +34,10 @@ def abstract_system_model_inputs():
             ("P2", "I2", 0): 1,
         },
         "foreground_biosphere": {
-            ("P1", "CO2", 1): 0.1,
-            ("P1", "CO2", 2): 0.1,
-            ("P2", "CO2", 1): 0.1,
-            ("P2", "CO2", 2): 0.1,
+            ("P1", "CO2", 1): 10,
+            ("P1", "CO2", 2): 10,
+            ("P2", "CO2", 1): 10,
+            ("P2", "CO2", 2): 10,
         },
         "foreground_production": {
             ("P1", "F1", 1): 1,
@@ -102,19 +102,23 @@ def abstract_system_model_inputs():
     }
 
 
-@pytest.fixture(scope="module", params=[False, True], ids=["fixed", "flexible"])
+# Fixture to create the abstract system model (fixed or flexible)
+@pytest.fixture(scope="module", params=["fixed", "flex"], ids=["fixed", "flex"])
 def abstract_system_model(request, abstract_system_model_inputs):
-    """Fixture to generate a model from the abstract system model inputs."""
+    model_type = request.param  # This will be 'fixed' or 'flex'
     model_inputs = converter.ModelInputs(**abstract_system_model_inputs)
+
+    # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(
         inputs=model_inputs,
-        name=f"abstract_system_model_{'flexible' if request.param else 'fixed'}",
-        flexible_operation=request.param,
+        name=f"abstract_system_model_{model_type}",
+        flexible_operation=(model_type == "flex"),
+        path=f"tests/fixtures/model_debug_{model_type}.lp",
     )
     return model
 
 
-@pytest.fixture(scope="module")
-def solved_system_model(abstract_system_model):
+@pytest.fixture(scope="function")
+def solved_system_model(request, abstract_system_model):
     """Fixture to solve the abstract system model (fixed or flexible)."""
     return optimizer.solve_model(abstract_system_model, compute_iis=True)

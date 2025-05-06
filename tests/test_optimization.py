@@ -97,18 +97,22 @@ def test_model_solution_is_optimal(solved_system_model):
 
 
 @pytest.mark.parametrize(
-    "flexible, expected_obj_value",
+    "model_type, expected_value",
     [
-        (False, 8.99602e02),  # expected objective value for fixed
-        (True, 67.89),  # expected objective value for flexible
+        ("fixed", 1.57709e03),  # Expected value for the fixed model
+        ("flex", 1.40843e03),  # Expected value for the flexible model
     ],
-    ids=["fixed", "flexible"],
+    ids=["fixed", "flex"],
 )
-def test_model_objective_in_tolerance(
-    flexible, expected_obj_value, solved_system_model
-):
+def test_system_model(model_type, expected_value, solved_system_model):
+    # Get the model from the solved system model fixture
     model, _ = solved_system_model
-    assert pytest.approx(pyo.value(model.OBJ()), rel=1e-2) == expected_obj_value
+
+    # Assert that the objective value is approximately equal to the expected value
+    assert pytest.approx(expected_value, rel=1e-4) == pyo.value(model.OBJ), (
+        f"Objective value for {model_type} model should be {expected_value} "
+        f"but was {pyo.value(model.OBJ)}."
+    )
 
 
 def test_model_scaling_values_within_tolerance(solved_system_model):
@@ -124,7 +128,7 @@ def test_model_scaling_values_within_tolerance(solved_system_model):
     # Check non-zero expected values are within tolerance
     for (process, start_time), expected in expected_values.items():
         actual = pyo.value(model.var_installation[process, start_time])
-        assert pytest.approx(actual, rel=1e-2) == expected, (
+        assert pytest.approx(expected, rel=1e-2) == actual, (
             f"Installation value for {process} at {start_time} "
             f"should be {expected} but was {actual}."
         )
@@ -134,7 +138,7 @@ def test_model_scaling_values_within_tolerance(solved_system_model):
         for time in model.SYSTEM_TIME:
             if (process, time) not in expected_values:
                 actual = pyo.value(model.var_installation[process, time])
-                assert pytest.approx(actual, rel=1e-2) == 0, (
+                assert pytest.approx(0, rel=1e-2) == actual, (
                     f"Installation value for {process} at {time} "
                     f"should be 0 but was {actual}."
                 )
