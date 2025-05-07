@@ -30,12 +30,11 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    # "bw-timex",
     "dynamic-characterization",
-    "premise[bw25]",
     "brightway25",
     "tdqm",
     "pyomo",
+    "pyyaml",
     # dependencies as strings with quotes, e.g. "foo"
     # You can add version requirements like "foo>2.0"
 ]
