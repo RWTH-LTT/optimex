@@ -113,7 +113,7 @@ def abstract_system_model(request, abstract_system_model_inputs):
         inputs=model_inputs,
         name=f"abstract_system_model_{model_type}",
         flexible_operation=(model_type == "flex"),
-        path=f"tests/fixtures/model_debug_{model_type}.lp",
+        debug_path=f"tests/fixtures/model_debug_{model_type}.lp",
     )
     return model
 

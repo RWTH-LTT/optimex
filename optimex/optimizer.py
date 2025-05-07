@@ -13,15 +13,46 @@ from optimex.converter import ModelInputs
 
 
 def create_model(
-    inputs: ModelInputs, name: str, flexible_operation: bool = False, path: str = None
+    inputs: ModelInputs,
+    name: str,
+    flexible_operation: bool = True,
+    debug_path: str = None,
 ) -> pyo.ConcreteModel:
     """
-    Build a concrete model with all elements required to solve the optimization
-    problem.
+    Build a Pyomo ConcreteModel for the optimization problem based on the provided
+    inputs.
 
-    Returns:
-        pyo.ConcreteModel: Concrete model for optimization problem
+    This function constructs a fully defined Pyomo model using data from a `ModelInputs`
+    instance. It optionally supports flexible operation of processes and can save
+    intermediate data to a specified path.
+
+    Parameters
+    ----------
+    inputs : ModelInputs
+        Structured input data containing all flows, mappings, and constraints
+        required for model construction.
+    name : str
+        Name of the Pyomo model instance.
+    flexible_operation : bool, optional
+        Enables flexible operation mode for processes. When set to True, the model
+        introduces additional variables that allow processes to operate between 0 and
+        their maximum installed capacity during their designated process time. This
+        allows partial operation of a process rather than enforcing full capacity usage
+        at all times.
+
+        Flexible operation is based on scaling the inventory associated with the first
+        time step of operation. In contrast, fixed operation (when `flexible_operation`
+        is False) assumes that processes always run at full capacity once deployed.
+    debug_path : str, optional
+        If provided, specifies the directory path where intermediate model data (such as
+        the LP formulation) or diagnostics may be stored.
+
+    Returns
+    -------
+    pyo.ConcreteModel
+        A fully constructed Pyomo model ready for optimization.
     """
+
     model = pyo.ConcreteModel(name=name)
 
     logging.info("Creating sets")
@@ -436,23 +467,38 @@ def create_model(
 
     model.OBJ = pyo.Objective(sense=pyo.minimize, rule=expression_objective_function)
 
-    if path is not None:
-        model.write(path, format=ProblemFormat.cpxlp)
+    if debug_path is not None:
+        model.write(debug_path, format=ProblemFormat.cpxlp)
     return model
 
 
 def solve_model(model: pyo.ConcreteModel, tee: bool = True, compute_iis: bool = False):
     """
-    Solve the provided model.
+    Solve a Pyomo optimization model using the Gurobi solver.
 
-    Args:
-        model (pyo.ConcreteModel): Model to solve
-        tee (bool, optional): Print solver output.
-        compute_iis (bool, optional): Compute Irreducible Infeasible Set.
+    Parameters
+    ----------
+    model : pyo.ConcreteModel
+        The Pyomo model to be solved.
+    tee : bool, optional
+        If True, prints the solver output to the console. Default is True.
+    compute_iis : bool, optional
+        If True and the model is infeasible, attempts to compute the
+        Irreducible Infeasible Set (IIS) and write it to a file.
+        Default is False.
 
-    Returns:
-        Tuple[pyo.ConcreteModel, pyo.SolverResults]: Solved model and results
+    Returns
+    -------
+    Tuple[pyo.ConcreteModel, pyo.SolverResults]
+        The solved model and the solver results object.
+
+    Notes
+    -----
+    If the model is infeasible and `compute_iis` is enabled, the function
+    attempts to write an IIS file using `write_iis()`. An exception will
+    be logged if IIS computation fails.
     """
+
     solver = pyo.SolverFactory("gurobi")
     solver.options["logfile"] = "gurobi.log"
 
