@@ -13,7 +13,13 @@ from tqdm import tqdm
 
 class Optimex:
     """
-    Class to perform time-explicit LCA optimization
+    Class to perform time-explicit Life Cycle Assessment (LCA)
+    computations and gather necessary data for building an optimization model.
+
+    This class is primarily responsible for executing the LCA-based computations
+    required to collect all the data needed for building `ModelInputs`. It is reliant on
+    Brightway2, an open-source framework for Life Cycle Assessment, to perform the
+    calculations and retrieve LCA results.
     """
 
     def __init__(
@@ -26,24 +32,25 @@ class Optimex:
         timehorizon: int = 100,
     ) -> None:
         """
-        Initialize the Optimex class.
+        Initialize the LCAProcessor class to compute and gather LCA data
+        for model input creation.
 
         Parameters
         ----------
         demand : dict
-            Dictionary containing time-explicit demands for each flow.
+            A dictionary containing time-explicit demands for each flow.
         start_date : datetime
-            The start date for the time horizon.
+            The start date for the time horizon, used to calculate future years.
         method : tuple
-            A tuple defining the LCIA method, such as `('foo', 'bar')` or
-            default methods like
-            `("EF v3.1", "climate change", "global warming potential (GWP100)")`.
+            A tuple defining the LCIA method (e.g.,
+            `("EF v3.1", "climate change", "global warming potential (GWP100)")`).
         database_date_dict : dict
-            A dictionary mapping database names to dates.
+            A dictionary mapping database names to their respective dates.
         temporal_resolution : str, optional
-            The temporal resolution for the optimization model, by default "year".
+            The temporal resolution for the optimization model (e.g., "year").
+            Default is "year".
         timehorizon : int, optional
-            The length of the time horizon in years, by default 100.
+            The length of the time horizon in years. Default is 100 years.
         """
         # Store the provided values as instance variables
         self.demand_raw = demand
@@ -190,37 +197,43 @@ class Optimex:
 
     def construct_foreground_tensors(self) -> tuple[dict, dict, dict]:
         """
-        Constructs the foreground technosphere and biosphere tensors by expanding the
-        standard techno- and biosphere matrices with a new dimension (process time tau).
-        These tensors represent the amounts of the flows associated with the processes
-        in the system, distributed over time according to the temporal distributions of
-        the exchanges.
+        Constructs the foreground technosphere, biosphere, and production tensors by
+        expanding the standard techno- and biosphere matrices with a new dimension:
+        process time (tau). These tensors represent the amounts of flows associated with
+        processes in the system, distributed over time according to the temporal
+        distributions of the exchanges.
 
-        The method iterates through the processes in the foreground database and for
-        each exchange, it collects temporal distribution data (i.e., years and amounts)
-        and aggregates this data into three separate tensors:
+        The method iterates through the processes in the foreground database and, for
+        each exchange, collects temporal distribution data (i.e., years and amounts).
+        This data is then aggregated into three separate tensors that represent
+        different types of flows.
 
-        - **Technosphere Tensor**: Contains intermediate flows between processes
-        in the technosphere.
-        - **Biosphere Tensor**: Contains elementary flows from processes
-        to the biosphere.
-        - **Production Tensor**: Contains functional flows produced by processes.
-
-
-        The tensors and flow dictionaries are stored as protected variables for
-        internal use, and read-only properties are provided to access them.
+        Parameters
+        ----------
+        None
 
         Returns
         -------
-        tuple[dict, dict, dict]
+        tuple of dict
             A tuple containing:
-            - **Foreground Technosphere Tensor**: A dictionary where keys are tuples of
-            (process_code, flow_code, year) and values are the corresponding amounts.
-            - **Foreground Biosphere Tensor**: A dictionary where keys are tuples of
-            (process_code, flow_code, year) and values are the corresponding amounts.
-            - **Foreground Production Tensor**: A dictionary where keys are tuples of
-            (process_code, functional_flow, year) and values are the corresponding
+            - Foreground Technosphere Tensor: A dictionary where the keys are tuples
+            of (process_code, flow_code, year) and the values are the corresponding
+            amounts for each flow in the technosphere.
+            - Foreground Biosphere Tensor: A dictionary where the keys are tuples
+            of (process_code, flow_code, year) and the values are the corresponding
+            amounts for each elementary flow to the biosphere.
+            - Foreground Production Tensor: A dictionary where the keys are tuples
+            of (process_code, functional_flow, year) and the values are the
+            corresponding amounts for each produced functional flow.
+
+        Notes
+        -----
+        Conventionally, functional flows are a subset of intermediate flows and are
+        included within the technosphere matrix. However, for clarity and easier
+        downstream processing, we explicitly extract functional flows and store them in
+        a separate production tensor.
         """
+
         technosphere_tensor = {}
         production_tensor = {}
         biosphere_tensor = {}
@@ -289,33 +302,39 @@ class Optimex:
 
     def _calculate_inventory_of_db(self, db_name, intermediate_flows, method, cutoff):
         """
-        Calculate the inventory for a given database.
-        This method calculates the inventory tensor and elementary flows for a specified
-        database by performing a life cycle assessment (LCA) on the activities within
-        the database. The results are aggregated and returned as dictionaries.
-        Parameters:
-        -----------
+        Calculate the life cycle inventory for a specified background database.
+
+        Performs an LCA for each intermediate flow exchanged with the given database
+        using the specified LCIA method. Intermediate flows are mapped to resulting
+        elementary flows to construct an inventory tensor. A cutoff threshold is
+        applied to filter insignificant results.
+
+        Parameters
+        ----------
         db_name : str
-            The name of the database to calculate the inventory for.
+            Name of the background database to analyze.
         intermediate_flows : dict
-            A dictionary of intermediate flows where keys are flow codes and
-            values are flow names.
+            Dictionary mapping intermediate flow codes to flow names.
         method : tuple
-            The LCA method to be used for the calculation.
+            LCIA method used to compute environmental impacts (e.g.,
+            ("EF v3.1", "climate change", "GWP100")).
         cutoff : float
-            The cutoff value for filtering the inventory results.
-        Returns:
-        --------
-        inventory_tensor : dict
-            A dictionary representing the inventory tensor with keys as tuples of
-            (db_name, intermediate_flow_code, elementary_flow_code) and amounts.
-        elementary_flows : dict
-            A dictionary mapping elementary flow codes to their respective names.
-        Raises:
+            Number of top elementary flows (per intermediate flow) to retain based on
+            impact magnitude. Used to reduce computational complexity.
+
+        Returns
         -------
+        inventory_tensor : dict
+            Dictionary with keys as (db_name, intermediate_flow_code,
+            elementary_flow_code) and values as flow amounts.
+        elementary_flows : dict
+            Dictionary mapping elementary flow codes to their names.
+
+        Raises
+        ------
         Exception
-            If there is an error fetching activities from the database, an empty
-            dictionary is returned for both inventory_tensor and elementary_flows
+            Returns empty dictionaries if activities cannot be retrieved or if an
+            error occurs during inventory calculation.
         """
 
         logging.info(f"Calculating inventory for database: {db_name}")
@@ -422,13 +441,24 @@ class Optimex:
 
     def sequential_inventory_tensor_calculation(self, cutoff=1e4) -> dict:
         """
-        Calculate the inventory tensor for the background databases sequentially.
+        Calculate the inventory tensor for all background databases sequentially.
+
+        For each background database, this method performs LCA calculations and
+        constructs an inventory matrix. The results are aggregated into a single
+        dictionary representing the background inventory tensor.
 
         Parameters
         ----------
         cutoff : float, optional
-            The cutoff value based on lca.to_dataframe(). Defaults to 1e4 meaning
-            only the top 10,000 flows orderer by impact will be considered.
+            Maximum number of elementary flows to retain per activity based on
+            total impact (from `lca.to_dataframe()`). Defaults to 1e4, meaning
+            only the top 10,000 flows ordered by impact score will be included.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the combined inventory tensor for all
+            background databases.
         """
         results = []
 
@@ -457,15 +487,19 @@ class Optimex:
 
     def load_inventory_tensors(self, file_path: str) -> None:
         """
+        Load inventory tensors from a pickle file.
 
-        Load the inventory tensors from a pickle file and update the background
-        inventory and elementary flows. WARNING: Don't try to unpickle untrusted data,
-        only use this for reloading pre-calculated inventory tensors from yourself.
+        This method unpickles pre-computed inventory tensors and updates the
+        internal background inventory and elementary flow mappings.
+
+        .. warning::
+            Only unpickle data you trust. Loading pickle files from untrusted
+            sources can be insecure.
 
         Parameters
         ----------
         file_path : str
-            The path to the pickle file containing the inventory tensors.
+            Path to the pickle file containing the saved inventory tensors.
         """
 
         # Load the inventory tensor from the pickle file
@@ -552,17 +586,30 @@ class Optimex:
 
     def construct_characterization_matrix(self, dynamic=True, metric="GWP") -> dict:
         """
-        Construct the characterization matrix that links the environmental flows to the
-        system time points. Currently, only the GWP metric is supported.
-        The characterization matrix is a dictionary with the following keys:
-        - 'flow': The environmental flow.
-        - 'year': The year of the system time point.
+        Construct the dynamic characterization matrix.
+
+        The characterization matrix maps elementary flows to impact factors for each
+        system time point. This implementation currently supports only the Global
+        Warming Potential (GWP) metric.
+
+        Parameters
+        ----------
+        dynamic : bool, optional
+            Whether to compute a dynamic characterization matrix over time. If False,
+            a static (time-invariant) matrix is used. Default is True.
+        metric : str, optional
+            The impact assessment metric to use. Currently, only "GWP" is supported.
+            Default is "GWP".
 
         Returns
         -------
         dict
-            Dictionary containing the characterization matrix.
+            A dictionary where keys are tuples of (elementary_flow_code, year) and
+            values are the corresponding characterization factors.
         """
+
+        # TODO: Add support for radiative forcing
+
         # Create a DataFrame based on self.elementary_flows
         df = pd.DataFrame({"code": list(self.elementary_flows.keys())})
 

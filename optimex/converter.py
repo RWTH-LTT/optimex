@@ -353,6 +353,10 @@ class Converter:
         """
         Load model inputs from a pickle file.
 
+            .. warning::
+        Only unpickle data you trust. Loading pickle files from untrusted
+        sources can be insecure.
+
         Parameters
         ----------
         filename : str, optional
@@ -362,11 +366,6 @@ class Converter:
         -------
         ModelInputs
             The deserialized model input data.
-
-        Warnings
-        --------
-        Unpickling data from untrusted sources can be dangerous and may lead to
-        arbitrary code execution. Only unpickle files that you have created and trust.
         """
         with open(filename, "rb") as f:
             self.model_inputs = pickle.load(f)
