@@ -113,12 +113,12 @@ def abstract_system_model(request, abstract_system_model_inputs):
         inputs=model_inputs,
         name=f"abstract_system_model_{model_type}",
         flexible_operation=(model_type == "flex"),
-        debug_path=f"tests/fixtures/model_debug_{model_type}.lp",
+        # debug_path=f"tests/fixtures/model_debug_{model_type}.lp",
     )
     return model
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def solved_system_model(request, abstract_system_model):
     """Fixture to solve the abstract system model (fixed or flexible)."""
     return optimizer.solve_model(abstract_system_model, compute_iis=True)

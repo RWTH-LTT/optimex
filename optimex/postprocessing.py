@@ -5,6 +5,10 @@ import pyomo.environ as pyo
 
 class PostProcessor:
     def __init__(self, solved_model: pyo.ConcreteModel):
+        raise NotImplementedError(
+            "PostProcessor is currently disabled due to major refactoring. "
+            "This class will be updated in a future version."
+        )
         self.m = solved_model
         self.df_scaling = None
         self.df_production = None

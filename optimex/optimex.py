@@ -102,6 +102,8 @@ class Optimex:
         self._mapping = {}
         self._characterization = {}
 
+        self._process_operation_time = {}  # dict: {process code: (start, end)}
+
     @property
     def processes(self) -> dict:
         """Read-only access to the processes dictionary."""
@@ -166,6 +168,11 @@ class Optimex:
     def demand(self) -> dict:
         """Read-only access to the parsed demand dictionary."""
         return self._demand
+
+    @property
+    def process_operation_time(self) -> dict:
+        """Read-only access to the process operation time dictionary."""
+        return self._process_operation_time
 
     def parse_demand(self) -> dict:
         """
@@ -240,9 +247,7 @@ class Optimex:
 
         for act in self.foreground_db:
             # Only process activities present in the demand
-            if (
-                act["functional flow"] not in self.demand_raw.keys()
-            ):  # TODO: functional flows
+            if act["functional flow"] not in self.demand_raw.keys():
                 continue
 
             # Store process information
@@ -299,6 +304,38 @@ class Optimex:
         self._foreground_production = production_tensor
 
         return technosphere_tensor, biosphere_tensor, production_tensor
+
+    def set_process_operation_time(self, operation_time: dict[str, tuple[int, int]]):
+        """
+        Set the user-defined operation time for processes.
+
+        Parameters
+        ----------
+        operation_time : dict of str to (int, int)
+            A dictionary mapping process codes to a tuple representing
+            their (start_time, end_time). Both start and end must be integers.
+
+        Raises
+        ------
+        ValueError
+            If the input is not properly structured or contains invalid values.
+        """
+        for proc_code, period in operation_time.items():
+            if not isinstance(proc_code, str):
+                raise ValueError("Process code must be a string.")
+            if (
+                not isinstance(period, tuple)
+                or len(period) != 2
+                or not all(isinstance(t, int) for t in period)
+            ):
+                raise ValueError(
+                    "Each value must be a tuple of two integers (start, end)."
+                )
+            if period[0] > period[1]:
+                raise ValueError(
+                    f"Start time must not exceed end time for process '{proc_code}'."
+                )
+        self._process_operation_time = operation_time
 
     def _calculate_inventory_of_db(self, db_name, intermediate_flows, method, cutoff):
         """
