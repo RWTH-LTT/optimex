@@ -99,8 +99,8 @@ def test_model_solution_is_optimal(solved_system_model):
 @pytest.mark.parametrize(
     "model_type, expected_value",
     [
-        ("fixed", 1.57709e03),  # Expected value for the fixed model
-        ("flex", 1.40843e03),  # Expected value for the flexible model
+        ("fixed", 3.15417e03),  # Expected value for the fixed model
+        ("flex", 2.81685e03),  # Expected value for the flexible model
     ],
     ids=["fixed", "flex"],
 )
@@ -119,10 +119,10 @@ def test_model_scaling_values_within_tolerance(solved_system_model):
     model, _ = solved_system_model
 
     expected_values = {
-        ("P1", 2025): 10.00,
-        ("P1", 2027): 10.00,
-        ("P2", 2021): 10.00,
-        ("P2", 2023): 10.00,
+        ("P1", 2025): 20.00,
+        ("P1", 2027): 20.00,
+        ("P2", 2021): 20.00,
+        ("P2", 2023): 20.00,
     }
 
     # Check non-zero expected values are within tolerance

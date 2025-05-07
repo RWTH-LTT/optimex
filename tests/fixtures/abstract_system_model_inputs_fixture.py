@@ -40,10 +40,10 @@ def abstract_system_model_inputs():
             ("P2", "CO2", 2): 10,
         },
         "foreground_production": {
-            ("P1", "F1", 1): 1,
-            ("P1", "F1", 2): 1,
-            ("P2", "F1", 1): 1,
-            ("P2", "F1", 2): 1,
+            ("P1", "F1", 1): 0.5,
+            ("P1", "F1", 2): 0.5,
+            ("P2", "F1", 1): 0.5,
+            ("P2", "F1", 2): 0.5,
         },
         "background_inventory": {
             ("db_2020", "I1", "CO2"): 1,

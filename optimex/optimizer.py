@@ -358,17 +358,18 @@ def create_model(
         )
 
         # Operation limit
-        def op_limit(model, p, t):
-            return model.var_operation[p, t] <= sum(
+        def op_limit(model, p, f, t):
+            return model.var_operation[p, t] * model.foreground_production[
+                p, f, model.process_operation_start[p]
+            ] <= sum(
                 model.foreground_production[p, f, tau]
                 * model.var_installation[p, t - tau]
-                for f in model.FUNCTIONAL_FLOW
                 for tau in model.PROCESS_TIME
                 if (t - tau in model.SYSTEM_TIME)
             )
 
         model.OperationLimit = pyo.Constraint(
-            model.PROCESS, model.SYSTEM_TIME, rule=op_limit
+            model.PROCESS, model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=op_limit
         )
 
         # Demand driven by operation
