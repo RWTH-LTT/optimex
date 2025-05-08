@@ -4,10 +4,12 @@ It provides functionality to perform optimization using Pyomo.
 """
 
 import logging
+from typing import Any, Dict, Tuple
 
 import pyomo.environ as pyo
 from pyomo.contrib.iis import write_iis
 from pyomo.opt import ProblemFormat
+from pyomo.opt.results.results_ import SolverResults
 
 from optimex.converter import ModelInputs
 
@@ -473,46 +475,77 @@ def create_model(
     return model
 
 
-def solve_model(model: pyo.ConcreteModel, tee: bool = True, compute_iis: bool = False):
+def solve_model(
+    model: pyo.ConcreteModel,
+    solver_name: str = "gurobi",
+    solver_args: Dict[str, Any] = None,
+    solver_options: Dict[str, Any] = None,
+    tee: bool = True,
+    compute_iis: bool = False,
+    **solve_kwargs: Any,
+) -> Tuple[pyo.ConcreteModel, SolverResults]:
     """
-    Solve a Pyomo optimization model using the Gurobi solver.
+    Solve a Pyomo optimization model using a specified solver.
 
     Parameters
     ----------
     model : pyo.ConcreteModel
         The Pyomo model to be solved.
+    solver_name : str, optional
+        Name of the solver to use (as accepted by `pyo.SolverFactory`).
+        Default is "gurobi".
+    solver_args : dict, optional
+        Keyword arguments to pass to `pyo.SolverFactory`, e.g.
+        {"executable": "/path/to/solver"}.
+    solver_options : dict, optional
+        Solver-specific options to set on the solver instance, e.g.
+        {"timelimit": 60, "mipgap": 0.01}.
     tee : bool, optional
         If True, prints the solver output to the console. Default is True.
     compute_iis : bool, optional
         If True and the model is infeasible, attempts to compute the
         Irreducible Infeasible Set (IIS) and write it to a file.
-        Default is False.
+    **solve_kwargs
+        Additional keyword arguments passed to `solver.solve()`, e.g.
+        `symbolic_solver_labels=True`.
 
     Returns
     -------
-    Tuple[pyo.ConcreteModel, pyo.SolverResults]
+    Tuple[pyo.ConcreteModel, pyomo.opt.results.results_.SolverResults]
         The solved model and the solver results object.
 
     Notes
     -----
-    If the model is infeasible and `compute_iis` is enabled, the function
-    attempts to write an IIS file using `write_iis()`. An exception will
-    be logged if IIS computation fails.
+    - To switch solvers, just change `solver_name` (e.g. "glpk", "cplex").
+    - Solver-specific options go into `solver_options`; arguments to the factory
+      go into `solver_args`.
+    - If `compute_iis` is enabled and the model is infeasible, we try to write
+      an IIS file named "model_iis.ilp".
     """
+    # Create solver
+    solver_args = solver_args or {}
+    solver = pyo.SolverFactory(solver_name, **solver_args)
 
-    solver = pyo.SolverFactory("gurobi")
-    solver.options["logfile"] = "gurobi.log"
+    # Apply solver options
+    if solver_options:
+        for opt, val in solver_options.items():
+            solver.options[opt] = val
 
-    results = solver.solve(model, tee=tee)
-    logging.info(f"Solver status: {results.solver.termination_condition}")
+    # Solve
+    results = solver.solve(model, tee=tee, **solve_kwargs)
+    logging.info(
+        f"Solver [{solver_name}] status: {results.solver.termination_condition}"
+    )
 
+    # Handle infeasibility / IIS
     if (
         results.solver.termination_condition == pyo.TerminationCondition.infeasible
         and compute_iis
     ):
         try:
             write_iis(model, iis_file_name="model_iis.ilp", solver=solver)
+            logging.info("IIS file written to model_iis.ilp")
         except Exception as e:
-            logging.info(f"Failed to compute IIS: {e}")
+            logging.warning(f"Failed to compute IIS: {e}")
 
     return model, results
