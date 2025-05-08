@@ -25,6 +25,7 @@ def standalone_db():
             },
         },
     )
+    bd.config.biosphere = "bio"
     bd.Database("foreground").write(
         {
             ("foreground", "P1"): {
@@ -184,4 +185,11 @@ def standalone_db():
                 ],
             },
         }
+    )
+
+    bd.Method(("GWP", "example")).write(
+        [
+            (("bio", "CO2"), 1),
+            (("bio", "CH4"), 27),
+        ]
     )
