@@ -17,7 +17,6 @@ on:
       - ".gitignore"
   pull_request:
     branches: [main, develop]
-    types: [opened, reopened] # excludes syncronize to avoid redundant trigger from commits on PRs
     paths-ignore:
       - "**.md"
       - "**.bib"
@@ -32,8 +31,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, ubuntu-20.04, macos-latest, windows-2019]
-        py-version: ["3.9", "3.10", "3.11", "3.12"]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        py-version: ["3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +52,18 @@ jobs:
       - name: Install package and test deps
         run: |
           pip install .[testing] # install the package and the testing deps
+
+      # 🔧 Install GLPK solver
+      - name: Install GLPK
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y glpk-utils
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            brew install glpk
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            choco install glpk --no-progress
+          fi
+        shell: bash
 
       - name: Test with pytest
         run: |

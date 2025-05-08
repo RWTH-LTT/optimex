@@ -11,7 +11,7 @@ from dynamic_characterization import characterize
 from tqdm import tqdm
 
 
-class Optimex:
+class LCADataProcessor:
     """
     Class to perform time-explicit Life Cycle Assessment (LCA)
     computations and gather necessary data for building an optimization model.
@@ -32,8 +32,13 @@ class Optimex:
         timehorizon: int = 100,
     ) -> None:
         """
-        Initialize the LCAProcessor class to compute and gather LCA data
-        for model input creation.
+        Initialize the LCADataProcessor class to compute and collect LCA data
+        for creating input to an optimization model. This class is designed to
+        gather the necessary LCA data based on processes and their intermediate
+        and elementary flows that produce outputs matching the required demand.
+
+        For unique identification of processes, the class uses the `code`
+        attribute of a `bw2data.parameters.ActivityParameter` instance.
 
         Parameters
         ----------
@@ -366,12 +371,6 @@ class Optimex:
             elementary_flow_code) and values as flow amounts.
         elementary_flows : dict
             Dictionary mapping elementary flow codes to their names.
-
-        Raises
-        ------
-        Exception
-            Returns empty dictionaries if activities cannot be retrieved or if an
-            error occurs during inventory calculation.
         """
 
         logging.info(f"Calculating inventory for database: {db_name}")
@@ -483,6 +482,8 @@ class Optimex:
         For each background database, this method performs LCA calculations and
         constructs an inventory matrix. The results are aggregated into a single
         dictionary representing the background inventory tensor.
+
+        See also `parallel_inventory_tensor_calculation` for a parallelized version.
 
         Parameters
         ----------
