@@ -53,6 +53,18 @@ jobs:
         run: |
           pip install .[testing] # install the package and the testing deps
 
+      # 🔧 Install GLPK solver
+      - name: Install GLPK
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y glpk-utils
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            brew install glpk
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            choco install glpk --no-progress
+          fi
+        shell: bash
+
       - name: Test with pytest
         run: |
           pytest
