@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple
 
 import yaml
 
-from optimex.optimex import Optimex
+from optimex.optimex import LCADataProcessor
 
 
 @dataclass
@@ -122,7 +122,7 @@ class Converter:
         flows, and background information.
     """
 
-    def __init__(self, optimex: Optimex):
+    def __init__(self, optimex: LCADataProcessor):
         self.optimex = optimex
         self.model_inputs = None
 
