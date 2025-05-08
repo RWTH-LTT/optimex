@@ -65,13 +65,17 @@ class ModelInputs:
     process_names : dict of str to str, optional
         Maps process identifiers to human-readable names.
     process_limits_max_default : float, default: inf
-        Default upper bound for annual process deployment if not specified.
+        Default upper bound for annual process deployment of all process if not
+        specified explicitly in process_limits_max.
     process_limits_min_default : float, default: 0.0
-        Default lower bound for annual process deployment if not specified.
+        Default lower bound for annual process deployment of all process if not
+        specified explicitly in process_limits_min.
     cumulative_process_limits_max_default : float, default: inf
-        Default global upper bound for process deployment if not specified.
+        Default global upper bound for total process deployment of all proscceses if
+        not specified explicitly in cumulative_process_limits_max.
     cumulative_process_limits_min_default : float, default: 0.0
-        Default global lower bound process deployment if not specified.
+        Default global lower bound for total process deployment of all processes if not
+        explicitly specified in cumulative_process_limits_min.
     """
 
     PROCESS: List[str]
