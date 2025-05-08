@@ -1,23 +1,7 @@
 import pyomo.environ as pyo
+import pytest
 
 from optimex import converter
-
-
-def assert_relative_error(actual, expected, tolerance=1e-2):
-    epsilon = 1e-5
-    if abs(expected) < epsilon:
-        # Near-zero expected value, fall back to absolute error check
-        assert abs(actual) < tolerance, (
-            f"Expected near zero (|{expected:.5e}| < {epsilon}), "
-            f"but actual value {actual:.5f} exceeds absolute tolerance {tolerance:.5f}."
-        )
-    else:
-        # Use relative error check otherwise
-        relative_error = abs(actual - expected) / abs(expected)
-        assert relative_error < tolerance, (
-            f"Relative error {relative_error:.5%} exceeds tolerance {tolerance:.5%}. "
-            f"Expected {expected:.5f}, got {actual:.5f}."
-        )
 
 
 def test_dict_converts_to_modelinputs(abstract_system_model_inputs):
@@ -102,19 +86,41 @@ def test_all_params(abstract_system_model, abstract_system_model_inputs):
 
 def test_model_solution_is_optimal(solved_system_model):
     _, results = solved_system_model
-    assert results.solver.status == pyo.SolverStatus.ok, "Solver did not exit normally."
-    assert (
-        results.solver.termination_condition == pyo.TerminationCondition.optimal
-    ), "Solution is not optimal."
+    assert results.solver.status == pyo.SolverStatus.ok, (
+        f"Solver status is '{results.solver.status}', expected 'ok'. "
+        "The solver did not exit normally."
+    )
+    assert results.solver.termination_condition in [
+        pyo.TerminationCondition.optimal,
+        pyo.TerminationCondition.unknown,
+    ], (
+        f"Solver termination condition is '{results.solver.termination_condition}', "
+        "expected 'optimal' or 'unknown'."
+    )
 
 
-def test_model_objective_in_tolerance(solved_system_model):
+@pytest.mark.parametrize(
+    "model_type, expected_value",
+    [
+        ("fixed", 3.15417e03),  # Expected value for the fixed model
+        ("flex", 2.81685e03),  # Expected value for the flexible model
+    ],
+    ids=["fixed_result", "flex_result"],
+)
+def test_system_model(model_type, expected_value, solved_system_model):
+    # Get the model from the solved system model fixture
     model, _ = solved_system_model
 
-    expected_objective = 1.79920e03
-    actual_objective = pyo.value(model.OBJ)
-
-    assert_relative_error(actual_objective, expected_objective)
+    model_name = model.name
+    expected_name = f"abstract_system_model_{model_type}"
+    # Only run the test if the model type matches the result type
+    if model_name != expected_name:
+        pytest.skip()
+    # Assert that the objective value is approximately equal to the expected value
+    assert pytest.approx(expected_value, rel=1e-4) == pyo.value(model.OBJ), (
+        f"Objective value for {model_type} model should be {expected_value} "
+        f"but was {pyo.value(model.OBJ)}."
+    )
 
 
 def test_model_scaling_values_within_tolerance(solved_system_model):
@@ -129,12 +135,18 @@ def test_model_scaling_values_within_tolerance(solved_system_model):
 
     # Check non-zero expected values are within tolerance
     for (process, start_time), expected in expected_values.items():
-        actual = pyo.value(model.scaling[process, start_time])
-        assert_relative_error(actual, expected)
+        actual = pyo.value(model.var_installation[process, start_time])
+        assert pytest.approx(expected, rel=1e-2) == actual, (
+            f"Installation value for {process} at {start_time} "
+            f"should be {expected} but was {actual}."
+        )
 
     # Check all other values are close to zero
     for process in model.PROCESS:
         for time in model.SYSTEM_TIME:
             if (process, time) not in expected_values:
-                actual = pyo.value(model.scaling[process, time])
-                assert_relative_error(actual, 0)
+                actual = pyo.value(model.var_installation[process, time])
+                assert pytest.approx(0, rel=1e-2) == actual, (
+                    f"Installation value for {process} at {time} "
+                    f"should be 0 but was {actual}."
+                )

@@ -15,36 +15,29 @@ def abstract_system_model_inputs():
         "BACKGROUND_ID": ["db_2020", "db_2030"],
         "PROCESS_TIME": [0, 1, 2, 3],
         "SYSTEM_TIME": [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029],
-        # "process_phaseend_map":
-        #     {
-        #         ("P1", "pre-production"): 0,
-        #         ("P1", "production"): 2,
-        #         ("P1", "post-production"): 3,
-        #         ("P2", "pre-production"): 0,
-        #         ("P2", "production"): 2,
-        #         ("P2", "post-production"): 3
-        #     },
+        "process_operation_time": {
+            "P1": (1, 2),
+            "P2": (1, 2),
+        },
         "demand": {
-            ("F1", 2020): 0,
-            ("F1", 2021): 0,
             ("F1", 2022): 10,
-            ("F1", 2023): 10,
+            ("F1", 2023): 5,
             ("F1", 2024): 10,
-            ("F1", 2025): 10,
+            ("F1", 2025): 5,
             ("F1", 2026): 10,
-            ("F1", 2027): 10,
+            ("F1", 2027): 5,
             ("F1", 2028): 10,
-            ("F1", 2029): 10,
+            ("F1", 2029): 5,
         },
         "foreground_technosphere": {
             ("P1", "I1", 0): 27.5,
             ("P2", "I2", 0): 1,
         },
         "foreground_biosphere": {
-            ("P1", "CO2", 1): 0.1,
-            ("P1", "CO2", 2): 0.1,
-            ("P2", "CO2", 1): 0.1,
-            ("P2", "CO2", 2): 0.1,
+            ("P1", "CO2", 1): 10,
+            ("P1", "CO2", 2): 10,
+            ("P2", "CO2", 1): 10,
+            ("P2", "CO2", 2): 10,
         },
         "foreground_production": {
             ("P1", "F1", 1): 0.5,
@@ -109,18 +102,27 @@ def abstract_system_model_inputs():
     }
 
 
-@pytest.fixture(scope="module")
-def abstract_system_model(abstract_system_model_inputs):
-    """Fixture to generate a model from the abstract system model inputs."""
+# Fixture to create the abstract system model (fixed or flexible)
+@pytest.fixture(
+    scope="module",
+    params=["fixed", "flex"],
+    ids=["fixed_operation", "flexible_operation"],
+)
+def abstract_system_model(request, abstract_system_model_inputs):
+    model_type = request.param  # This will be 'fixed' or 'flex'
     model_inputs = converter.ModelInputs(**abstract_system_model_inputs)
+
+    # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(
         inputs=model_inputs,
-        name="abstract_system_model",
+        name=f"abstract_system_model_{model_type}",
+        flexible_operation=(model_type == "flex"),
+        # debug_path=f"tests/fixtures/model_debug_{model_type}.lp",
     )
     return model
 
 
 @pytest.fixture(scope="module")
-def solved_system_model(abstract_system_model):
-    """Fixture to generate a solved model from the abstract system model."""
-    return optimizer.solve_model(abstract_system_model)
+def solved_system_model(request, abstract_system_model):
+    """Fixture to solve the abstract system model (fixed or flexible)."""
+    return optimizer.solve_model(abstract_system_model, solver_name="glpk")
