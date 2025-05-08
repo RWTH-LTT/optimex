@@ -103,7 +103,11 @@ def abstract_system_model_inputs():
 
 
 # Fixture to create the abstract system model (fixed or flexible)
-@pytest.fixture(scope="module", params=["fixed", "flex"], ids=["fixed", "flex"])
+@pytest.fixture(
+    scope="module",
+    params=["fixed", "flex"],
+    ids=["fixed_operation", "flexible_operation"],
+)
 def abstract_system_model(request, abstract_system_model_inputs):
     model_type = request.param  # This will be 'fixed' or 'flex'
     model_inputs = converter.ModelInputs(**abstract_system_model_inputs)
@@ -121,4 +125,6 @@ def abstract_system_model(request, abstract_system_model_inputs):
 @pytest.fixture(scope="module")
 def solved_system_model(request, abstract_system_model):
     """Fixture to solve the abstract system model (fixed or flexible)."""
-    return optimizer.solve_model(abstract_system_model, compute_iis=True)
+    return optimizer.solve_model(
+        abstract_system_model, solver_name="gdpopt", algorithm="LOA"
+    )
