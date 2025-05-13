@@ -328,6 +328,10 @@ class LCADataProcessor:
         for proc_code, period in operation_time.items():
             if not isinstance(proc_code, str):
                 raise ValueError("Process code must be a string.")
+            if proc_code not in self._processes:
+                raise ValueError(
+                    f"Process code '{proc_code}' not found in the processes dictionary."
+                )
             if (
                 not isinstance(period, tuple)
                 or len(period) != 2
@@ -341,6 +345,7 @@ class LCADataProcessor:
                     f"Start time must not exceed end time for process '{proc_code}'."
                 )
         self._process_operation_time = operation_time
+        return self._process_operation_time
 
     def _calculate_inventory_of_db(self, db_name, intermediate_flows, method, cutoff):
         """

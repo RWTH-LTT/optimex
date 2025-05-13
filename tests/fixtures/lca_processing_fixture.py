@@ -13,19 +13,18 @@ from optimex import lca_processor
 @bw2test
 def setup_brightway_databases():
     bd.projects.set_current("__test_standalone_db__")
-    bd.Database("bio").write(
+    bd.Database("biosphere3").write(
         {
-            ("bio", "CO2"): {
+            ("biosphere3", "CO2"): {
                 "type": "emission",
                 "name": "carbon dioxide",
             },
-            ("bio", "CH4"): {
+            ("biosphere3", "CH4"): {
                 "type": "emission",
                 "name": "methane",
             },
         },
     )
-    bd.Database("bio")._metadata["kind"] = "biosphere"
 
     bd.Database("db_2020").write(
         {
@@ -42,7 +41,7 @@ def setup_brightway_databases():
                     {
                         "amount": 1,
                         "type": "biosphere",
-                        "input": ("bio", "CO2"),
+                        "input": ("biosphere3", "CO2"),
                     },
                 ],
             },
@@ -59,7 +58,7 @@ def setup_brightway_databases():
                     {
                         "amount": 1,
                         "type": "biosphere",
-                        "input": ("bio", "CH4"),
+                        "input": ("biosphere3", "CH4"),
                     },
                 ],
             },
@@ -80,7 +79,7 @@ def setup_brightway_databases():
                     {
                         "amount": 0.9,
                         "type": "biosphere",
-                        "input": ("bio", "CO2"),
+                        "input": ("biosphere3", "CO2"),
                     },
                 ],
             },
@@ -97,7 +96,7 @@ def setup_brightway_databases():
                     {
                         "amount": 0.9,
                         "type": "biosphere",
-                        "input": ("bio", "CH4"),
+                        "input": ("biosphere3", "CH4"),
                     },
                 ],
             },
@@ -132,7 +131,7 @@ def setup_brightway_databases():
                     {
                         "amount": 20,
                         "type": "biosphere",
-                        "input": ("bio", "CO2"),
+                        "input": ("biosphere3", "CO2"),
                         "temporal_distribution": TemporalDistribution(
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([0, 0.5, 0.5, 0]),
@@ -160,13 +159,13 @@ def setup_brightway_databases():
                         "input": ("db_2020", "I2"),
                         "temporal_distribution": TemporalDistribution(
                             date=np.array(range(4), dtype="timedelta64[Y]"),
-                            amount=np.array([0, 0, 0, 1]),
+                            amount=np.array([1, 0, 0, 0]),
                         ),
                     },
                     {
                         "amount": 20,
                         "type": "biosphere",
-                        "input": ("bio", "CO2"),
+                        "input": ("biosphere3", "CO2"),
                         "temporal_distribution": TemporalDistribution(
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([0, 0.5, 0.5, 0]),
@@ -179,8 +178,8 @@ def setup_brightway_databases():
 
     bd.Method(("GWP", "example")).write(
         [
-            (("bio", "CO2"), 1),
-            (("bio", "CH4"), 27),
+            (("biosphere3", "CO2"), 1),
+            (("biosphere3", "CH4"), 27),
         ]
     )
 
@@ -191,6 +190,13 @@ def mock_lca_data_processor(setup_brightway_databases):
         date=np.arange(2020 - 1970, 10, dtype="datetime64[Y]"),
         amount=np.asarray([0, 0, 10, 5, 10, 5, 10, 5, 10, 5]),
     )
+
+    # Define functional flows for optimex
+    foreground = bd.Database("foreground")
+    for act in foreground:
+        act["functional flow"] = "F1"
+        act.save()
+
     lca_data_processor = lca_processor.LCADataProcessor(
         demand={"F1": td_demand},
         start_date=datetime.strptime("2020", "%Y"),
