@@ -21,7 +21,7 @@ def setup_brightway_databases():
             },
             ("biosphere3", "CH4"): {
                 "type": "emission",
-                "name": "methane",
+                "name": "methane, fossil",
             },
         },
     )

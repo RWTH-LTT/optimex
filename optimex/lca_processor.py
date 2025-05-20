@@ -93,9 +93,7 @@ class LCADataProcessor:
             {}
         )  # dict: {elementary flow code: elementary flow name}
         self._functional_flows = set()  # set: functional flow names
-        self._system_time = set(
-            range(self.start_date.year, self.start_date.year + self.timehorizon)
-        )  # set: absolute time points
+        self._system_time = set()  # set: absolute time points
         self._process_time = set()  # set: relative process time points
 
         # Tensors/matrices for optimization model
@@ -194,9 +192,11 @@ class LCADataProcessor:
             Dictionary containing the parsed demand with (flow, year) as the key and
             amount as the value.
         """
-
+        longest_years = 0
         for flow, td in self.demand_raw.items():
             years = td.date.astype("datetime64[Y]").astype(int) + 1970
+            if len(years) > longest_years:
+                longest_years = len(years)
             amounts = td.amount
 
             # Create a dictionary of (flow, year) -> amount
@@ -204,6 +204,10 @@ class LCADataProcessor:
                 {(flow, year): amount for year, amount in zip(years, amounts)}
             )
             self._functional_flows.add(flow)
+
+        self._system_time = range(
+            self.start_date.year, self.start_date.year + longest_years
+        )
 
         return self._demand
 
@@ -585,7 +589,7 @@ class LCADataProcessor:
             Dictionary containing the mapping matrix with keys as tuples (year, db_key).
         """
         # Generate a list of datetime objects for the years in the range
-        years = [self.start_date.year + i for i in range(self.timehorizon)]
+        years = self.system_time
 
         # Sort database entries by their year (extract year from datetime)
         db_names = sorted(
@@ -629,26 +633,44 @@ class LCADataProcessor:
 
     def construct_characterization_matrix(self, dynamic=True, metric="GWP") -> dict:
         """
-        Construct the dynamic characterization matrix.
+        Construct the dynamic characterization matrix for elementary flows.
 
-        The characterization matrix maps elementary flows to impact factors for each
-        system time point. This implementation currently supports only the Global
-        Warming Potential (GWP) metric.
+        This method generates a time-sensitive characterization matrix that maps each
+        elementary flow and system year to a corresponding impact factor. It supports
+        two metrics from the `dynamic_characterization` package: Global Warming
+        Potential (GWP) and Cumulative Radiative Forcing (CRF).
+
+        The characterization is computed over a specified time horizon, and results are
+        stored as a dictionary with keys in the form of `(elementary_flow, system_year)`
+        and corresponding float values representing the impact.
 
         Parameters
         ----------
-        dynamic : bool, optional
-            Whether to compute a dynamic characterization matrix over time. If False,
-            a static (time-invariant) matrix is used. Default is True.
         metric : str, optional
-            The impact assessment metric to use. Currently, only "GWP" is supported.
-            Default is "GWP".
+            The impact metric to use for characterization. Must be one of:
+            - `"GWP"`: Global Warming Potential, which normalizes cumulative radiative
+            forcing (RF) using a reference CO₂ pulse  occurring in the middle of
+            the time horizon.
+            - `"CRF"`: Cumulative Radiative Forcing, which integrates RF values across
+            the entire time horizon without normalization.
+            Default is `"GWP"`.
+
+        dynamic : bool, optional
+            Whether to perform time-explicit (dynamic) characterization. If `True`, the
+            characterization factors are computed for each year in the time horizon
+            using time-series radiative forcing. If `False`, static characterization
+            (like GWP100) is used for all system time points.
+            Default is `True`.
 
         Returns
         -------
-        dict
-            A dictionary where keys are tuples of (elementary_flow_code, year) and
-            values are the corresponding characterization factors.
+        Dict[Tuple[str, int], float]
+            A dictionary representing the dynamic characterization matrix. Each key is a
+            tuple of the form `(elementary_flow, system_year)` and the corresponding
+            value is the computed impact factor (e.g., GWP or CRF value) for that year.
+
+            This dictionary is also stored internally in `self._characterization`
+
         """
 
         # TODO: Add support for radiative forcing
@@ -657,7 +679,7 @@ class LCADataProcessor:
         df = pd.DataFrame({"code": list(self.elementary_flows.keys())})
 
         dates = pd.date_range(
-            start=self.start_date, periods=self.timehorizon, freq="YE"
+            start=self.start_date, periods=len(self._system_time), freq="YE"
         )
 
         # Get the id of each flow and add it to the DataFrame
@@ -666,29 +688,55 @@ class LCADataProcessor:
             df["amount"] = 1
             df["activity"] = np.nan
 
-            df = df.loc[np.repeat(df.index, len(dates))].reset_index(drop=True)
+            if metric == "GWP":
+                df = df.loc[np.repeat(df.index, len(dates))].reset_index(drop=True)
 
-            # Tile the dates and ensure 'date' is in datetime format
-            df["date"] = np.tile(dates, len(df) // len(dates))
-            df["date"] = df["date"].astype("datetime64[s]")
+                # Tile the dates and ensure 'date' is in datetime format
+                df["date"] = np.tile(dates, len(df) // len(dates))
+                df["date"] = df["date"].astype("datetime64[s]")
 
-            # dynamic characterization needs dates in datetime64 format
-            df_characterized = characterize(
-                df,
-                metric=metric,
-                fixed_time_horizon=True,
-                base_lcia_method=self.method,
-                time_horizon=self.timehorizon,
-            )
+                # dynamic characterization needs dates in datetime64 format
+                df_characterized = characterize(
+                    df,
+                    metric=metric,
+                    fixed_time_horizon=True,
+                    base_lcia_method=self.method,
+                    time_horizon=self.timehorizon,
+                )
+                df_characterized["date"] = df_characterized["date"].dt.to_pydatetime()
+                characterization_matrix = {
+                    (
+                        df.loc[df["flow"] == row["flow"], "code"].values[0],
+                        row["date"].year,
+                    ): row["amount"]
+                    for _, row in df_characterized.iterrows()
+                }
+            elif metric == "CRF":
+                characterization_matrix = {}
+                df["date"] = pd.Timestamp(self.start_date)
+                for idx, _ in df.iterrows():
+                    df_row = df.iloc[[idx]][["date", "flow", "amount", "activity"]]
+                    df_characterized = characterize(
+                        df_row,
+                        metric="radiative_forcing",
+                        fixed_time_horizon=True,
+                        base_lcia_method=self.method,
+                        time_horizon=self.timehorizon,
+                        time_horizon_start=pd.Timestamp(self.start_date),
+                    )
+                    df_characterized["date"] = df_characterized[
+                        "date"
+                    ].dt.to_pydatetime()
+                    flow = df_characterized["flow"].values[0]
+                    code = df.loc[df["flow"] == flow, "code"].values[0]
+                    for year in self.system_time:
+                        years_left = (
+                            self.start_date.year + self.timehorizon - year - 1
+                        )  # max is 100 years after 2020
+                        rf_values = df_characterized.head(years_left)["amount"]
+                        cumulative_rf = rf_values.sum()
 
-            df_characterized["date"] = df_characterized["date"].dt.to_pydatetime()
-            characterization_matrix = {
-                (
-                    df.loc[df["flow"] == row["flow"], "code"].values[0],
-                    row["date"].year,
-                ): row["amount"]
-                for _, row in df_characterized.iterrows()
-            }
+                        characterization_matrix[(code, year)] = cumulative_rf
         else:
             method_data = bd.Method(self.method).load()
             # Preprocess method_data into a dictionary for fast lookups
