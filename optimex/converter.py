@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple
 
 import yaml
 
-from optimex.optimex import LCADataProcessor
+from optimex.lca_processor import LCADataProcessor
 
 
 @dataclass
@@ -113,79 +113,87 @@ class ModelInputs:
 
 class Converter:
     """
-    Converts and validates inputs from an Optimex instance for use in optimization.
+    Converts and validates inputs from an LCADataProcessor instance for use in
+    optimization.
 
-    This class extracts relevant structural data from an `Optimex` object
+    This class extracts relevant structural data from an `LCADataProcessor` object
     and constructs a `ModelInputs` object, ensuring format compatibility
     and optionally filtering or renaming components.
 
     Parameters
     ----------
-    optimex : Optimex
+    lca_data_processor : LCADataProcessor
         The source object containing LCA data structures such as processes,
         flows, and background information.
     """
 
-    def __init__(self, optimex: LCADataProcessor):
-        self.optimex = optimex
+    def __init__(self, lca_data_processor: LCADataProcessor):
+        self.lca_data_processor = lca_data_processor
         self.model_inputs = None
 
     def combine_and_check(self, **kwargs) -> ModelInputs:
         """
-        Combine data from `Optimex` and additional user-provided parameters, validate
-        the input structure, and return a validated `ModelInputs` object.
+        Combine data from `LCADataProcessor` and additional user-provided parameters,
+        validate the input structure, and return a validated `ModelInputs` object.
 
-        This method acts as an interface between the LCA-based data in `Optimex` and the
-        structured input required for the optimization process. It collects data from
-        the `Optimex` object, formats it according to the `ModelInputs` dataclass, and
-        allows the user to override any default values with additional parameters
-        passed through `kwargs`. The method performs validation to ensure that the data
-        adheres to the expected structure and consistency between different input types,
-        such as processes, flows, and time periods.
+        This method acts as an interface between the LCA-based data in
+        `LCADataProcessor` and the structured input required for the optimization
+        process. It collects data from the `LCADataProcessor` object, formats it
+        according to the `ModelInputs` dataclass, and allows the user to override any
+        default values with additional parameters passed through `kwargs`.
+        The method performs validation to ensure that the data adheres to the expected
+        structure and consistency between different input types, such as processes,
+        flows, and time periods.
         If any inconsistencies are detected, a `ValueError` is raised.
 
         Parameters
         ----------
         **kwargs : dict, optional
-            Keyword arguments that override the default values from the Optimex
+            Keyword arguments that override the default values from the LCADataProcessor
             instance. These correspond to the fields in `ModelInputs.
         """
 
-        # STEP 1: Retrieve all data from kwargs or default to self.optimex
-        process = kwargs.get("PROCESS", list(self.optimex.processes.keys()))
-        process_names = kwargs.get("process_names", self.optimex.processes)
+        # STEP 1: Retrieve all data from kwargs or default to self.lca_data_processor
+        process = kwargs.get("PROCESS", list(self.lca_data_processor.processes.keys()))
+        process_names = kwargs.get("process_names", self.lca_data_processor.processes)
         functional_flow = kwargs.get(
-            "FUNCTIONAL_FLOW", list(self.optimex.functional_flows)
+            "FUNCTIONAL_FLOW", list(self.lca_data_processor.functional_flows)
         )
         intermediate_flow = kwargs.get(
-            "INTERMEDIATE_FLOW", list(self.optimex.intermediate_flows.keys())
+            "INTERMEDIATE_FLOW", list(self.lca_data_processor.intermediate_flows.keys())
         )
         elementary_flow = kwargs.get(
-            "ELEMENTARY_FLOW", list(self.optimex.elementary_flows.keys())
+            "ELEMENTARY_FLOW", list(self.lca_data_processor.elementary_flows.keys())
         )
         background_id = kwargs.get(
-            "BACKGROUND_ID", list(self.optimex.background_dbs.keys())
+            "BACKGROUND_ID", list(self.lca_data_processor.background_dbs.keys())
         )
-        process_time = kwargs.get("PROCESS_TIME", list(self.optimex.process_time))
-        system_time = kwargs.get("SYSTEM_TIME", list(self.optimex.system_time))
-        demand = kwargs.get("demand", self.optimex.demand)
+        process_time = kwargs.get(
+            "PROCESS_TIME", list(self.lca_data_processor.process_time)
+        )
+        system_time = kwargs.get(
+            "SYSTEM_TIME", list(self.lca_data_processor.system_time)
+        )
+        demand = kwargs.get("demand", self.lca_data_processor.demand)
         process_operation_time = kwargs.get(
-            "process_operation_time", self.optimex.process_operation_time
+            "process_operation_time", self.lca_data_processor.process_operation_time
         )
         foreground_technosphere = kwargs.get(
-            "foreground_technosphere", self.optimex.foreground_technosphere
+            "foreground_technosphere", self.lca_data_processor.foreground_technosphere
         )
         foreground_biosphere = kwargs.get(
-            "foreground_biosphere", self.optimex.foreground_biosphere
+            "foreground_biosphere", self.lca_data_processor.foreground_biosphere
         )
         foreground_production = kwargs.get(
-            "foreground_production", self.optimex.foreground_production
+            "foreground_production", self.lca_data_processor.foreground_production
         )
         background_inventory = kwargs.get(
-            "background_inventory", self.optimex._background_inventory
+            "background_inventory", self.lca_data_processor.background_inventory
         )
-        mapping = kwargs.get("mapping", self.optimex.mapping)
-        characterization = kwargs.get("characterization", self.optimex.characterization)
+        mapping = kwargs.get("mapping", self.lca_data_processor.mapping)
+        characterization = kwargs.get(
+            "characterization", self.lca_data_processor.characterization
+        )
         process_limits_max = kwargs.get("process_limits_max")
         process_limits_min = kwargs.get("process_limits_min")
         cumulative_process_limits_max = kwargs.get("cumulative_process_limits_max")
