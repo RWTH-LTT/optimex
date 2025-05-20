@@ -724,9 +724,9 @@ class LCADataProcessor:
                         time_horizon=self.timehorizon,
                         time_horizon_start=pd.Timestamp(self.start_date),
                     )
-                    df_characterized["date"] = df_characterized[
-                        "date"
-                    ].dt.to_pydatetime()
+                    df_characterized["date"] = np.array(
+                        df_characterized["date"].dt.to_pydatetime()
+                    )
                     flow = df_characterized["flow"].values[0]
                     code = df.loc[df["flow"] == flow, "code"].values[0]
                     for year in self.system_time:
@@ -753,3 +753,16 @@ class LCADataProcessor:
         self._characterization = characterization_matrix
 
         return characterization_matrix
+
+    def set_characterization(self, characterization: dict) -> None:
+        """
+        Set the characterization matrix directly.
+
+        Parameters
+        ----------
+        characterization : dict
+            A dictionary representing the characterization matrix.
+            Each key is a tuple of the form (elementary_flow, system_year)
+            and the corresponding value is the computed impact factor.
+        """
+        self._characterization = characterization
