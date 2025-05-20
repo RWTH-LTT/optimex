@@ -199,11 +199,12 @@ class LCADataProcessor:
             Dictionary containing the parsed demand with (flow, year) as the key and
             amount as the value.
         """
-        longest_years = 0
+        longest_demand_interval = 0
+        # find longest defined demand for initialization of system time
         for flow, td in self.demand_raw.items():
             years = td.date.astype("datetime64[Y]").astype(int) + 1970
-            if len(years) > longest_years:
-                longest_years = len(years)
+            if len(years) > longest_demand_interval:
+                longest_demand_interval = len(years)
             amounts = td.amount
 
             # Create a dictionary of (flow, year) -> amount
@@ -213,7 +214,7 @@ class LCADataProcessor:
             self._functional_flows.add(flow)
 
         self._system_time = range(
-            self.start_date.year, self.start_date.year + longest_years
+            self.start_date.year, self.start_date.year + longest_demand_interval
         )
 
         return self._demand
@@ -674,7 +675,7 @@ class LCADataProcessor:
             Default is `None`.
 
         dynamic : bool, optional
-            Whether to perform time-explicit (dynamic) characterization. If `True`, the
+            Whether to perform dynamic characterization. If `True`, the
             characterization factors are computed for each year in the time horizon
             using time-series radiative forcing. If `False`, static characterization
             (like GWP100) is used for all system time points.
@@ -748,11 +749,11 @@ class LCADataProcessor:
                     )
                     flow = df_characterized["flow"].values[0]
                     code = df.loc[df["flow"] == flow, "code"].values[0]
+                    # add values from emissionpoint till end of time horizon for each
+                    # year in system time
                     for year in self.system_time:
-                        years_left = (
-                            self.start_date.year + self.timehorizon - year - 1
-                        )  # max is 100 years after 2020
-                        rf_values = df_characterized.head(years_left)["amount"]
+                        cutoff_year = self.start_date.year + self.timehorizon - year - 1
+                        rf_values = df_characterized.head(cutoff_year)["amount"]
                         cumulative_rf = rf_values.sum()
 
                         characterization_matrix[(base_method_name, code, year)] = (
