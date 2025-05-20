@@ -84,7 +84,6 @@ def test_set_process_operation_time(
 def test_sequential_inventory_tensor_calculation(
     mock_lca_data_processor, abstract_system_model_inputs
 ):
-    mock_lca_data_processor.parse_demand
     mock_lca_data_processor.construct_foreground_tensors()
     mock_lca_data_processor.sequential_inventory_tensor_calculation()
     sequential_inventory_tensor_generated = mock_lca_data_processor.background_inventory
@@ -97,14 +96,12 @@ def test_sequential_inventory_tensor_calculation(
 
 
 def test_mapping_matrix(mock_lca_data_processor, abstract_system_model_inputs):
-    mock_lca_data_processor.parse_demand()
     mapping_matrix_generated = mock_lca_data_processor.construct_mapping_matrix()
     mapping_matrix_expected = abstract_system_model_inputs["mapping"]
     assert_dicts_equal_allowing_zeros(mapping_matrix_generated, mapping_matrix_expected)
 
 
 def test_characterization_matrix(mock_lca_data_processor, abstract_system_model_inputs):
-    mock_lca_data_processor.parse_demand()
     mock_lca_data_processor.construct_foreground_tensors()
     mock_lca_data_processor.sequential_inventory_tensor_calculation()
     characterization_matrix_generated = (
