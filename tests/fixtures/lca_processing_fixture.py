@@ -183,6 +183,13 @@ def setup_brightway_databases():
         ]
     )
 
+    bd.Method(("land_use", "example")).write(
+        [
+            (("biosphere3", "CO2"), 2),
+            (("biosphere3", "CH4"), 1),
+        ]
+    )
+
 
 @pytest.fixture(scope="module")
 def mock_lca_data_processor(setup_brightway_databases):
@@ -200,7 +207,10 @@ def mock_lca_data_processor(setup_brightway_databases):
     lca_data_processor = lca_processor.LCADataProcessor(
         demand={"F1": td_demand},
         start_date=datetime.strptime("2020", "%Y"),
-        method=("GWP", "example"),
+        methods={
+            "climate_change": ("GWP", "example"),
+            "land_use": ("land_use", "example"),
+        },
         database_date_dict={
             "db_2020": datetime.strptime("2020", "%Y"),
             "db_2030": datetime.strptime("2030", "%Y"),

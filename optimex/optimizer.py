@@ -17,6 +17,7 @@ from optimex.converter import ModelInputs
 def create_model(
     inputs: ModelInputs,
     name: str,
+    objective_category: str,
     flexible_operation: bool = True,
     debug_path: str = None,
 ) -> pyo.ConcreteModel:
@@ -35,6 +36,8 @@ def create_model(
         required for model construction.
     name : str
         Name of the Pyomo model instance.
+    objective_category : str
+        The category of impact to be minimized in the optimization problem.
     flexible_operation : bool, optional
         Enables flexible operation mode for processes. When set to True, the model
         introduces additional variables that allow processes to operate between 0 and
@@ -225,6 +228,18 @@ def create_model(
         default=0,  # Set default coupling value to 0 if not defined
     )
 
+    model.category_impact_limit = pyo.Param(
+        model.CATEGORY,
+        within=pyo.Reals,
+        doc="maximum impact limit",
+        default=float("inf"),
+        initialize=(
+            inputs.category_impact_limit
+            if inputs.category_impact_limit is not None
+            else {}
+        ),
+    )
+
     # Variables
     logging.info("Creating variables")
     model.var_installation = pyo.Var(
@@ -354,10 +369,9 @@ def create_model(
                     )
                 )
                 for e in model.ELEMENTARY_FLOW
-                for c in model.CATEGORY
             )
 
-        model.time_process_specific_impact = pyo.Expression(
+        model.specific_impact = pyo.Expression(
             model.CATEGORY, model.PROCESS, model.SYSTEM_TIME, rule=impact_op
         )
 
@@ -421,7 +435,7 @@ def create_model(
         )
 
         # Time process-specific impact
-        def impact_orig(model, p, t):
+        def impact_orig(model, c, p, t):
             return sum(
                 model.characterization[c, e, t]
                 * (
@@ -437,10 +451,9 @@ def create_model(
                     + model.scaled_biosphere[p, e, t]
                 )
                 for e in model.ELEMENTARY_FLOW
-                for c in model.CATEGORY
             )
 
-        model.time_process_specific_impact = pyo.Expression(
+        model.specific_impact = pyo.Expression(
             model.CATEGORY, model.PROCESS, model.SYSTEM_TIME, rule=impact_orig
         )
 
@@ -461,12 +474,27 @@ def create_model(
             model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=demand_orig
         )
 
+    # Category impact limit
+    def category_impact_limit_rule(model, c):
+        return (
+            sum(
+                model.specific_impact[c, p, t]
+                for p in model.PROCESS
+                for t in model.SYSTEM_TIME
+            )
+            <= model.category_impact_limit[c]
+        )
+
+    model.CategoryImpactLimit = pyo.Constraint(
+        model.CATEGORY, rule=category_impact_limit_rule
+    )
+
     # Objective: Direct computation
     logging.info("Creating objective function")
 
     def expression_objective_function(model):
         return sum(
-            model.time_process_specific_impact[p, t]
+            model.specific_impact[objective_category, p, t]
             for p in model.PROCESS
             for t in model.SYSTEM_TIME
         )
