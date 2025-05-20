@@ -35,6 +35,7 @@ dependencies = [
     "tdqm",
     "pyomo",
     "pyyaml",
+    "bw_temporalis",
     # dependencies as strings with quotes, e.g. "foo"
     # You can add version requirements like "foo>2.0"
 ]

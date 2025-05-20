@@ -26,10 +26,11 @@ requirements:
     - setuptools
   run:
     - dynamic_characterization
-    - premise
     - brightway25
     - tqdm
     - pyomo
+    - bw_temporalis
+    - pyyaml
 
 
 source:
@@ -47,7 +48,7 @@ build:
     - dev/*
     - notebooks/*
     - archive/*
-    
+
 files:
   include:
     - optimex/**
