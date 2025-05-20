@@ -73,8 +73,9 @@ def create_model(
     model.ELEMENTARY_FLOW = pyo.Set(
         doc="Set of elementary flows, indexed by e", initialize=inputs.ELEMENTARY_FLOW
     )
-    # model.INDICATOR = pyo.Set(doc="Set of environmental indicators,
-    # indexed by ind", initialize=inputs.INDICATOR)
+    model.CATEGORY = pyo.Set(
+        doc="Set of impact categories, indexed by c", initialize=inputs.CATEGORY
+    )
 
     model.BACKGROUND_ID = pyo.Set(
         doc="Set of identifiers of the prospective background databases, indexed by b",
@@ -163,7 +164,7 @@ def create_model(
         initialize=inputs.mapping,
     )
     model.characterization = pyo.Param(
-        #    model.INDICATOR,
+        model.CATEGORY,
         model.ELEMENTARY_FLOW,
         model.SYSTEM_TIME,
         within=pyo.Reals,
@@ -331,9 +332,9 @@ def create_model(
         )
 
         # Time process-specific impact
-        def impact_op(model, p, t):
+        def impact_op(model, c, p, t):
             return sum(
-                model.characterization[e, t]
+                model.characterization[c, e, t]
                 * (
                     sum(
                         (
@@ -353,10 +354,11 @@ def create_model(
                     )
                 )
                 for e in model.ELEMENTARY_FLOW
+                for c in model.CATEGORY
             )
 
         model.time_process_specific_impact = pyo.Expression(
-            model.PROCESS, model.SYSTEM_TIME, rule=impact_op
+            model.CATEGORY, model.PROCESS, model.SYSTEM_TIME, rule=impact_op
         )
 
         # Operation limit
@@ -421,7 +423,7 @@ def create_model(
         # Time process-specific impact
         def impact_orig(model, p, t):
             return sum(
-                model.characterization[e, t]
+                model.characterization[c, e, t]
                 * (
                     sum(
                         model.scaled_technosphere[p, i, t]
@@ -435,10 +437,11 @@ def create_model(
                     + model.scaled_biosphere[p, e, t]
                 )
                 for e in model.ELEMENTARY_FLOW
+                for c in model.CATEGORY
             )
 
         model.time_process_specific_impact = pyo.Expression(
-            model.PROCESS, model.SYSTEM_TIME, rule=impact_orig
+            model.CATEGORY, model.PROCESS, model.SYSTEM_TIME, rule=impact_orig
         )
 
         # Demand constraint
