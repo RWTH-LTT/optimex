@@ -188,7 +188,7 @@ class Converter:
             "foreground_production", self.lca_data_processor.foreground_production
         )
         background_inventory = kwargs.get(
-            "background_inventory", self.lca_data_processor._background_inventory
+            "background_inventory", self.lca_data_processor.background_inventory
         )
         mapping = kwargs.get("mapping", self.lca_data_processor.mapping)
         characterization = kwargs.get(
