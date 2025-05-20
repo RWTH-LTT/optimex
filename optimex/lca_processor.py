@@ -656,7 +656,7 @@ class LCADataProcessor:
             Default is `"GWP"`.
 
         dynamic : bool, optional
-            Whether to perform time-explicit (dynamic) characterization. If `True`, the
+            Whether to perform dynamic characterization. If `True`, the
             characterization factors are computed for each year in the time horizon
             using time-series radiative forcing. If `False`, static characterization
             (like GWP100) is used for all system time points.
