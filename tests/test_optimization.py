@@ -23,6 +23,7 @@ def test_all_sets_init(abstract_system_model, abstract_system_model_inputs):
         ("BACKGROUND_ID", "BACKGROUND_ID"),
         ("PROCESS_TIME", "PROCESS_TIME"),
         ("SYSTEM_TIME", "SYSTEM_TIME"),
+        ("CATEGORY", "CATEGORY"),
     ]
 
     for model_set_name, input_set_name in sets_to_test:

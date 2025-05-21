@@ -96,21 +96,27 @@ def test_sequential_inventory_tensor_calculation(
 
 
 def test_mapping_matrix(mock_lca_data_processor, abstract_system_model_inputs):
+    mock_lca_data_processor.parse_demand()
     mapping_matrix_generated = mock_lca_data_processor.construct_mapping_matrix()
     mapping_matrix_expected = abstract_system_model_inputs["mapping"]
     assert_dicts_equal_allowing_zeros(mapping_matrix_generated, mapping_matrix_expected)
 
 
-def test_characterization_matrix(mock_lca_data_processor, abstract_system_model_inputs):
+def test_characterization_tensor(mock_lca_data_processor, abstract_system_model_inputs):
+    mock_lca_data_processor.parse_demand()
     mock_lca_data_processor.construct_foreground_tensors()
     mock_lca_data_processor.sequential_inventory_tensor_calculation()
-    characterization_matrix_generated = (
-        mock_lca_data_processor.construct_characterization_matrix(metric="CRF")
+    mock_lca_data_processor.construct_characterization_matrix(
+        base_method_name="climate_change", dynamic=True, metric="CRF"
     )
-    characterization_matrix_expected = {
+    mock_lca_data_processor.construct_characterization_matrix(
+        base_method_name="land_use", dynamic=False
+    )
+    characterization_tensor_generated = mock_lca_data_processor.characterization
+    characterization_tensor_expected = {
         k: v * 1e-13
         for k, v in abstract_system_model_inputs["characterization"].items()
     }
     assert_dicts_equal_allowing_zeros(
-        characterization_matrix_generated, characterization_matrix_expected
+        characterization_tensor_generated, characterization_tensor_expected
     )

@@ -1,5 +1,5 @@
 import pickle
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Dict, List, Tuple
 
 import yaml
@@ -34,6 +34,8 @@ class ModelInputs:
     SYSTEM_TIME : list of int
         Absolute time steps representing actual years in the system (e.g., 2025, 2026).
         Used for defining system-wide constraints, demand, and impact assessments.
+    CATEGORY : list of str
+        Impact categories for each elementary flow.
     demand : dict of (str, int) to float
         Maps (functional_flow, system_time) to demand amount.
     process_operation_time : dict of str to (int, int)
@@ -85,6 +87,7 @@ class ModelInputs:
     BACKGROUND_ID: List[str]
     PROCESS_TIME: List[int]
     SYSTEM_TIME: List[int]
+    CATEGORY: List[str]
 
     demand: Dict[Tuple[str, int], float]
     process_operation_time: Dict[str, Tuple[int, int]]
@@ -97,6 +100,7 @@ class ModelInputs:
     mapping: Dict[Tuple[str, int], float]
     characterization: Dict[Tuple[str, int], float]
 
+    category_impact_limit: Dict[str, float] = None
     process_limits_max: Dict[Tuple[str, int], float] = None
     process_limits_min: Dict[Tuple[str, int], float] = None
     cumulative_process_limits_max: Dict[str, float] = None
@@ -174,6 +178,7 @@ class Converter:
         system_time = kwargs.get(
             "SYSTEM_TIME", list(self.lca_data_processor.system_time)
         )
+        category = kwargs.get("CATEGORY", list(self.lca_data_processor.category))
         demand = kwargs.get("demand", self.lca_data_processor.demand)
         process_operation_time = kwargs.get(
             "process_operation_time", self.lca_data_processor.process_operation_time
@@ -194,6 +199,7 @@ class Converter:
         characterization = kwargs.get(
             "characterization", self.lca_data_processor.characterization
         )
+        category_impact_limit = kwargs.get("category_impact_limit")
         process_limits_max = kwargs.get("process_limits_max")
         process_limits_min = kwargs.get("process_limits_min")
         cumulative_process_limits_max = kwargs.get("cumulative_process_limits_max")
@@ -245,9 +251,14 @@ class Converter:
             assert_keys_in_set([bg_id], background_id, "mapping")
             assert_keys_in_set([sys_time], system_time, "mapping")
 
-        for elem_flow, sys_time in characterization.keys():
+        for cat, elem_flow, sys_time in characterization.keys():
             assert_keys_in_set([elem_flow], elementary_flow, "characterization")
             assert_keys_in_set([sys_time], system_time, "characterization")
+            assert_keys_in_set([cat], category, "characterization")
+
+        if category_impact_limit is not None:
+            for cat, _ in category_impact_limit.items():
+                assert_keys_in_set([cat], category, "category_impact_limit")
 
         if process_limits_max is not None:
             for proc, sys_time in process_limits_max.keys():
@@ -285,6 +296,7 @@ class Converter:
             BACKGROUND_ID=background_id,
             PROCESS_TIME=process_time,
             SYSTEM_TIME=system_time,
+            CATEGORY=category,
             demand=demand,
             process_operation_time=process_operation_time,
             foreground_technosphere=foreground_technosphere,
@@ -293,6 +305,7 @@ class Converter:
             background_inventory=background_inventory,
             mapping=mapping,
             characterization=characterization,
+            category_impact_limit=category_impact_limit,
             process_limits_max=process_limits_max,
             process_limits_min=process_limits_min,
             cumulative_process_limits_max=cumulative_process_limits_max,
@@ -399,26 +412,4 @@ class Converter:
         """
         if model_inputs is None:
             raise ValueError("Model inputs have not been set.")
-        return {
-            "PROCESS": model_inputs.PROCESS,
-            "process_names": model_inputs.process_names,
-            "FUNCTIONAL_FLOW": model_inputs.FUNCTIONAL_FLOW,
-            "INTERMEDIATE_FLOW": model_inputs.INTERMEDIATE_FLOW,
-            "ELEMENTARY_FLOW": model_inputs.ELEMENTARY_FLOW,
-            "BACKGROUND_ID": model_inputs.BACKGROUND_ID,
-            "PROCESS_TIME": model_inputs.PROCESS_TIME,
-            "SYSTEM_TIME": model_inputs.SYSTEM_TIME,
-            "demand": model_inputs.demand,
-            "process_operation_time": model_inputs.process_operation_time,
-            "foreground_technosphere": model_inputs.foreground_technosphere,
-            "foreground_biosphere": model_inputs.foreground_biosphere,
-            "foreground_production": model_inputs.foreground_production,
-            "background_inventory": model_inputs.background_inventory,
-            "mapping": model_inputs.mapping,
-            "characterization": model_inputs.characterization,
-            "process_limits_max": model_inputs.process_limits_max,
-            "process_limits_min": model_inputs.process_limits_min,
-            "cumulative_process_limits_max": model_inputs.cumulative_process_limits_max,
-            "cumulative_process_limits_min": model_inputs.cumulative_process_limits_min,
-            "process_coupling": model_inputs.process_coupling,
-        }
+        return asdict(model_inputs)

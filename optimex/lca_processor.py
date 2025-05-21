@@ -26,7 +26,7 @@ class LCADataProcessor:
         self,
         demand: dict,
         start_date: datetime,
-        method: tuple,
+        methods: dict,
         database_date_dict: dict,
         temporal_resolution: str = "year",
         timehorizon: int = 100,
@@ -46,8 +46,9 @@ class LCADataProcessor:
             A dictionary containing time-explicit demands for each flow.
         start_date : datetime
             The start date for the time horizon, used to calculate future years.
-        method : tuple
-            A tuple defining the LCIA method (e.g.,
+        methods : Dict[str, tuple]
+            A dictionary mapping user-defined impact category names to their respective
+            LCIA methods represented by a tuple (e.g.,
             `("EF v3.1", "climate change", "global warming potential (GWP100)")`).
         database_date_dict : dict
             A dictionary mapping database names to their respective dates.
@@ -60,7 +61,7 @@ class LCADataProcessor:
         # Store the provided values as instance variables
         self.demand_raw = demand
         self.timehorizon = timehorizon
-        self.method = method
+        self.methods = methods
 
         if temporal_resolution != "year":
             raise NotImplementedError("Only 'year' is currently supported.")
@@ -95,6 +96,7 @@ class LCADataProcessor:
         self._functional_flows = set()  # set: functional flow names
         self._system_time = set()  # set: absolute time points
         self._process_time = set()  # set: relative process time points
+        self._category = set(self.methods.keys())  # set: impact categories
 
         # Tensors/matrices for optimization model
         self._demand = {}
@@ -131,6 +133,11 @@ class LCADataProcessor:
     def system_time(self) -> set:
         """Read-only access to the system time list."""
         return self._system_time
+
+    @property
+    def category(self) -> set:
+        """Read-only access to the impact categories list."""
+        return self._category
 
     @property
     def process_time(self) -> set:
@@ -352,7 +359,7 @@ class LCADataProcessor:
         self._process_operation_time = operation_time
         return self._process_operation_time
 
-    def _calculate_inventory_of_db(self, db_name, intermediate_flows, method, cutoff):
+    def _calculate_inventory_of_db(self, db_name, intermediate_flows, methods, cutoff):
         """
         Calculate the life cycle inventory for a specified background database.
 
@@ -367,9 +374,10 @@ class LCADataProcessor:
             Name of the background database to analyze.
         intermediate_flows : dict
             Dictionary mapping intermediate flow codes to flow names.
-        method : tuple
-            LCIA method used to compute environmental impacts (e.g.,
-            ("EF v3.1", "climate change", "GWP100")).
+        methods : Dict[str, tuple]
+            A dictionary mapping user-defined impact category names to their respective
+            LCIA methods represented by a tuple (e.g.,
+            `("EF v3.1", "climate change", "global warming potential (GWP100)")`).
         cutoff : float
             Number of top elementary flows (per intermediate flow) to retain based on
             impact magnitude. Used to reduce computational complexity.
@@ -397,44 +405,48 @@ class LCADataProcessor:
                 logging.warning(f"Failed to get activity for key '{key}': {e}")
         function_unit_dict = {activity: 1 for activity in activity_cache.values()}
 
-        lca = bc.LCA(function_unit_dict, method)
+        lca = bc.LCA(function_unit_dict, next(iter(methods.values())))
         lca.lci(factorize=len(function_unit_dict) > 10)  # factorize if many activities
         logging.info(f"Factorized LCI for database: {db_name}")
         for intermediate_flow_code, activity in tqdm(activity_cache.items()):
             # logging.info(f"Calculating inventory for activity: {activity}")
-            lca.redo_lci({activity.id: 1})
-            if lca.inventory.nnz == 0:
-                logging.warning(
-                    f"Skipping activity {activity} as it has no non-zero inventory."
-                )
-                continue
-            raw_inventory_df = lca.to_dataframe(matrix_label="inventory", cutoff=cutoff)
-
-            inventory_df = (
-                raw_inventory_df.groupby("row_code", as_index=False)
-                .agg({"amount": "sum"})
-                .merge(
-                    raw_inventory_df[["row_code", "row_name"]].drop_duplicates(
-                        "row_code"
-                    ),
-                    on="row_code",
-                )
-            )
-
-            # Vectorized updates to `inventory_tensor`
-            inventory_tensor.update(
-                {
-                    (db_name, intermediate_flow_code, elementary_flow_code): amount
-                    for elementary_flow_code, amount in zip(
-                        inventory_df["row_code"], inventory_df["amount"]
+            for method in methods.values():
+                lca.switch_method(method)
+                lca.lci(demand={activity.id: 1})
+                if lca.inventory.nnz == 0:
+                    logging.warning(
+                        f"Skipping activity {activity} as it has no non-zero inventory."
                     )
-                }
-            )
+                    continue
+                raw_inventory_df = lca.to_dataframe(
+                    matrix_label="inventory", cutoff=cutoff
+                )
 
-            # Vectorized updates to `elementary_flows`
-            elementary_flows.update(
-                dict(zip(inventory_df["row_code"], inventory_df["row_name"]))
-            )
+                inventory_df = (
+                    raw_inventory_df.groupby("row_code", as_index=False)
+                    .agg({"amount": "sum"})
+                    .merge(
+                        raw_inventory_df[["row_code", "row_name"]].drop_duplicates(
+                            "row_code"
+                        ),
+                        on="row_code",
+                    )
+                )
+
+                # Vectorized updates to `inventory_tensor`
+                inventory_tensor.update(
+                    {
+                        (db_name, intermediate_flow_code, elementary_flow_code): amount
+                        for elementary_flow_code, amount in zip(
+                            inventory_df["row_code"], inventory_df["amount"]
+                        )
+                    }
+                )
+
+                # Vectorized updates to `elementary_flows`
+                elementary_flows.update(
+                    dict(zip(inventory_df["row_code"], inventory_df["row_name"]))
+                )
         logging.info(f"Finished calculating inventory for database: {db_name}")
         return inventory_tensor, elementary_flows
 
@@ -515,7 +527,7 @@ class LCADataProcessor:
             try:
                 # Directly call the _calculate_inventory_of_db method for each db
                 inventory_tensor, elementary_flows = self._calculate_inventory_of_db(
-                    db_name, self._intermediate_flows, self.method, cutoff
+                    db_name, self._intermediate_flows, self.methods, cutoff
                 )
                 # Store the result in the results list
                 results.append((inventory_tensor, elementary_flows))
@@ -632,9 +644,15 @@ class LCADataProcessor:
 
         return mapping_matrix
 
-    def construct_characterization_matrix(self, dynamic=True, metric="GWP") -> dict:
+    def construct_characterization_matrix(
+        self,
+        base_method_name: str,
+        dynamic: bool = False,
+        metric: str = None,
+    ) -> dict:
         """
-        Construct the dynamic characterization matrix for elementary flows.
+        Construct the dynamic characterization matrix for elementary flows for a
+        certain method.
 
         This method generates a time-sensitive characterization matrix that maps each
         elementary flow and system year to a corresponding impact factor. It supports
@@ -647,21 +665,29 @@ class LCADataProcessor:
 
         Parameters
         ----------
+
+        base_method_name : str
+            The user-define dictionary key in `methods` representing the LCIA method to
+            use for pre-processing characterization.
+        dynamic : bool, optional
+            Whether to perform dynamic characterization. Currently dynamic approaches
+            using the dynamic_characterization package for the impact category of
+            climate change are supported.
+            If `True`, the characterization factors are computed for each year in the
+            time horizon using time-series radiative forcing. If `False`, static
+            characterization with the given base method (like GWP100) is used for
+            all system time points.
+            Default is `False`.
         metric : str, optional
-            The impact metric to use for characterization. Must be one of:
+            The impact metric to use for dynamic characterization. When performing
+            static characterization leave at default. Currently supported
+            metrics for the impact category of climate change include:
             - `"GWP"`: Global Warming Potential, which normalizes cumulative radiative
             forcing (RF) using a reference CO₂ pulse  occurring in the middle of
             the time horizon.
             - `"CRF"`: Cumulative Radiative Forcing, which integrates RF values across
             the entire time horizon without normalization.
-            Default is `"GWP"`.
-
-        dynamic : bool, optional
-            Whether to perform dynamic characterization. If `True`, the
-            characterization factors are computed for each year in the time horizon
-            using time-series radiative forcing. If `False`, static characterization
-            (like GWP100) is used for all system time points.
-            Default is `True`.
+            Default is `None`.
 
         Returns
         -------
@@ -674,7 +700,7 @@ class LCADataProcessor:
 
         """
 
-        # TODO: Add support for radiative forcing
+        method = self.methods[base_method_name]
 
         # Create a DataFrame based on self.elementary_flows
         df = pd.DataFrame({"code": list(self.elementary_flows.keys())})
@@ -701,12 +727,13 @@ class LCADataProcessor:
                     df,
                     metric=metric,
                     fixed_time_horizon=True,
-                    base_lcia_method=self.method,
+                    base_lcia_method=method,
                     time_horizon=self.timehorizon,
                 )
                 df_characterized["date"] = df_characterized["date"].dt.to_pydatetime()
                 characterization_matrix = {
                     (
+                        base_method_name,
                         df.loc[df["flow"] == row["flow"], "code"].values[0],
                         row["date"].year,
                     ): row["amount"]
@@ -721,7 +748,7 @@ class LCADataProcessor:
                         df_row,
                         metric="radiative_forcing",
                         fixed_time_horizon=True,
-                        base_lcia_method=self.method,
+                        base_lcia_method=method,
                         time_horizon=self.timehorizon,
                         time_horizon_start=pd.Timestamp(self.start_date),
                     )
@@ -737,23 +764,23 @@ class LCADataProcessor:
                         rf_values = df_characterized.head(cutoff_year)["amount"]
                         cumulative_rf = rf_values.sum()
 
-                        characterization_matrix[(code, year)] = cumulative_rf
+                        characterization_matrix[(base_method_name, code, year)] = (
+                            cumulative_rf
+                        )
         else:
-            method_data = bd.Method(self.method).load()
+            method_data = bd.Method(method).load()
             # Preprocess method_data into a dictionary for fast lookups
             method_data_dict = {
                 flow: value for flow, value in method_data if value != 0
             }
             characterization_matrix = {
-                (row["code"], year): method_data_dict[row["flow"]]
+                (base_method_name, row["code"], year): method_data_dict[row["flow"]]
                 for _, row in df.iterrows()
                 for year in dates.year
                 if row["flow"] in method_data_dict
             }
 
-        self._characterization = characterization_matrix
-
-        return characterization_matrix
+        self._characterization.update(characterization_matrix)
 
     def set_characterization(self, characterization: dict) -> None:
         """
