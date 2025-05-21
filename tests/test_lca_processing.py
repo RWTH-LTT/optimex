@@ -113,10 +113,7 @@ def test_characterization_tensor(mock_lca_data_processor, abstract_system_model_
         base_method_name="land_use", dynamic=False
     )
     characterization_tensor_generated = mock_lca_data_processor.characterization
-    characterization_tensor_expected = {
-        k: v * 1e-13
-        for k, v in abstract_system_model_inputs["characterization"].items()
-    }
+    characterization_tensor_expected = abstract_system_model_inputs["characterization"]
     assert_dicts_equal_allowing_zeros(
         characterization_tensor_generated, characterization_tensor_expected
     )

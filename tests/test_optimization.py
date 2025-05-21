@@ -53,6 +53,8 @@ def test_all_params(abstract_system_model, abstract_system_model_inputs):
         "cumulative_process_limits_max",
         "cumulative_process_limits_min",
         "process_coupling",
+        "process_operation_time",
+        "impact_category_limit",
     ]
 
     for name in param_names:
@@ -86,7 +88,7 @@ def test_all_params(abstract_system_model, abstract_system_model_inputs):
 
 
 def test_model_solution_is_optimal(solved_system_model):
-    _, results = solved_system_model
+    _, _, results = solved_system_model
     assert results.solver.status == pyo.SolverStatus.ok, (
         f"Solver status is '{results.solver.status}', expected 'ok'. "
         "The solver did not exit normally."
@@ -103,14 +105,14 @@ def test_model_solution_is_optimal(solved_system_model):
 @pytest.mark.parametrize(
     "model_type, expected_value",
     [
-        ("fixed", 3.15417e03),  # Expected value for the fixed model
-        ("flex", 2.81685e03),  # Expected value for the flexible model
+        ("fixed", 3.15417e-10),  # Expected value for the fixed model
+        ("flex", 2.81685e-10),  # Expected value for the flexible model
     ],
     ids=["fixed_result", "flex_result"],
 )
 def test_system_model(model_type, expected_value, solved_system_model):
     # Get the model from the solved system model fixture
-    model, _ = solved_system_model
+    model, objective, _ = solved_system_model
 
     model_name = model.name
     expected_name = f"abstract_system_model_{model_type}"
@@ -118,14 +120,14 @@ def test_system_model(model_type, expected_value, solved_system_model):
     if model_name != expected_name:
         pytest.skip()
     # Assert that the objective value is approximately equal to the expected value
-    assert pytest.approx(expected_value, rel=1e-4) == pyo.value(model.OBJ), (
+    assert pytest.approx(expected_value, rel=1e-4) == objective, (
         f"Objective value for {model_type} model should be {expected_value} "
-        f"but was {pyo.value(model.OBJ)}."
+        f"but was {objective}."
     )
 
 
 def test_model_scaling_values_within_tolerance(solved_system_model):
-    model, _ = solved_system_model
+    model, _, _ = solved_system_model
 
     expected_values = {
         ("P1", 2025): 20.00,
