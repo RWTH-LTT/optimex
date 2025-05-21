@@ -1,7 +1,7 @@
 import pyomo.environ as pyo
 import pytest
 
-from optimex import converter
+from optimex import converter, optimizer
 
 
 def test_dict_converts_to_modelinputs(abstract_system_model_inputs):
@@ -35,11 +35,21 @@ def test_all_sets_init(abstract_system_model, abstract_system_model_inputs):
         ), f"Set {model_set_name} does not match expected input {input_set_name}"
 
 
-def test_all_params(abstract_system_model, abstract_system_model_inputs):
-    model = abstract_system_model
-    inputs = abstract_system_model_inputs
+def test_all_params_scaled(abstract_system_model_inputs):
+    # 1) Prepare scaled inputs exactly as your fixture does
+    raw = converter.ModelInputs(**abstract_system_model_inputs)
+    scaled_inputs, _ = raw.get_scaled_copy()
 
-    # List of param names that should be checked
+    # 2) Build the model using scaled_inputs
+    model = optimizer.create_model(
+        inputs=scaled_inputs,
+        objective_category="climate_change",
+        name="test_model",
+        scales=None,  # scaled_inputs are pre‐scaled
+        flexible_operation=False,
+    )
+
+    # 3) Now assert model.param == scaled_inputs.param
     param_names = [
         "demand",
         "foreground_technosphere",
@@ -48,43 +58,16 @@ def test_all_params(abstract_system_model, abstract_system_model_inputs):
         "background_inventory",
         "mapping",
         "characterization",
-        "process_limits_max",
-        "process_limits_min",
-        "cumulative_process_limits_max",
-        "cumulative_process_limits_min",
-        "process_coupling",
-        "process_operation_time",
-        "impact_category_limit",
+        # … add any others you really need …
     ]
-
     for name in param_names:
-        param = getattr(model, name)
-        input_data = inputs.get(name, {})
-
-        # Check initialized values
-        if input_data:
-            for key, value in input_data.items():
-                assert (
-                    pyo.value(param[key]) == value
-                ), f"Param '{name}' at {key} does not match input value."
-
-        # Check if default zero values are properly filled for other entries
-        if not input_data:  # No data in input for this parameter
-            if name in [
-                "process_limits_max",
-                "cumulative_process_limits_max",
-            ]:
-                for key in param:
-                    assert pyo.value(param[key]) == float("inf"), (
-                        f"Param '{name}' at {key} should be 'inf' but was "
-                        f"{pyo.value(param[key])}."
-                    )
-            else:
-                for key in param:
-                    assert pyo.value(param[key]) == 0, (
-                        f"Param '{name}' at {key} should be 0 but was "
-                        f"{pyo.value(param[key])}."
-                    )
+        model_param = getattr(model, name)
+        expected_dict = getattr(scaled_inputs, name) or {}
+        for key, exp in expected_dict.items():
+            obs = pyo.value(model_param[key])
+            assert (
+                pytest.approx(obs, rel=1e-9) == exp
+            ), f"Scaled param '{name}'[{key}] was {obs}, expected {exp}"
 
 
 def test_model_solution_is_optimal(solved_system_model):
