@@ -257,7 +257,7 @@ class Converter:
             assert_keys_in_set([cat], category, "characterization")
 
         if category_impact_limit is not None:
-            for cat, limit in category_impact_limit.items():
+            for cat, _ in category_impact_limit.items():
                 assert_keys_in_set([cat], category, "category_impact_limit")
 
         if process_limits_max is not None:
