@@ -379,6 +379,7 @@ def create_model(
                 for e in model.ELEMENTARY_FLOW
             )
 
+        # impact of process p at time t in category c
         model.specific_impact = pyo.Expression(
             model.CATEGORY, model.PROCESS, model.SYSTEM_TIME, rule=impact_op
         )

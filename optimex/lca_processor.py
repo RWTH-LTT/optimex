@@ -47,8 +47,8 @@ class LCADataProcessor:
         start_date : datetime
             The start date for the time horizon, used to calculate future years.
         methods : Dict[str, tuple]
-            A dictionary mapping impact category names to their respective LCIA methods,
-            defined by a tuple (e.g.,
+            A dictionary mapping user-defined impact category names to their respective
+            LCIA methods represented by a tuple (e.g.,
             `("EF v3.1", "climate change", "global warming potential (GWP100)")`).
         database_date_dict : dict
             A dictionary mapping database names to their respective dates.
@@ -375,8 +375,9 @@ class LCADataProcessor:
         intermediate_flows : dict
             Dictionary mapping intermediate flow codes to flow names.
         methods : Dict[str, tuple]
-            LCIA method used to compute environmental impacts (e.g.,
-            ("EF v3.1", "climate change", "GWP100")).
+            A dictionary mapping user-defined impact category names to their respective
+            LCIA methods represented by a tuple (e.g.,
+            `("EF v3.1", "climate change", "global warming potential (GWP100)")`).
         cutoff : float
             Number of top elementary flows (per intermediate flow) to retain based on
             impact magnitude. Used to reduce computational complexity.
@@ -411,7 +412,7 @@ class LCADataProcessor:
             # logging.info(f"Calculating inventory for activity: {activity}")
             for method in methods.values():
                 lca.switch_method(method)
-                lca.redo_lci({activity.id: 1})
+                lca.lci(demand={activity.id: 1})
                 if lca.inventory.nnz == 0:
                     logging.warning(
                         f"Skipping activity {activity} as it has no non-zero inventory."
@@ -644,7 +645,10 @@ class LCADataProcessor:
         return mapping_matrix
 
     def construct_characterization_matrix(
-        self, base_method_name: str, metric: str = None, dynamic: bool = False
+        self,
+        base_method_name: str,
+        dynamic: bool = False,
+        metric: str = None,
     ) -> dict:
         """
         Construct the dynamic characterization matrix for elementary flows for a
@@ -663,23 +667,27 @@ class LCADataProcessor:
         ----------
 
         base_method_name : str
-            The dictionary key of the LCIA method to use for pre-processing
-            characterization.
+            The user-define dictionary key in `methods` representing the LCIA method to
+            use for pre-processing characterization.
+        dynamic : bool, optional
+            Whether to perform dynamic characterization. Currently dynamic approaches
+            using the dynamic_characterization package for the impact category of
+            climate change are supported.
+            If `True`, the characterization factors are computed for each year in the
+            time horizon using time-series radiative forcing. If `False`, static
+            characterization with the given base method (like GWP100) is used for
+            all system time points.
+            Default is `False`.
         metric : str, optional
-            The impact metric to use for dynamic characterization. Must be one of:
+            The impact metric to use for dynamic characterization. When performing
+            static characterization leave at default. Currently supported
+            metrics for the impact category of climate change include:
             - `"GWP"`: Global Warming Potential, which normalizes cumulative radiative
             forcing (RF) using a reference CO₂ pulse  occurring in the middle of
             the time horizon.
             - `"CRF"`: Cumulative Radiative Forcing, which integrates RF values across
             the entire time horizon without normalization.
             Default is `None`.
-
-        dynamic : bool, optional
-            Whether to perform dynamic characterization. If `True`, the
-            characterization factors are computed for each year in the time horizon
-            using time-series radiative forcing. If `False`, static characterization
-            (like GWP100) is used for all system time points.
-            Default is `False`.
 
         Returns
         -------
