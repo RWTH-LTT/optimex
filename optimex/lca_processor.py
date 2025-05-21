@@ -411,7 +411,7 @@ class LCADataProcessor:
             # logging.info(f"Calculating inventory for activity: {activity}")
             for method in methods.values():
                 lca.switch_method(method)
-                lca.redo_lci({activity.id: 1})
+                lca.lci(demand={activity.id: 1})
                 if lca.inventory.nnz == 0:
                     logging.warning(
                         f"Skipping activity {activity} as it has no non-zero inventory."
