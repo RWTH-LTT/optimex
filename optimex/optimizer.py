@@ -18,6 +18,7 @@ def create_model(
     inputs: ModelInputs,
     name: str,
     objective_category: str,
+    scales: Dict[str, Any] = None,
     flexible_operation: bool = True,
     debug_path: str = None,
 ) -> pyo.ConcreteModel:
@@ -38,6 +39,11 @@ def create_model(
         Name of the Pyomo model instance.
     objective_category : str
         The category of impact to be minimized in the optimization problem.
+    scales : dict, optional
+        Dictionary containing scaling factors for a scaled model. The keys should
+        include 'foreground' and 'characterization'. The values should be the
+        corresponding scaling factors. This is used to denormalize the objective
+        function and duals.
     flexible_operation : bool, optional
         Enables flexible operation mode for processes. When set to True, the model
         introduces additional variables that allow processes to operate between 0 and
@@ -59,6 +65,8 @@ def create_model(
     """
 
     model = pyo.ConcreteModel(name=name)
+    model._scales = scales or {}
+    model._objective_category = objective_category
 
     logging.info("Creating sets")
     # Sets
@@ -502,7 +510,11 @@ def create_model(
     model.OBJ = pyo.Objective(sense=pyo.minimize, rule=expression_objective_function)
 
     if debug_path is not None:
-        model.write(debug_path, format=ProblemFormat.cpxlp)
+        model.write(
+            debug_path,
+            io_options={"symbolic_solver_labels": True},
+            format=ProblemFormat.cpxlp,
+        )
     return model
 
 
@@ -514,69 +526,89 @@ def solve_model(
     tee: bool = True,
     compute_iis: bool = False,
     **solve_kwargs: Any,
-) -> Tuple[pyo.ConcreteModel, SolverResults]:
+) -> Tuple[pyo.ConcreteModel, float, SolverResults]:
     """
-    Solve a Pyomo optimization model using a specified solver.
+    Solve a Pyomo optimization model using a specified solver and
+    denormalize the objective (and optional duals) using stored scales.
 
     Parameters
     ----------
     model : pyo.ConcreteModel
-        The Pyomo model to be solved.
+        The Pyomo model to be solved. Must have attribute `_scales` with keys
+        'foreground' and 'characterization'.
     solver_name : str, optional
-        Name of the solver to use (as accepted by `pyo.SolverFactory`).
-        Default is "gurobi".
+        Name of the solver (default: "gurobi").
     solver_args : dict, optional
-        Keyword arguments to pass to `pyo.SolverFactory`, e.g.
-        {"executable": "/path/to/solver"}.
+        Args to pass to SolverFactory.
     solver_options : dict, optional
-        Solver-specific options to set on the solver instance, e.g.
-        {"timelimit": 60, "mipgap": 0.01}.
+        Solver-specific options, e.g. timelimit, mipgap.
     tee : bool, optional
-        If True, prints the solver output to the console. Default is True.
+        If True, prints solver output.
     compute_iis : bool, optional
-        If True and the model is infeasible, attempts to compute the
-        Irreducible Infeasible Set (IIS) and write it to a file.
+        If True and infeasible, writes IIS to file.
     **solve_kwargs
-        Additional keyword arguments passed to `solver.solve()`, e.g.
-        `symbolic_solver_labels=True`.
+        Additional kwargs for solver.solve().
 
     Returns
     -------
-    Tuple[pyo.ConcreteModel, pyomo.opt.results.results_.SolverResults]
-        The solved model and the solver results object.
-
-    Notes
-    -----
-    - To switch solvers, just change `solver_name` (e.g. "glpk", "cplex").
-    - Solver-specific options go into `solver_options`; arguments to the factory
-      go into `solver_args`.
-    - If `compute_iis` is enabled and the model is infeasible, we try to write
-      an IIS file named "model_iis.ilp".
+    model : pyo.ConcreteModel
+        The solved model (with original scaling preserved).
+    true_obj : float
+        The denormalized objective value.
+    results : SolverResults
+        The raw Pyomo solver results object.
     """
-    # Create solver
+    # 1) Instantiate solver
     solver_args = solver_args or {}
     solver = pyo.SolverFactory(solver_name, **solver_args)
-
-    # Apply solver options
     if solver_options:
         for opt, val in solver_options.items():
             solver.options[opt] = val
 
-    # Solve
+    # 2) Solve model
     results = solver.solve(model, tee=tee, **solve_kwargs)
+    model.solutions.load_from(results)
     logging.info(
-        f"Solver [{solver_name}] status: {results.solver.termination_condition}"
+        f"Solver [{solver_name}] termination: {results.solver.termination_condition}"
     )
 
-    # Handle infeasibility / IIS
+    # 3) Handle infeasibility and optional IIS
     if (
         results.solver.termination_condition == pyo.TerminationCondition.infeasible
         and compute_iis
     ):
         try:
             write_iis(model, iis_file_name="model_iis.ilp", solver=solver)
-            logging.info("IIS file written to model_iis.ilp")
+            logging.info("IIS written to model_iis.ilp")
         except Exception as e:
-            logging.warning(f"Failed to compute IIS: {e}")
+            logging.warning(f"IIS generation failed: {e}")
 
-    return model, results
+    # 4) Denormalize objective
+    scaled_obj = pyo.value(model.OBJ)
+    fg_scale = getattr(model, "_scales", {}).get("foreground", 1.0)
+    cat_scales = getattr(model, "_scales", {}).get("characterization", {})
+    if model._objective_category and model._objective_category in cat_scales:
+        cat_scale = cat_scales[model._objective_category]
+    else:
+        cat_scale = 1.0
+
+    true_obj = scaled_obj * fg_scale * cat_scale
+    logging.info(f"Objective (scaled): {scaled_obj:.6g}")
+    logging.info(f"Objective (real):   {true_obj:.6g}")
+
+    # 5) (Optional) Denormalize duals
+    if hasattr(model, "dual"):
+        denorm_duals: Dict[Any, float] = {}
+        # Example: demand constraint duals
+        for idx, con in getattr(model, "demand_constraint", {}).items():
+            λ = model.dual.get(con, None)
+            if λ is not None:
+                denorm_duals[f"demand_{idx}"] = λ * fg_scale
+        # Example: impact constraint duals
+        for c, con in getattr(model, "category_impact_constraint", {}).items():
+            μ = model.dual.get(con, None)
+            if μ is not None:
+                denorm_duals[f"impact_{c}"] = μ * cat_scales.get(c, 1.0)
+        logging.info(f"Denormalized duals: {denorm_duals}")
+
+    return model, true_obj, results

@@ -1,6 +1,7 @@
+import copy
 import pickle
 from dataclasses import asdict, dataclass
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import yaml
 
@@ -113,6 +114,67 @@ class ModelInputs:
     process_limits_min_default: float = 0.0
     cumulative_process_limits_max_default: float = float("inf")
     cumulative_process_limits_min_default: float = 0.0
+
+    def get_scaled_copy(self) -> Tuple["ModelInputs", Dict[str, Any]]:
+        """
+        Returns a deep-copied, scaled version of ModelInputs for numerical stability,
+        along with the scaling factors used.
+        """
+        # Deep copy to preserve raw data
+        scaled = copy.deepcopy(self)
+        scales: Dict[str, Any] = {}
+
+        # 1. Compute shared foreground scale
+        fg_vals = list(self.foreground_production.values())
+        fg_vals += list(self.foreground_biosphere.values())
+        fg_vals += list(self.foreground_technosphere.values())
+        fg_scale = max((abs(v) for v in fg_vals), default=1.0)
+        if fg_scale == 0:
+            fg_scale = 1.0
+        scales["foreground"] = fg_scale
+
+        # Apply foreground scaling
+        for d in (
+            "foreground_production",
+            "foreground_biosphere",
+            "foreground_technosphere",
+        ):
+            orig: Dict = getattr(self, d)
+            scaled_dict = {k: orig[k] / fg_scale for k in orig}
+            setattr(scaled, d, scaled_dict)
+
+        # 2. Compute per-category characterization scales
+        cat_scales: Dict[str, float] = {}
+        for cat in self.CATEGORY:
+            # collect original values for this category
+            vals = [v for (c, *_), v in self.characterization.items() if c == cat]
+            scale = max((abs(v) for v in vals), default=1.0)
+            if scale == 0:
+                scale = 1.0
+            cat_scales[cat] = scale
+
+        scales["characterization"] = cat_scales
+
+        # Apply characterization scaling
+        scaled_char: Dict = {}
+        for key, v in self.characterization.items():
+            cat, flow, year = key
+            scale = cat_scales.get(cat, 1.0)
+            scaled_char[key] = v / scale
+        scaled.characterization = scaled_char
+
+        # 3. Scale demand by foreground scale
+        if self.demand is not None:
+            scaled.demand = {k: v / fg_scale for k, v in self.demand.items()}
+
+        # 4. Scale category impact limits (if provided)
+        if self.category_impact_limit is not None:
+            scaled.category_impact_limit = {
+                cat: lim / cat_scales.get(cat, 1.0)
+                for cat, lim in self.category_impact_limit.items()
+            }
+
+        return scaled, scales
 
 
 class Converter:
