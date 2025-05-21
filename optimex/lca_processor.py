@@ -766,12 +766,10 @@ class LCADataProcessor:
                 flow: value for flow, value in method_data if value != 0
             }
             characterization_matrix = {
-                (base_method_name, row["code"], year): method_data_dict[
-                    self.biosphere_db.name, row["code"]
-                ]
+                (base_method_name, row["code"], year): method_data_dict[row["flow"]]
                 for _, row in df.iterrows()
                 for year in dates.year
-                if (self.biosphere_db.name, row["code"]) in method_data_dict
+                if row["flow"] in method_data_dict
             }
 
         self._characterization.update(characterization_matrix)
