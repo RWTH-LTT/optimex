@@ -123,15 +123,17 @@ def abstract_system_model_inputs():
 # Fixture to create the abstract system model (fixed or flexible)
 @pytest.fixture(
     scope="module",
-    params=["fixed", "flex"],
-    ids=["fixed_operation", "flexible_operation"],
+    params=["fixed", "flex", "constrained"],
+    ids=["fixed_operation", "flexible_operation", "constrained_land_use"],
 )
 def abstract_system_model(request, abstract_system_model_inputs):
     model_type = request.param  # This will be 'fixed' or 'flex'
     model_inputs = converter.ModelInputs(**abstract_system_model_inputs)
-    model_inputs.category_impact_limit = {
-        "land_use": 1000,
-    }  # TODO: add test case where impact limits affect optimization results
+    if model_type == "constrained":
+        # Set the impact limit for the constrained model
+        model_inputs.category_impact_limit = {
+            "land_use": 100,
+        }
     scaled_inputs, scales = model_inputs.get_scaled_copy()
     # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(
@@ -139,7 +141,7 @@ def abstract_system_model(request, abstract_system_model_inputs):
         objective_category="climate_change",
         name=f"abstract_system_model_{model_type}",
         scales=scales,
-        flexible_operation=(model_type == "flex"),
+        flexible_operation=(model_type != "fixed"),
         # debug_path=f"tests/fixtures/model_debug_{model_type}.lp",
     )
     return model

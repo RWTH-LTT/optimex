@@ -90,8 +90,9 @@ def test_model_solution_is_optimal(solved_system_model):
     [
         ("fixed", 3.15417e-10),  # Expected value for the fixed model
         ("flex", 2.81685e-10),  # Expected value for the flexible model
+        ("constrained", 2.83062e-10),  # Expected value for the constrained model
     ],
-    ids=["fixed_result", "flex_result"],
+    ids=["fixed_result", "flex_result", "constrained_result"],
 )
 def test_system_model(model_type, expected_value, solved_system_model):
     # Get the model from the solved system model fixture
@@ -112,12 +113,24 @@ def test_system_model(model_type, expected_value, solved_system_model):
 def test_model_scaling_values_within_tolerance(solved_system_model):
     model, _, _ = solved_system_model
 
-    expected_values = {
-        ("P1", 2025): 20.00,
-        ("P1", 2027): 20.00,
-        ("P2", 2021): 20.00,
-        ("P2", 2023): 20.00,
-    }
+    if (
+        model.name == "abstract_system_model_fixed"
+        or model.name == "abstract_system_model_flex"
+    ):
+        expected_values = {
+            ("P1", 2025): 20.00,
+            ("P1", 2027): 20.00,
+            ("P2", 2021): 20.00,
+            ("P2", 2023): 20.00,
+        }
+    elif model.name == "abstract_system_model_constrained":
+        expected_values = {
+            ("P1", 2027): 5.44,
+            ("P2", 2021): 20.00,
+            ("P2", 2023): 20.00,
+            ("P2", 2025): 20.00,
+            ("P2", 2027): 14.56,
+        }
 
     # Check non-zero expected values are within tolerance
     for (process, start_time), expected in expected_values.items():
