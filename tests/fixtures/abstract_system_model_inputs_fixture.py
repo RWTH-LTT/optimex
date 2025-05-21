@@ -134,7 +134,7 @@ def abstract_system_model(request, abstract_system_model_inputs):
     model_inputs = converter.ModelInputs(**abstract_system_model_inputs)
     model_inputs.category_impact_limit = {
         "land_use": 1e18,
-    }
+    }  # TODO: add test case where impact limits affect optimization results
 
     # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(
