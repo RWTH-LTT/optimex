@@ -158,7 +158,7 @@ class ModelInputs:
         # Apply characterization scaling
         scaled_char: Dict = {}
         for key, v in self.characterization.items():
-            cat, flow, year = key
+            cat, _, _ = key
             scale = cat_scales.get(cat, 1.0)
             scaled_char[key] = v / scale
         scaled.characterization = scaled_char
