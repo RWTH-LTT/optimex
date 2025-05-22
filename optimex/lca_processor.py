@@ -691,10 +691,11 @@ class LCADataProcessor:
 
         Returns
         -------
-        Dict[Tuple[str, int], float]
+        Dict[Tuple[str, str, int], float]
             A dictionary representing the dynamic characterization matrix. Each key is a
-            tuple of the form `(elementary_flow, system_year)` and the corresponding
-            value is the computed impact factor (e.g., GWP or CRF value) for that year.
+            tuple of the form `(impact_category, elementary_flow, system_year)` and the 
+            corresponding value is the computed impact factor (e.g., GWP or CRF value) for that 
+            year.
 
             This dictionary is also stored internally in `self._characterization`
 

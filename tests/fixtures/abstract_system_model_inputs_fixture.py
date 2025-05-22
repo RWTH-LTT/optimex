@@ -76,49 +76,46 @@ def abstract_system_model_inputs():
         },
         # cumulative radiative forcing for timehorizon from 2020 till 2120
         "characterization": {
-            key: val * 1e13
-            for key, val in {  # scaling for numerical stability
-                ("climate_change", "CO2", 2020): 8.856378067710995e-14,
-                ("climate_change", "CO2", 2021): 8.78632948322376e-14,
-                ("climate_change", "CO2", 2022): 8.716115201983699e-14,
-                ("climate_change", "CO2", 2023): 8.645732530491629e-14,
-                ("climate_change", "CO2", 2024): 8.575178705349817e-14,
-                ("climate_change", "CO2", 2025): 8.50445089133486e-14,
-                ("climate_change", "CO2", 2026): 8.433546179417147e-14,
-                ("climate_change", "CO2", 2027): 8.362461584725384e-14,
-                ("climate_change", "CO2", 2028): 8.291194044454685e-14,
-                ("climate_change", "CO2", 2029): 8.219740415716608e-14,
-                ("climate_change", "CH4", 2020): 2.3651673669270527e-12,
-                ("climate_change", "CH4", 2021): 2.3651198384711042e-12,
-                ("climate_change", "CH4", 2022): 2.3650681065838066e-12,
-                ("climate_change", "CH4", 2023): 2.36501179951239e-12,
-                ("climate_change", "CH4", 2024): 2.3649505126261558e-12,
-                ("climate_change", "CH4", 2025): 2.3648838055087402e-12,
-                ("climate_change", "CH4", 2026): 2.364811198793221e-12,
-                ("climate_change", "CH4", 2027): 2.3647321707173162e-12,
-                ("climate_change", "CH4", 2028): 2.3646461533739266e-12,
-                ("climate_change", "CH4", 2029): 2.364552528630073e-12,
-                ("land_use", "CO2", 2020): 2,
-                ("land_use", "CO2", 2021): 2,
-                ("land_use", "CO2", 2022): 2,
-                ("land_use", "CO2", 2023): 2,
-                ("land_use", "CO2", 2024): 2,
-                ("land_use", "CO2", 2025): 2,
-                ("land_use", "CO2", 2026): 2,
-                ("land_use", "CO2", 2027): 2,
-                ("land_use", "CO2", 2028): 2,
-                ("land_use", "CO2", 2029): 2,
-                ("land_use", "CH4", 2020): 1,
-                ("land_use", "CH4", 2021): 1,
-                ("land_use", "CH4", 2022): 1,
-                ("land_use", "CH4", 2023): 1,
-                ("land_use", "CH4", 2024): 1,
-                ("land_use", "CH4", 2025): 1,
-                ("land_use", "CH4", 2026): 1,
-                ("land_use", "CH4", 2027): 1,
-                ("land_use", "CH4", 2028): 1,
-                ("land_use", "CH4", 2029): 1,
-            }.items()
+            ("climate_change", "CO2", 2020): 8.856378067710995e-14,
+            ("climate_change", "CO2", 2021): 8.78632948322376e-14,
+            ("climate_change", "CO2", 2022): 8.716115201983699e-14,
+            ("climate_change", "CO2", 2023): 8.645732530491629e-14,
+            ("climate_change", "CO2", 2024): 8.575178705349817e-14,
+            ("climate_change", "CO2", 2025): 8.50445089133486e-14,
+            ("climate_change", "CO2", 2026): 8.433546179417147e-14,
+            ("climate_change", "CO2", 2027): 8.362461584725384e-14,
+            ("climate_change", "CO2", 2028): 8.291194044454685e-14,
+            ("climate_change", "CO2", 2029): 8.219740415716608e-14,
+            ("climate_change", "CH4", 2020): 2.3651673669270527e-12,
+            ("climate_change", "CH4", 2021): 2.3651198384711042e-12,
+            ("climate_change", "CH4", 2022): 2.3650681065838066e-12,
+            ("climate_change", "CH4", 2023): 2.36501179951239e-12,
+            ("climate_change", "CH4", 2024): 2.3649505126261558e-12,
+            ("climate_change", "CH4", 2025): 2.3648838055087402e-12,
+            ("climate_change", "CH4", 2026): 2.364811198793221e-12,
+            ("climate_change", "CH4", 2027): 2.3647321707173162e-12,
+            ("climate_change", "CH4", 2028): 2.3646461533739266e-12,
+            ("climate_change", "CH4", 2029): 2.364552528630073e-12,
+            ("land_use", "CO2", 2020): 2,
+            ("land_use", "CO2", 2021): 2,
+            ("land_use", "CO2", 2022): 2,
+            ("land_use", "CO2", 2023): 2,
+            ("land_use", "CO2", 2024): 2,
+            ("land_use", "CO2", 2025): 2,
+            ("land_use", "CO2", 2026): 2,
+            ("land_use", "CO2", 2027): 2,
+            ("land_use", "CO2", 2028): 2,
+            ("land_use", "CO2", 2029): 2,
+            ("land_use", "CH4", 2020): 1,
+            ("land_use", "CH4", 2021): 1,
+            ("land_use", "CH4", 2022): 1,
+            ("land_use", "CH4", 2023): 1,
+            ("land_use", "CH4", 2024): 1,
+            ("land_use", "CH4", 2025): 1,
+            ("land_use", "CH4", 2026): 1,
+            ("land_use", "CH4", 2027): 1,
+            ("land_use", "CH4", 2028): 1,
+            ("land_use", "CH4", 2029): 1,
         },
     }
 
@@ -126,22 +123,25 @@ def abstract_system_model_inputs():
 # Fixture to create the abstract system model (fixed or flexible)
 @pytest.fixture(
     scope="module",
-    params=["fixed", "flex"],
-    ids=["fixed_operation", "flexible_operation"],
+    params=["fixed", "flex", "constrained"],
+    ids=["fixed_operation", "flexible_operation", "constrained_land_use"],
 )
 def abstract_system_model(request, abstract_system_model_inputs):
     model_type = request.param  # This will be 'fixed' or 'flex'
     model_inputs = converter.ModelInputs(**abstract_system_model_inputs)
-    model_inputs.category_impact_limit = {
-        "land_use": 1e18,
-    }  # TODO: add test case where impact limits affect optimization results
-
+    if model_type == "constrained":
+        # Set the impact limit for the constrained model
+        model_inputs.category_impact_limit = {
+            "land_use": 100,
+        }
+    scaled_inputs, scales = model_inputs.get_scaled_copy()
     # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(
-        inputs=model_inputs,
+        inputs=scaled_inputs,
         objective_category="climate_change",
         name=f"abstract_system_model_{model_type}",
-        flexible_operation=(model_type == "flex"),
+        scales=scales,
+        flexible_operation=(model_type != "fixed"),
         # debug_path=f"tests/fixtures/model_debug_{model_type}.lp",
     )
     return model
