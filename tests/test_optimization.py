@@ -131,6 +131,8 @@ def test_model_scaling_values_within_tolerance(solved_system_model):
             ("P2", 2025): 20.00,
             ("P2", 2027): 14.56,
         }
+    else:
+        pytest.skip(f"Unknown model name: {model.name}")
 
     # Check non-zero expected values are within tolerance
     for (process, start_time), expected in expected_values.items():
