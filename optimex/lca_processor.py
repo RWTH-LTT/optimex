@@ -37,7 +37,7 @@ class CharacterizationMethodConfig(BaseModel):
             Supported values: 'GWP', 'CRF'.
     """
 
-    name: str = Field(
+    category_name: str = Field(
         ...,
         description="User-defined name for the impact category "
         "(e.g., 'climate_change_dynamic_gwp').",
@@ -174,9 +174,13 @@ class LCADataProcessor:
                 "There should be exactly one dynamic (foreground) database specified "
                 "with date='dynamic'."
             )
-        self.foreground_db = bd.Database(dynamic_dbs[0])
+        self.foreground_db = bd.Database(dynamic_dbs.pop())
         self.biosphere_db = bd.Database(bd.config.biosphere)
-        self.background_dbs = dynamic_dbs
+        self.background_dbs = {
+            db: date
+            for db, date in config.temporal.database_dates.items()
+            if db != self.foreground_db.name
+        }
 
         self._demand = {}
         self._processes = {}
@@ -194,7 +198,7 @@ class LCADataProcessor:
         self._background_inventory = {}
         self._mapping = {}
         self._characterization = {}
-        self._operation_flow = {}
+        self._operation_flows = {}
 
         self._parse_demand()
         self._construct_foreground_tensors()
@@ -273,9 +277,9 @@ class LCADataProcessor:
         return self._demand
 
     @property
-    def operation_flow(self) -> dict:
+    def operation_flows(self) -> dict:
         """Read-only access to the operation flow dictionary."""
-        return self._operation_flow
+        return self._operation_flows
 
     def _parse_demand(self) -> None:
         """
@@ -381,9 +385,6 @@ class LCADataProcessor:
                 input_code = exc.input["code"]
                 input_name = exc.input["name"]
 
-                if act.get("operation"):
-                    self._operation_flow.setdefault(act["code"], input_code)
-
                 # Update tensors and flow dictionaries
                 if type == "technosphere":
                     technosphere_tensor.update(
@@ -392,6 +393,8 @@ class LCADataProcessor:
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
+                    if exc.get("operation"):
+                        self._operation_flows.update({(act["code"], input_code): True})
                     self._intermediate_flows.setdefault(input_code, input_name)
                 elif type == "biosphere":
                     biosphere_tensor.update(
@@ -400,6 +403,8 @@ class LCADataProcessor:
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
+                    if exc.get("operation"):
+                        self._operation_flows.update({(act["code"], input_code): True})
                     self._elementary_flows.setdefault(input_code, input_name)
                 elif type == "production":
                     production_tensor.update(
@@ -409,6 +414,10 @@ class LCADataProcessor:
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
+                    if exc.get("operation"):
+                        self._operation_flows.update(
+                            {(act["code"], act["functional flow"]): True}
+                        )
 
         # Store the tensors as protected variables
         self._foreground_technosphere = technosphere_tensor
@@ -477,7 +486,7 @@ class LCADataProcessor:
                 logger.warning(f"Failed to get activity for key '{key}': {e}")
         function_unit_dict = {activity: 1 for activity in activity_cache.values()}
 
-        lca = bc.LCA(function_unit_dict, next(iter(methods.values())))
+        lca = bc.LCA(function_unit_dict, next(iter(methods)))
         lca.lci(factorize=len(function_unit_dict) > 10)  # factorize if many activities
         logger.info(f"Factorized LCI for database: {db_name}")
         for intermediate_flow_code, activity in tqdm(activity_cache.items()):
@@ -528,9 +537,7 @@ class LCADataProcessor:
         """
         raise NotImplementedError("This method is not yet functionally implemented.")
 
-    def _sequential_inventory_tensor_calculation(
-        self,
-    ) -> None:
+    def _sequential_inventory_tensor_calculation(self) -> None:
         """
         Compute the background inventory tensor for all background databases
         sequentially.
@@ -656,7 +663,7 @@ class LCADataProcessor:
             - `self._mapping`: dict with keys (db_name, year) and float values
         representing weights.
         """
-        years = sorted(self.system_time)  # Ensure chronological order
+        years = sorted(self._system_time)  # Ensure chronological order
 
         # Sort background DBs by year and extract mapping
         db_year_map = {db: self.background_dbs[db].year for db in self.background_dbs}
@@ -687,9 +694,7 @@ class LCADataProcessor:
             "based on linear interpolation."
         )
 
-    def _construct_characterization_tensor(
-        self,
-    ) -> None:
+    def _construct_characterization_tensor(self) -> None:
         """
         Construct the characterization tensor for LCIA methods over system time points.
 
@@ -705,6 +710,7 @@ class LCADataProcessor:
             system_year) to characterization factor values.
         """
         start_date = self.config.temporal.start_date
+        timehorizon = self.config.temporal.timehorizon
         dates = pd.date_range(
             start=start_date, periods=len(self._system_time), freq="YE"
         )
@@ -719,7 +725,8 @@ class LCADataProcessor:
         characterization_tensor = {}
 
         for config in self.config.characterization_methods:
-            method_name = config.name
+            category_name = config.category_name
+            self._category.add(category_name)
             method = config.brightway_method
             metric = config.metric
 
@@ -736,11 +743,11 @@ class LCADataProcessor:
                     flow_code, flow_id = row["code"], row["flow"]
                     if flow_id in method_dict:
                         for year in dates.year:
-                            characterization_tensor[(method_name, flow_code, year)] = (
-                                method_dict[flow_id]
-                            )
+                            characterization_tensor[
+                                (category_name, flow_code, year)
+                            ] = method_dict[flow_id]
                 logger.info(
-                    f"Static characterization for method {method_name} completed."
+                    f"Static characterization for method {category_name} completed."
                 )
 
             elif metric == "GWP":
@@ -754,19 +761,22 @@ class LCADataProcessor:
                     metric="GWP",
                     fixed_time_horizon=True,
                     base_lcia_method=method,
-                    time_horizon=self.timehorizon,
+                    time_horizon=timehorizon,
                 )
                 df_char["date"] = df_char["date"].dt.year
 
                 for _, row in df_char.iterrows():
                     flow_code = df.loc[df["flow"] == row["flow"], "code"].values[0]
-                    characterization_tensor[(method_name, flow_code, row["date"])] = (
+                    characterization_tensor[(category_name, flow_code, row["date"])] = (
                         row["amount"]
                     )
+                logger.info(
+                    f"Dynamic GWP characterization for {category_name} completed."
+                )
 
             elif metric == "CRF":
                 # Dynamic CRF (cumulative RF over time horizon)
-                df["date"] = pd.Timestamp(self.start_date)
+                df["date"] = pd.Timestamp(self.config.temporal.start_date)
 
                 for _, row in df.iterrows():
                     flow_code = row["code"]
@@ -778,32 +788,22 @@ class LCADataProcessor:
                         metric="radiative_forcing",
                         fixed_time_horizon=True,
                         base_lcia_method=method,
-                        time_horizon=self.timehorizon,
-                        time_horizon_start=pd.Timestamp(self.start_date),
+                        time_horizon=timehorizon,
+                        time_horizon_start=pd.Timestamp(start_date),
                     )
                     rf_series = df_char["amount"].values
 
                     for year in self.system_time:
-                        cutoff = self.start_date.year + self.timehorizon - year - 1
+                        cutoff = start_date.year + timehorizon - year - 1
                         cumulative_rf = rf_series[:cutoff].sum()
-                        characterization_tensor[(method_name, flow_code, year)] = (
+                        characterization_tensor[(category_name, flow_code, year)] = (
                             cumulative_rf
                         )
+                logger.info(
+                    f"Dynamic CRF characterization for {category_name} completed."
+                )
 
             else:
                 raise ValueError(f"Unsupported dynamic metric: {metric}")
 
         self._characterization.update(characterization_tensor)
-
-    def set_characterization(self, characterization: dict) -> None:
-        """
-        Set the characterization matrix directly.
-
-        Parameters
-        ----------
-        characterization : dict
-            A dictionary representing the characterization matrix.
-            Each key is a tuple of the form (elementary_flow, system_year)
-            and the corresponding value is the computed impact factor.
-        """
-        self._characterization = characterization
