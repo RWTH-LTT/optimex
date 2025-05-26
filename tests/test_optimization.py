@@ -5,8 +5,8 @@ from optimex import converter, optimizer
 
 
 def test_dict_converts_to_modelinputs(abstract_system_model_inputs):
-    model_inputs = converter.ModelInputs(**abstract_system_model_inputs)
-    assert isinstance(model_inputs, converter.ModelInputs)
+    model_inputs = converter.OptimizationModelInputs(**abstract_system_model_inputs)
+    assert isinstance(model_inputs, converter.OptimizationModelInputs)
 
 
 def test_pyomo_model_generation(abstract_system_model):
@@ -37,12 +37,12 @@ def test_all_sets_init(abstract_system_model, abstract_system_model_inputs):
 
 def test_all_params_scaled(abstract_system_model_inputs):
     # 1) Prepare scaled inputs exactly as your fixture does
-    raw = converter.ModelInputs(**abstract_system_model_inputs)
+    raw = converter.OptimizationModelInputs(**abstract_system_model_inputs)
     scaled_inputs, _ = raw.get_scaled_copy()
 
     # 2) Build the model using scaled_inputs
     model = optimizer.create_model(
-        inputs=scaled_inputs,
+        scaled_inputs=scaled_inputs,
         objective_category="climate_change",
         name="test_model",
         scales=None,  # scaled_inputs are pre‐scaled

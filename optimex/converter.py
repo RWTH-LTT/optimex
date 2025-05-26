@@ -51,7 +51,7 @@ class OptimizationModelInputs(BaseModel):
     demand: Dict[Tuple[str, int], float] = Field(
         ..., description=("Maps (functional_flow, system_time) to demand amount.")
     )
-    operation_flows: Dict[Tuple[str, str], bool] = Field(
+    operation_flow: Dict[Tuple[str, str], bool] = Field(
         ...,
         description=(
             "Maps (process, flow) to boolean indicating if the flow is occuring during "
@@ -95,6 +95,14 @@ class OptimizationModelInputs(BaseModel):
         description=(
             "Maps (impact_category, elementary_flow, system_time) to impact "
             "characterization factor."
+        ),
+    )
+
+    operation_time_limits: Dict[str, Tuple[int, int]] = Field(
+        None,
+        description=(
+            "Maps process identifiers to tuples of (min_time, max_time) for operation "
+            "time limits."
         ),
     )
 
@@ -279,7 +287,7 @@ class OptimizationModelInputs(BaseModel):
                 grouped.setdefault((proc, flow), []).append((t, val))
 
             for (proc, flow), tv_pairs in grouped.items():
-                if not self.operation_flows.get((proc, flow), False):
+                if not self.operation_flow.get((proc, flow), False):
                     continue  # Skip non-operational flows
 
                 # Sort by time, filter out zeros
@@ -429,13 +437,14 @@ class ModelInputManager:
             "SYSTEM_TIME": list(lca_processor.system_time),
             "CATEGORY": list(lca_processor.category),
             "demand": lca_processor.demand,
-            "operation_flows": lca_processor.operation_flows,
+            "operation_flow": lca_processor.operation_flow,
             "foreground_technosphere": lca_processor.foreground_technosphere,
             "foreground_biosphere": lca_processor.foreground_biosphere,
             "foreground_production": lca_processor.foreground_production,
             "background_inventory": lca_processor.background_inventory,
             "mapping": lca_processor.mapping,
             "characterization": lca_processor.characterization,
+            "operation_time_limits": lca_processor.operation_time_limits,
             # Optional constraints not populated by default
             "category_impact_limit": None,
             "process_limits_max": None,

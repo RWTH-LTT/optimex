@@ -128,7 +128,7 @@ def abstract_system_model_inputs():
 )
 def abstract_system_model(request, abstract_system_model_inputs):
     model_type = request.param  # This will be 'fixed' or 'flex'
-    model_inputs = converter.ModelInputs(**abstract_system_model_inputs)
+    model_inputs = converter.OptimizationModelInputs(**abstract_system_model_inputs)
     if model_type == "constrained":
         # Set the impact limit for the constrained model
         model_inputs.category_impact_limit = {
@@ -137,7 +137,7 @@ def abstract_system_model(request, abstract_system_model_inputs):
     scaled_inputs, scales = model_inputs.get_scaled_copy()
     # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(
-        inputs=scaled_inputs,
+        scaled_inputs=scaled_inputs,
         objective_category="climate_change",
         name=f"abstract_system_model_{model_type}",
         scales=scales,

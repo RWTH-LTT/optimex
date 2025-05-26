@@ -11,14 +11,13 @@ from pyomo.contrib.iis import write_iis
 from pyomo.opt import ProblemFormat
 from pyomo.opt.results.results_ import SolverResults
 
-from optimex.converter import ModelInputs
+from optimex.converter import OptimizationModelInputs
 
 
 def create_model(
-    inputs: ModelInputs,
+    inputs: OptimizationModelInputs,
     name: str,
     objective_category: str,
-    scales: Dict[str, Any] = None,
     flexible_operation: bool = True,
     debug_path: str = None,
 ) -> pyo.ConcreteModel:
@@ -39,11 +38,6 @@ def create_model(
         Name of the Pyomo model instance.
     objective_category : str
         The category of impact to be minimized in the optimization problem.
-    scales : dict, optional
-        Dictionary containing scaling factors for a scaled model. The keys should
-        include 'foreground' and 'characterization'. The values should be the
-        corresponding scaling factors. This is used to denormalize the objective
-        function and duals.
     flexible_operation : bool, optional
         Enables flexible operation mode for processes. When set to True, the model
         introduces additional variables that allow processes to operate between 0 and
@@ -65,38 +59,49 @@ def create_model(
     """
 
     model = pyo.ConcreteModel(name=name)
-    model._scales = scales or {}
     model._objective_category = objective_category
+    scaled_inputs, scales = inputs.get_scaled_copy()
+    model._scales = scales  # Store scales for denormalization later
 
     logging.info("Creating sets")
     # Sets
     model.PROCESS = pyo.Set(
-        doc="Set of processes (or activities), indexed by p", initialize=inputs.PROCESS
+        doc="Set of processes (or activities), indexed by p",
+        initialize=scaled_inputs.PROCESS,
     )
     model.FUNCTIONAL_FLOW = pyo.Set(
         doc="Set of functional flows (or products), indexed by r",
-        initialize=inputs.FUNCTIONAL_FLOW,
+        initialize=scaled_inputs.FUNCTIONAL_FLOW,
     )
     model.INTERMEDIATE_FLOW = pyo.Set(
         doc="Set of intermediate flows, indexed by i",
-        initialize=inputs.INTERMEDIATE_FLOW,
+        initialize=scaled_inputs.INTERMEDIATE_FLOW,
     )
     model.ELEMENTARY_FLOW = pyo.Set(
-        doc="Set of elementary flows, indexed by e", initialize=inputs.ELEMENTARY_FLOW
+        doc="Set of elementary flows, indexed by e",
+        initialize=scaled_inputs.ELEMENTARY_FLOW,
+    )
+    model.FLOW = pyo.Set(
+        initialize=lambda m: m.FUNCTIONAL_FLOW
+        | m.INTERMEDIATE_FLOW
+        | m.ELEMENTARY_FLOW,
+        doc="Set of all flows, indexed by f",
     )
     model.CATEGORY = pyo.Set(
-        doc="Set of impact categories, indexed by c", initialize=inputs.CATEGORY
+        doc="Set of impact categories, indexed by c", initialize=scaled_inputs.CATEGORY
     )
 
     model.BACKGROUND_ID = pyo.Set(
         doc="Set of identifiers of the prospective background databases, indexed by b",
-        initialize=inputs.BACKGROUND_ID,
+        initialize=scaled_inputs.BACKGROUND_ID,
     )
     model.PROCESS_TIME = pyo.Set(
-        doc="Set of process time points, indexed by tau", initialize=inputs.PROCESS_TIME
+        doc="Set of process time points, indexed by tau",
+        initialize=scaled_inputs.PROCESS_TIME,
     )
     model.SYSTEM_TIME = pyo.Set(
-        doc="Set of system time points, indexed by t", initialize=inputs.SYSTEM_TIME
+        doc="Set of system time points, indexed by t",
+        initialize=scaled_inputs.SYSTEM_TIME,
     )
 
     # Parameters
@@ -106,7 +111,7 @@ def create_model(
         within=pyo.Any,
         doc="Names of the processes",
         default=None,
-        initialize=inputs.process_names,
+        initialize=scaled_inputs.process_names,
     )
     model.demand = pyo.Param(
         model.FUNCTIONAL_FLOW,
@@ -114,21 +119,8 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit demand vector d",
         default=0,
-        initialize=inputs.demand,
+        initialize=scaled_inputs.demand,
     )
-    model.process_operation_start = pyo.Param(
-        model.PROCESS,
-        within=model.PROCESS_TIME,
-        initialize={p: inputs.process_operation_time[p][0] for p in inputs.PROCESS},
-        doc="start of operation phase",
-    )
-    model.process_operation_end = pyo.Param(
-        model.PROCESS,
-        within=model.PROCESS_TIME,
-        initialize={p: inputs.process_operation_time[p][1] for p in inputs.PROCESS},
-        doc="end of operation phase",
-    )
-
     model.foreground_technosphere = pyo.Param(
         model.PROCESS,
         model.INTERMEDIATE_FLOW,
@@ -136,7 +128,7 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit foreground technosphere tensor A",
         default=0,
-        initialize=inputs.foreground_technosphere,
+        initialize=scaled_inputs.foreground_technosphere,
     )
     model.foreground_biosphere = pyo.Param(
         model.PROCESS,
@@ -145,7 +137,7 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit foreground biosphere tensor B",
         default=0,
-        initialize=inputs.foreground_biosphere,
+        initialize=scaled_inputs.foreground_biosphere,
     )
     model.foreground_production = pyo.Param(
         model.PROCESS,
@@ -154,7 +146,7 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit foreground production tensor F",
         default=0,
-        initialize=inputs.foreground_production,
+        initialize=scaled_inputs.foreground_production,
     )
     # TODO: check that first year production is 1
     model.background_inventory = pyo.Param(
@@ -164,7 +156,7 @@ def create_model(
         within=pyo.Reals,
         doc="prospective background inventory tensor G",
         default=0,
-        initialize=inputs.background_inventory,
+        initialize=scaled_inputs.background_inventory,
     )
     model.mapping = pyo.Param(
         model.BACKGROUND_ID,
@@ -172,7 +164,7 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit background mapping tensor M",
         default=0,
-        initialize=inputs.mapping,
+        initialize=scaled_inputs.mapping,
     )
     model.characterization = pyo.Param(
         model.CATEGORY,
@@ -181,16 +173,40 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit characterization tensor Q",
         default=0,
-        initialize=inputs.characterization,
+        initialize=scaled_inputs.characterization,
+    )
+    model.operation_flow = pyo.Param(
+        model.PROCESS,
+        model.FLOW,
+        within=pyo.Binary,
+        doc="operation flow matrix",
+        default=0,
+        initialize=scaled_inputs.operation_flow,
+    )
+    model.process_operation_start = pyo.Param(
+        model.PROCESS,
+        within=pyo.NonNegativeIntegers,
+        doc="start time of process operation",
+        default=0,
+        initialize={k: v[0] for k, v in scaled_inputs.operation_time_limits.items()},
+    )
+    model.process_operation_end = pyo.Param(
+        model.PROCESS,
+        within=pyo.NonNegativeIntegers,
+        doc="end time of process operation",
+        default=0,
+        initialize={k: v[1] for k, v in scaled_inputs.operation_time_limits.items()},
     )
     model.process_limits_max = pyo.Param(
         model.PROCESS,
         model.SYSTEM_TIME,
         within=pyo.Reals,
         doc="maximum time specific process limit S_max",
-        default=inputs.process_limits_max_default,
+        default=scaled_inputs.process_limits_max_default,
         initialize=(
-            inputs.process_limits_max if inputs.process_limits_max is not None else {}
+            scaled_inputs.process_limits_max
+            if scaled_inputs.process_limits_max is not None
+            else {}
         ),
     )
     model.process_limits_min = pyo.Param(
@@ -198,19 +214,21 @@ def create_model(
         model.SYSTEM_TIME,
         within=pyo.Reals,
         doc="minimum time specific process limit S_min",
-        default=inputs.process_limits_min_default,
+        default=scaled_inputs.process_limits_min_default,
         initialize=(
-            inputs.process_limits_min if inputs.process_limits_min is not None else {}
+            scaled_inputs.process_limits_min
+            if scaled_inputs.process_limits_min is not None
+            else {}
         ),
     )
     model.cumulative_process_limits_max = pyo.Param(
         model.PROCESS,
         within=pyo.Reals,
         doc="maximum cumulatative process limit S_max,cum",
-        default=inputs.cumulative_process_limits_max_default,
+        default=scaled_inputs.cumulative_process_limits_max_default,
         initialize=(
-            inputs.cumulative_process_limits_max
-            if inputs.cumulative_process_limits_max is not None
+            scaled_inputs.cumulative_process_limits_max
+            if scaled_inputs.cumulative_process_limits_max is not None
             else {}
         ),
     )
@@ -218,10 +236,10 @@ def create_model(
         model.PROCESS,
         within=pyo.Reals,
         doc="minimum cumulatative process limit S_min,cum",
-        default=inputs.cumulative_process_limits_min_default,
+        default=scaled_inputs.cumulative_process_limits_min_default,
         initialize=(
-            inputs.cumulative_process_limits_min
-            if inputs.cumulative_process_limits_min is not None
+            scaled_inputs.cumulative_process_limits_min
+            if scaled_inputs.cumulative_process_limits_min is not None
             else {}
         ),
     )
@@ -231,7 +249,9 @@ def create_model(
         within=pyo.NonNegativeReals,
         doc="coupling matrix",
         initialize=(
-            inputs.process_coupling if inputs.process_coupling is not None else {}
+            scaled_inputs.process_coupling
+            if scaled_inputs.process_coupling is not None
+            else {}
         ),
         default=0,  # Set default coupling value to 0 if not defined
     )
@@ -242,8 +262,8 @@ def create_model(
         doc="maximum impact limit",
         default=float("inf"),
         initialize=(
-            inputs.category_impact_limit
-            if inputs.category_impact_limit is not None
+            scaled_inputs.category_impact_limit
+            if scaled_inputs.category_impact_limit is not None
             else {}
         ),
     )
@@ -318,7 +338,8 @@ def create_model(
                 model.foreground_technosphere[p, i, tau]
                 * model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME) and not in_operation_phase(p, tau)
+                if (t - tau in model.SYSTEM_TIME)
+                and (not in_operation_phase(p, tau) or not model.operation_flow[p, i])
             )
 
         model.scaled_technosphere_cap = pyo.Expression(
@@ -339,7 +360,8 @@ def create_model(
                 model.foreground_biosphere[p, e, tau]
                 * model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME) and not in_operation_phase(p, tau)
+                if (t - tau in model.SYSTEM_TIME)
+                and (not in_operation_phase(p, tau) or not model.operation_flow[p, e])
             )
 
         model.scaled_biosphere_cap = pyo.Expression(

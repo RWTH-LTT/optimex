@@ -83,8 +83,8 @@ class TemporalConfig(BaseModel):
     timehorizon: int = Field(
         100, description="Length of the time horizon in units of temporal resolution."
     )
-    database_dates: Dict[str, Union[datetime, str]] = Field(
-        ...,
+    database_dates: Optional[Dict[str, Union[datetime, str]]] = Field(
+        None,
         description="Mapping from database names to their respective reference dates.",
     )
 
@@ -162,25 +162,25 @@ class LCADataProcessor:
             temporal parameters, characterization methods, and background inventory.
         """
         self.config = config
-
-        # Identify the dynamic (foreground) database from config.temporal.database_dates
-        dynamic_dbs = [
-            db
-            for db, date in config.temporal.database_dates.items()
-            if date == "dynamic"
-        ]
-        if len(dynamic_dbs) != 1:
+        if "foreground" not in bd.databases:
             raise ValueError(
-                "There should be exactly one dynamic (foreground) database specified "
-                "with date='dynamic'."
+                "Foreground database 'foreground' is not defined in Brightway2."
             )
-        self.foreground_db = bd.Database(dynamic_dbs.pop())
+        self.foreground_db = bd.Database("foreground")
+        self.background_dbs = {}
+        if config.temporal.database_dates is not None:
+            self.background_dbs = {
+                db: date
+                for db, date in config.temporal.database_dates.items()
+                if db != self.foreground_db.name
+            }
+        else:
+            for db_name in bd.databases:
+                db = bd.Database(db_name)
+                if (date := db.metadata.get("representative_time")) is not None:
+                    self.background_dbs[db.name] = datetime.fromisoformat(date)
+
         self.biosphere_db = bd.Database(bd.config.biosphere)
-        self.background_dbs = {
-            db: date
-            for db, date in config.temporal.database_dates.items()
-            if db != self.foreground_db.name
-        }
 
         self._demand = {}
         self._processes = {}
@@ -198,7 +198,8 @@ class LCADataProcessor:
         self._background_inventory = {}
         self._mapping = {}
         self._characterization = {}
-        self._operation_flows = {}
+        self._operation_flow = {}
+        self._operation_time_limits = {}
 
         self._parse_demand()
         self._construct_foreground_tensors()
@@ -277,9 +278,14 @@ class LCADataProcessor:
         return self._demand
 
     @property
-    def operation_flows(self) -> dict:
+    def operation_flow(self) -> dict:
         """Read-only access to the operation flow dictionary."""
-        return self._operation_flows
+        return self._operation_flow
+
+    @property
+    def operation_time_limits(self) -> dict:
+        """Read-only access to the operation time limits dictionary."""
+        return self._operation_time_limits
 
     def _parse_demand(self) -> None:
         """
@@ -348,6 +354,8 @@ class LCADataProcessor:
             - self._processes: dict mapping process codes to their names.
             - self._operation_flow: dict mapping process codes to flow codes, that
               are occurring in the operation phase.
+            - self._operation_time_limits: dict mapping process codes to their
+              operation time limits, if defined.
         Notes
         -----
         Functional flows are a subset of intermediate flows and are included within
@@ -365,6 +373,8 @@ class LCADataProcessor:
 
             # Store process information
             self._processes.setdefault(act["code"], act["name"])
+            if (limits := act.get("operation_time_limits")) is not None:
+                self._operation_time_limits[act["code"]] = limits
 
             for exc in act.exchanges():
                 # Extract temporal distribution
@@ -394,7 +404,7 @@ class LCADataProcessor:
                         }
                     )
                     if exc.get("operation"):
-                        self._operation_flows.update({(act["code"], input_code): True})
+                        self._operation_flow.update({(act["code"], input_code): True})
                     self._intermediate_flows.setdefault(input_code, input_name)
                 elif type == "biosphere":
                     biosphere_tensor.update(
@@ -404,7 +414,7 @@ class LCADataProcessor:
                         }
                     )
                     if exc.get("operation"):
-                        self._operation_flows.update({(act["code"], input_code): True})
+                        self._operation_flow.update({(act["code"], input_code): True})
                     self._elementary_flows.setdefault(input_code, input_name)
                 elif type == "production":
                     production_tensor.update(
@@ -415,7 +425,7 @@ class LCADataProcessor:
                         }
                     )
                     if exc.get("operation"):
-                        self._operation_flows.update(
+                        self._operation_flow.update(
                             {(act["code"], act["functional flow"]): True}
                         )
 
