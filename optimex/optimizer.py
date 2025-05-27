@@ -277,13 +277,6 @@ def create_model(
         doc="Installation of the process",
     )
 
-    model.var_operation = pyo.Var(
-        model.PROCESS,
-        model.SYSTEM_TIME,
-        within=pyo.NonNegativeReals,
-        doc="Operation of the process",
-    )
-
     # Process limits
     model.ProcessLimitMax = pyo.Constraint(
         model.PROCESS,
@@ -332,48 +325,56 @@ def create_model(
                 <= model.process_operation_end[p]
             )
 
-        # Scaled technosphere (capacity and operation)
-        def tech_cap(model, p, i, t):
-            return sum(
-                model.foreground_technosphere[p, i, tau]
-                * model.var_installation[p, t - tau]
-                for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME)
-                and (not in_operation_phase(p, tau) or not model.operation_flow[p, i])
+        model.var_operation = pyo.Var(
+            model.PROCESS,
+            model.SYSTEM_TIME,
+            within=pyo.NonNegativeReals,
+            doc="Operational level",
+        )
+
+        # Expressions builder
+        def cap_expr(tensor: pyo.Param, flow_set):
+            def expr(m, p, x, t):
+                in_phase = (
+                    lambda tau: m.process_operation_start[p]
+                    <= tau
+                    <= m.process_operation_end[p]
+                )
+                return sum(
+                    tensor[p, x, tau] * m.var_installation[p, t - tau]
+                    for tau in m.PROCESS_TIME
+                    if (t - tau in m.SYSTEM_TIME)
+                    and (
+                        not flexible_operation
+                        or not in_phase(tau)
+                        or not m.operation_flow[p, x]
+                    )
+                )
+
+            return pyo.Expression(
+                model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
             )
 
-        model.scaled_technosphere_cap = pyo.Expression(
-            model.PROCESS, model.INTERMEDIATE_FLOW, model.SYSTEM_TIME, rule=tech_cap
-        )
+        def op_expr(forecast: pyo.Param, flow_set):
+            def expr(m, p, x, t):
+                tau0 = m.process_operation_start[p]
+                return forecast[p, x, tau0] * m.var_operation[p, t]
 
-        def tech_op(model, p, i, t):
-            tau0 = model.process_operation_start[p]
-            return model.foreground_technosphere[p, i, tau0] * model.var_operation[p, t]
-
-        model.scaled_technosphere_op = pyo.Expression(
-            model.PROCESS, model.INTERMEDIATE_FLOW, model.SYSTEM_TIME, rule=tech_op
-        )
-
-        # Scaled biosphere (capacity and operation)
-        def bio_cap(model, p, e, t):
-            return sum(
-                model.foreground_biosphere[p, e, tau]
-                * model.var_installation[p, t - tau]
-                for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME)
-                and (not in_operation_phase(p, tau) or not model.operation_flow[p, e])
+            return pyo.Expression(
+                model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
             )
 
-        model.scaled_biosphere_cap = pyo.Expression(
-            model.PROCESS, model.ELEMENTARY_FLOW, model.SYSTEM_TIME, rule=bio_cap
+        model.scaled_technosphere_cap = cap_expr(
+            model.foreground_technosphere, "INTERMEDIATE_FLOW"
         )
-
-        def bio_op(model, p, e, t):
-            tau0 = model.process_operation_start[p]
-            return model.foreground_biosphere[p, e, tau0] * model.var_operation[p, t]
-
-        model.scaled_biosphere_op = pyo.Expression(
-            model.PROCESS, model.ELEMENTARY_FLOW, model.SYSTEM_TIME, rule=bio_op
+        model.scaled_biosphere_cap = cap_expr(
+            model.foreground_biosphere, "ELEMENTARY_FLOW"
+        )
+        model.scaled_technosphere_op = op_expr(
+            model.foreground_technosphere, "INTERMEDIATE_FLOW"
+        )
+        model.scaled_biosphere_op = op_expr(
+            model.foreground_biosphere, "ELEMENTARY_FLOW"
         )
 
         # Time process-specific impact
@@ -406,17 +407,6 @@ def create_model(
             model.CATEGORY, model.PROCESS, model.SYSTEM_TIME, rule=impact_op
         )
 
-        # Total impact
-        def total_impact(model, c):
-            return sum(
-                model.specific_impact[c, p, t]
-                for p in model.PROCESS
-                for t in model.SYSTEM_TIME
-            )
-
-        model.total_impact = pyo.Expression(model.CATEGORY, rule=total_impact)
-
-        # Operation limit
         def op_limit(model, p, f, t):
             return model.var_operation[p, t] * model.foreground_production[
                 p, f, model.process_operation_start[p]
@@ -431,7 +421,6 @@ def create_model(
             model.PROCESS, model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=op_limit
         )
 
-        # Demand driven by operation
         def demand_op(model, f, t):
             return model.demand[f, t] == sum(
                 model.foreground_production[p, f, model.process_operation_start[p]]
@@ -442,52 +431,40 @@ def create_model(
         model.DemandConstraint = pyo.Constraint(
             model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=demand_op
         )
+
     else:
-        # Scaled technosphere
 
-        def op_limit(model, p, f, t):
-            return model.var_operation[p, t] * model.foreground_production[
-                p, f, model.process_operation_start[p]
-            ] == sum(
-                model.foreground_production[p, f, tau]
-                * model.var_installation[p, t - tau]
+        def operation_at_full_capacity(model, p, t):
+            return sum(
+                model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
                 if (t - tau in model.SYSTEM_TIME)
             )
 
-        model.OperationLimit = pyo.Constraint(
-            model.PROCESS, model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=op_limit
+        model.var_operation = pyo.Expression(
+            model.PROCESS,
+            model.SYSTEM_TIME,
+            rule=operation_at_full_capacity,
+            doc="Operational level at full capacity",
         )
 
-        def scaled_tech_orig(model, p, i, t):
-            return sum(
-                model.foreground_technosphere[p, i, tau]
-                * model.var_installation[p, t - tau]
-                for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME)
+        def fixed_expr(tensor: pyo.Param, flow_set: str):
+            def expr(m, p, x, t):
+                return sum(
+                    tensor[p, x, tau] * m.var_installation[p, t - tau]
+                    for tau in m.PROCESS_TIME
+                    if (t - tau in m.SYSTEM_TIME)
+                )
+
+            return pyo.Expression(
+                model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
             )
 
-        model.scaled_technosphere = pyo.Expression(
-            model.PROCESS,
-            model.INTERMEDIATE_FLOW,
-            model.SYSTEM_TIME,
-            rule=scaled_tech_orig,
+        model.scaled_technosphere = fixed_expr(
+            model.foreground_technosphere, "INTERMEDIATE_FLOW"
         )
-
-        # Scaled biosphere
-        def scaled_bio_orig(model, p, e, t):
-            return sum(
-                model.foreground_biosphere[p, e, tau]
-                * model.var_installation[p, t - tau]
-                for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME)
-            )
-
-        model.scaled_biosphere = pyo.Expression(
-            model.PROCESS,
-            model.ELEMENTARY_FLOW,
-            model.SYSTEM_TIME,
-            rule=scaled_bio_orig,
+        model.scaled_biosphere = fixed_expr(
+            model.foreground_biosphere, "ELEMENTARY_FLOW"
         )
 
         # Time process-specific impact
@@ -513,17 +490,6 @@ def create_model(
             model.CATEGORY, model.PROCESS, model.SYSTEM_TIME, rule=impact_orig
         )
 
-        # Total impact
-        def total_impact(model, c):
-            return sum(
-                model.specific_impact[c, p, t]
-                for p in model.PROCESS
-                for t in model.SYSTEM_TIME
-            )
-
-        model.total_impact = pyo.Expression(model.CATEGORY, rule=total_impact)
-
-        # Demand constraint
         def demand_orig(model, f, t):
             return (
                 sum(
@@ -540,6 +506,16 @@ def create_model(
             model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=demand_orig
         )
 
+    # Total impact
+    def total_impact(model, c):
+        return sum(
+            model.specific_impact[c, p, t]
+            for p in model.PROCESS
+            for t in model.SYSTEM_TIME
+        )
+
+    model.total_impact = pyo.Expression(model.CATEGORY, rule=total_impact)
+
     # Category impact limit
     def category_impact_limit_rule(model, c):
         return model.total_impact[c] <= model.category_impact_limit[c]
@@ -547,9 +523,6 @@ def create_model(
     model.CategoryImpactLimit = pyo.Constraint(
         model.CATEGORY, rule=category_impact_limit_rule
     )
-
-    # Objective: Direct computation
-    logger.info("Creating objective function")
 
     def expression_objective_function(model):
         return model.total_impact[model._objective_category]
