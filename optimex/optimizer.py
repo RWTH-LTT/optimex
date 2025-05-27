@@ -3,10 +3,10 @@ This module contains the optimizer for the Optimex project.
 It provides functionality to perform optimization using Pyomo.
 """
 
-import logging
 from typing import Any, Dict, Tuple
 
 import pyomo.environ as pyo
+from loguru import logger
 from pyomo.contrib.iis import write_iis
 from pyomo.opt import ProblemFormat
 from pyomo.opt.results.results_ import SolverResults
@@ -61,9 +61,9 @@ def create_model(
     model = pyo.ConcreteModel(name=name)
     model._objective_category = objective_category
     scaled_inputs, scales = inputs.get_scaled_copy()
-    model._scales = scales  # Store scales for denormalization later
+    model.scales = scales  # Store scales for denormalization later
 
-    logging.info("Creating sets")
+    logger.info("Creating sets")
     # Sets
     model.PROCESS = pyo.Set(
         doc="Set of processes (or activities), indexed by p",
@@ -105,7 +105,7 @@ def create_model(
     )
 
     # Parameters
-    logging.info("Creating parameters")
+    logger.info("Creating parameters")
     model.process_names = pyo.Param(
         model.PROCESS,
         within=pyo.Any,
@@ -269,12 +269,19 @@ def create_model(
     )
 
     # Variables
-    logging.info("Creating variables")
+    logger.info("Creating variables")
     model.var_installation = pyo.Var(
         model.PROCESS,
         model.SYSTEM_TIME,
         within=pyo.NonNegativeReals,
         doc="Installation of the process",
+    )
+
+    model.var_operation = pyo.Var(
+        model.PROCESS,
+        model.SYSTEM_TIME,
+        within=pyo.NonNegativeReals,
+        doc="Operation of the process",
     )
 
     # Process limits
@@ -317,13 +324,6 @@ def create_model(
     )
 
     if flexible_operation:
-        # Operation variable
-        model.var_operation = pyo.Var(
-            model.PROCESS,
-            model.SYSTEM_TIME,
-            within=pyo.NonNegativeReals,
-            doc="Operation of the process",
-        )
 
         def in_operation_phase(p, tau):
             return (
@@ -406,6 +406,16 @@ def create_model(
             model.CATEGORY, model.PROCESS, model.SYSTEM_TIME, rule=impact_op
         )
 
+        # Total impact
+        def total_impact(model, c):
+            return sum(
+                model.specific_impact[c, p, t]
+                for p in model.PROCESS
+                for t in model.SYSTEM_TIME
+            )
+
+        model.total_impact = pyo.Expression(model.CATEGORY, rule=total_impact)
+
         # Operation limit
         def op_limit(model, p, f, t):
             return model.var_operation[p, t] * model.foreground_production[
@@ -434,6 +444,21 @@ def create_model(
         )
     else:
         # Scaled technosphere
+
+        def op_limit(model, p, f, t):
+            return model.var_operation[p, t] * model.foreground_production[
+                p, f, model.process_operation_start[p]
+            ] == sum(
+                model.foreground_production[p, f, tau]
+                * model.var_installation[p, t - tau]
+                for tau in model.PROCESS_TIME
+                if (t - tau in model.SYSTEM_TIME)
+            )
+
+        model.OperationLimit = pyo.Constraint(
+            model.PROCESS, model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=op_limit
+        )
+
         def scaled_tech_orig(model, p, i, t):
             return sum(
                 model.foreground_technosphere[p, i, tau]
@@ -488,6 +513,16 @@ def create_model(
             model.CATEGORY, model.PROCESS, model.SYSTEM_TIME, rule=impact_orig
         )
 
+        # Total impact
+        def total_impact(model, c):
+            return sum(
+                model.specific_impact[c, p, t]
+                for p in model.PROCESS
+                for t in model.SYSTEM_TIME
+            )
+
+        model.total_impact = pyo.Expression(model.CATEGORY, rule=total_impact)
+
         # Demand constraint
         def demand_orig(model, f, t):
             return (
@@ -507,28 +542,17 @@ def create_model(
 
     # Category impact limit
     def category_impact_limit_rule(model, c):
-        return (
-            sum(
-                model.specific_impact[c, p, t]
-                for p in model.PROCESS
-                for t in model.SYSTEM_TIME
-            )
-            <= model.category_impact_limit[c]
-        )
+        return model.total_impact[c] <= model.category_impact_limit[c]
 
     model.CategoryImpactLimit = pyo.Constraint(
         model.CATEGORY, rule=category_impact_limit_rule
     )
 
     # Objective: Direct computation
-    logging.info("Creating objective function")
+    logger.info("Creating objective function")
 
     def expression_objective_function(model):
-        return sum(
-            model.specific_impact[objective_category, p, t]
-            for p in model.PROCESS
-            for t in model.SYSTEM_TIME
-        )
+        return model.total_impact[model._objective_category]
 
     model.OBJ = pyo.Objective(sense=pyo.minimize, rule=expression_objective_function)
 
@@ -557,7 +581,7 @@ def solve_model(
     Parameters
     ----------
     model : pyo.ConcreteModel
-        The Pyomo model to be solved. Must have attribute `_scales` with keys
+        The Pyomo model to be solved. Must have attribute `scales` with keys
         'foreground' and 'characterization'.
     solver_name : str, optional
         Name of the solver (default: "gurobi").
@@ -591,7 +615,7 @@ def solve_model(
     # 2) Solve model
     results = solver.solve(model, tee=tee, **solve_kwargs)
     model.solutions.load_from(results)
-    logging.info(
+    logger.info(
         f"Solver [{solver_name}] termination: {results.solver.termination_condition}"
     )
 
@@ -602,22 +626,22 @@ def solve_model(
     ):
         try:
             write_iis(model, iis_file_name="model_iis.ilp", solver=solver)
-            logging.info("IIS written to model_iis.ilp")
+            logger.info("IIS written to model_iis.ilp")
         except Exception as e:
-            logging.warning(f"IIS generation failed: {e}")
+            logger.warning(f"IIS generation failed: {e}")
 
     # 4) Denormalize objective
     scaled_obj = pyo.value(model.OBJ)
-    fg_scale = getattr(model, "_scales", {}).get("foreground", 1.0)
-    cat_scales = getattr(model, "_scales", {}).get("characterization", {})
-    if model._objective_category and model._objective_category in cat_scales:
-        cat_scale = cat_scales[model._objective_category]
+    fg_scale = getattr(model, "scales", {}).get("foreground", 1.0)
+    catscales = getattr(model, "scales", {}).get("characterization", {})
+    if model._objective_category and model._objective_category in catscales:
+        cat_scale = catscales[model._objective_category]
     else:
         cat_scale = 1.0
 
     true_obj = scaled_obj * fg_scale * cat_scale
-    logging.info(f"Objective (scaled): {scaled_obj:.6g}")
-    logging.info(f"Objective (real):   {true_obj:.6g}")
+    logger.info(f"Objective (scaled): {scaled_obj:.6g}")
+    logger.info(f"Objective (real):   {true_obj:.6g}")
 
     # 5) (Optional) Denormalize duals
     if hasattr(model, "dual"):
@@ -631,7 +655,7 @@ def solve_model(
         for c, con in getattr(model, "category_impact_constraint", {}).items():
             μ = model.dual.get(con, None)
             if μ is not None:
-                denorm_duals[f"impact_{c}"] = μ * cat_scales.get(c, 1.0)
-        logging.info(f"Denormalized duals: {denorm_duals}")
+                denorm_duals[f"impact_{c}"] = μ * catscales.get(c, 1.0)
+        logger.info(f"Denormalized duals: {denorm_duals}")
 
     return model, true_obj, results
