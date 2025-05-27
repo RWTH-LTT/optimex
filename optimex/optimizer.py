@@ -62,6 +62,7 @@ def create_model(
     model._objective_category = objective_category
     scaled_inputs, scales = inputs.get_scaled_copy()
     model.scales = scales  # Store scales for denormalization later
+    model.flexible_operation = flexible_operation
 
     logger.info("Creating sets")
     # Sets
@@ -316,15 +317,10 @@ def create_model(
         model.PROCESS, model.PROCESS, model.SYSTEM_TIME, rule=process_coupling_rule
     )
 
+    def in_operation_phase(p, tau):
+        return model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+
     if flexible_operation:
-
-        def in_operation_phase(p, tau):
-            return (
-                model.process_operation_start[p]
-                <= tau
-                <= model.process_operation_end[p]
-            )
-
         model.var_operation = pyo.Var(
             model.PROCESS,
             model.SYSTEM_TIME,
@@ -335,18 +331,13 @@ def create_model(
         # Expressions builder
         def cap_expr(tensor: pyo.Param, flow_set):
             def expr(m, p, x, t):
-                in_phase = (
-                    lambda tau: m.process_operation_start[p]
-                    <= tau
-                    <= m.process_operation_end[p]
-                )
                 return sum(
                     tensor[p, x, tau] * m.var_installation[p, t - tau]
                     for tau in m.PROCESS_TIME
                     if (t - tau in m.SYSTEM_TIME)
                     and (
                         not flexible_operation
-                        or not in_phase(tau)
+                        or not in_operation_phase(p, tau)
                         or not m.operation_flow[p, x]
                     )
                 )
@@ -355,10 +346,10 @@ def create_model(
                 model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
             )
 
-        def op_expr(forecast: pyo.Param, flow_set):
+        def op_expr(tensor: pyo.Param, flow_set):
             def expr(m, p, x, t):
                 tau0 = m.process_operation_start[p]
-                return forecast[p, x, tau0] * m.var_operation[p, t]
+                return tensor[p, x, tau0] * m.var_operation[p, t]
 
             return pyo.Expression(
                 model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
@@ -438,7 +429,7 @@ def create_model(
             return sum(
                 model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME)
+                if (t - tau in model.SYSTEM_TIME) and in_operation_phase(p, tau)
             )
 
         model.var_operation = pyo.Expression(
