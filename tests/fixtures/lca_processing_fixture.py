@@ -13,7 +13,11 @@ from optimex import lca_processor
 @bw2test
 def setup_brightway_databases():
     bd.projects.set_current("__test_standalone_db__")
-    bd.Database("biosphere3").write(
+    for db in bd.databases:
+        del db
+
+    bio_db = bd.Database("biosphere3")
+    bio_db.write(
         {
             ("biosphere3", "CO2"): {
                 "type": "emission",
@@ -25,8 +29,10 @@ def setup_brightway_databases():
             },
         },
     )
+    bio_db.register()
 
-    bd.Database("db_2020").write(
+    background_2020 = bd.Database("db_2020")
+    background_2020.write(
         {
             ("db_2020", "I1"): {
                 "name": "node I1",
@@ -64,7 +70,11 @@ def setup_brightway_databases():
             },
         }
     )
-    bd.Database("db_2030").write(
+    background_2020.metadata["representative_time"] = datetime(2020, 1, 1).isoformat()
+    background_2020.register()
+
+    background_2030 = bd.Database("db_2030")
+    background_2030.write(
         {
             ("db_2030", "I1"): {
                 "name": "node I1",
@@ -102,13 +112,20 @@ def setup_brightway_databases():
             },
         }
     )
+    background_2030.metadata["representative_time"] = datetime(2030, 1, 1).isoformat()
+    background_2030.register()
 
-    bd.Database("foreground").write(
+    foreground = bd.Database("foreground")
+    foreground.write(
         {
             ("foreground", "P1"): {
                 "name": "process P1",
                 "location": "somewhere",
                 "reference product": "F1",
+                "operation_time_limits": (
+                    1,
+                    2,
+                ),  # start and end year of operation phase
                 "exchanges": [
                     {
                         "amount": 1,
@@ -118,6 +135,7 @@ def setup_brightway_databases():
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([0, 0.5, 0.5, 0]),
                         ),
+                        "operation": True,
                     },
                     {
                         "amount": 27.5,
@@ -136,6 +154,7 @@ def setup_brightway_databases():
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([0, 0.5, 0.5, 0]),
                         ),
+                        "operation": True,
                     },
                 ],
             },
@@ -143,6 +162,10 @@ def setup_brightway_databases():
                 "name": "process P2",
                 "location": "somewhere",
                 "reference product": "F1",
+                "operation_time_limits": (
+                    1,
+                    2,
+                ),  # start and end year of operation phase
                 "exchanges": [
                     {
                         "amount": 1,
@@ -152,6 +175,7 @@ def setup_brightway_databases():
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([0, 0.5, 0.5, 0]),
                         ),
+                        "operation": True,
                     },
                     {
                         "amount": 1,
@@ -170,11 +194,13 @@ def setup_brightway_databases():
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([0, 0.5, 0.5, 0]),
                         ),
+                        "operation": True,
                     },
                 ],
             },
         }
     )
+    foreground.register()
 
     bd.Method(("GWP", "example")).write(
         [
@@ -183,7 +209,7 @@ def setup_brightway_databases():
         ]
     )
 
-    bd.Method(("land_use", "example")).write(
+    bd.Method(("land use", "example")).write(
         [
             (("biosphere3", "CO2"), 2),
             (("biosphere3", "CH4"), 1),
@@ -193,8 +219,11 @@ def setup_brightway_databases():
 
 @pytest.fixture(scope="module")
 def mock_lca_data_processor(setup_brightway_databases):
+    years = range(2020, 2030)
     td_demand = TemporalDistribution(
-        date=np.arange(2020 - 1970, 10, dtype="datetime64[Y]"),
+        date=np.array(
+            [datetime(year, 1, 1).isoformat() for year in years], dtype="datetime64[s]"
+        ),
         amount=np.asarray([0, 0, 10, 5, 10, 5, 10, 5, 10, 5]),
     )
 
@@ -204,19 +233,28 @@ def mock_lca_data_processor(setup_brightway_databases):
         act["functional flow"] = "F1"
         act.save()
 
-    lca_data_processor = lca_processor.LCADataProcessor(
+    lca_config = lca_processor.LCAConfig(
         demand={"F1": td_demand},
-        start_date=datetime.strptime("2020", "%Y"),
-        methods={
-            "climate_change": ("GWP", "example"),
-            "land_use": ("land_use", "example"),
+        temporal={
+            "start_date": datetime(2020, 1, 1),
+            "temporal_resolution": "year",
+            "timehorizon": 100,
         },
-        database_date_dict={
-            "db_2020": datetime.strptime("2020", "%Y"),
-            "db_2030": datetime.strptime("2030", "%Y"),
-            "foreground": "dynamic",
+        characterization_methods=[
+            {
+                "category_name": "climate_change",
+                "brightway_method": ("GWP", "example"),
+                "metric": "CRF",
+            },
+            {
+                "category_name": "land_use",
+                "brightway_method": ("land use", "example"),
+            },
+        ],
+        background_inventory={
+            "cutoff": 1e4,
+            "calculation_method": "sequential",
         },
-        temporal_resolution="year",
-        timehorizon=100,
     )
+    lca_data_processor = lca_processor.LCADataProcessor(lca_config)
     return lca_data_processor

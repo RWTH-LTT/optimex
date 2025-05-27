@@ -16,7 +16,7 @@ def abstract_system_model_inputs():
         "PROCESS_TIME": [0, 1, 2, 3],
         "SYSTEM_TIME": [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029],
         "CATEGORY": ["climate_change", "land_use"],
-        "process_operation_time": {
+        "operation_time_limits": {
             "P1": (1, 2),
             "P2": (1, 2),
         },
@@ -45,6 +45,12 @@ def abstract_system_model_inputs():
             ("P1", "F1", 2): 0.5,
             ("P2", "F1", 1): 0.5,
             ("P2", "F1", 2): 0.5,
+        },
+        "operation_flow": {
+            ("P1", "F1"): True,
+            ("P1", "CO2"): True,
+            ("P2", "F1"): True,
+            ("P2", "CO2"): True,
         },
         "background_inventory": {
             ("db_2020", "I1", "CO2"): 1,
@@ -134,13 +140,11 @@ def abstract_system_model(request, abstract_system_model_inputs):
         model_inputs.category_impact_limit = {
             "land_use": 100,
         }
-    scaled_inputs, scales = model_inputs.get_scaled_copy()
     # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(
-        scaled_inputs=scaled_inputs,
+        inputs=model_inputs,
         objective_category="climate_change",
         name=f"abstract_system_model_{model_type}",
-        scales=scales,
         flexible_operation=(model_type != "fixed"),
         # debug_path=f"tests/fixtures/model_debug_{model_type}.lp",
     )

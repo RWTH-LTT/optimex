@@ -36,82 +36,50 @@ def test_lca_data_processor_initialization(mock_lca_data_processor):
     assert isinstance(mock_lca_data_processor, lca_processor.LCADataProcessor)
 
 
-def test_parse_demand(mock_lca_data_processor, abstract_system_model_inputs):
-    demand_generated = mock_lca_data_processor.parse_demand()
+def test_demands(mock_lca_data_processor, abstract_system_model_inputs):
+    demand_generated = mock_lca_data_processor.demand
     demand_expected = abstract_system_model_inputs["demand"]
     assert_dicts_equal_allowing_zeros(demand_generated, demand_expected)
 
 
 def test_foreground_tensors(mock_lca_data_processor, abstract_system_model_inputs):
-    mock_lca_data_processor.parse_demand()
-    mock_lca_data_processor.construct_foreground_tensors()
-    foreground_technosphere_generated = mock_lca_data_processor.foreground_technosphere
-    foreground_biosphere_generated = mock_lca_data_processor.foreground_biosphere
-    foreground_production_generated = mock_lca_data_processor.foreground_production
+    fg_technosphere = mock_lca_data_processor.foreground_technosphere
+    fg_biosphere = mock_lca_data_processor.foreground_biosphere
+    fg_production = mock_lca_data_processor.foreground_production
+    operation_time_limits = mock_lca_data_processor.operation_time_limits
 
-    foreground_technosphere_expected = abstract_system_model_inputs[
-        "foreground_technosphere"
-    ]
-    foreground_biosphere_expected = abstract_system_model_inputs["foreground_biosphere"]
-    foreground_production_expected = abstract_system_model_inputs[
-        "foreground_production"
-    ]
+    expected = abstract_system_model_inputs
+    fg_technosphere_expected = expected["foreground_technosphere"]
+    fg_biosphere_expected = expected["foreground_biosphere"]
+    fg_production_expected = expected["foreground_production"]
+    operation_time_limits_expected = expected["operation_time_limits"]
 
-    assert_dicts_equal_allowing_zeros(
-        foreground_technosphere_generated, foreground_technosphere_expected
-    )
-    assert_dicts_equal_allowing_zeros(
-        foreground_biosphere_generated, foreground_biosphere_expected
-    )
-    assert_dicts_equal_allowing_zeros(
-        foreground_production_generated, foreground_production_expected
-    )
-
-
-def test_set_process_operation_time(
-    mock_lca_data_processor, abstract_system_model_inputs
-):
-    mock_lca_data_processor.parse_demand()
-    mock_lca_data_processor.construct_foreground_tensors()
-    process_operation_time_expected = abstract_system_model_inputs[
-        "process_operation_time"
-    ]
-    mock_lca_data_processor.set_process_operation_time(process_operation_time_expected)
-    process_operation_time_generated = mock_lca_data_processor.process_operation_time
-    assert process_operation_time_generated == process_operation_time_expected
+    assert_dicts_equal_allowing_zeros(fg_technosphere, fg_technosphere_expected)
+    assert_dicts_equal_allowing_zeros(fg_biosphere, fg_biosphere_expected)
+    assert_dicts_equal_allowing_zeros(fg_production, fg_production_expected)
+    assert operation_time_limits_expected == operation_time_limits
 
 
 def test_sequential_inventory_tensor_calculation(
     mock_lca_data_processor, abstract_system_model_inputs
 ):
-    mock_lca_data_processor.construct_foreground_tensors()
-    mock_lca_data_processor.sequential_inventory_tensor_calculation()
     sequential_inventory_tensor_generated = mock_lca_data_processor.background_inventory
     sequential_inventory_tensor_expected = abstract_system_model_inputs[
         "background_inventory"
     ]
+
     assert_dicts_equal_allowing_zeros(
         sequential_inventory_tensor_generated, sequential_inventory_tensor_expected
     )
 
 
-def test_mapping_matrix(mock_lca_data_processor, abstract_system_model_inputs):
-    mock_lca_data_processor.parse_demand()
-    mapping_matrix_generated = mock_lca_data_processor.construct_mapping_matrix()
-    mapping_matrix_expected = abstract_system_model_inputs["mapping"]
-    assert_dicts_equal_allowing_zeros(mapping_matrix_generated, mapping_matrix_expected)
+def test_mapping(mock_lca_data_processor, abstract_system_model_inputs):
+    mapping_generated = mock_lca_data_processor.mapping
+    mapping_expected = abstract_system_model_inputs["mapping"]
+    assert_dicts_equal_allowing_zeros(mapping_generated, mapping_expected)
 
 
 def test_characterization_tensor(mock_lca_data_processor, abstract_system_model_inputs):
-    mock_lca_data_processor.parse_demand()
-    mock_lca_data_processor.construct_foreground_tensors()
-    mock_lca_data_processor.sequential_inventory_tensor_calculation()
-    mock_lca_data_processor.construct_characterization_matrix(
-        base_method_name="climate_change", dynamic=True, metric="CRF"
-    )
-    mock_lca_data_processor.construct_characterization_matrix(
-        base_method_name="land_use", dynamic=False
-    )
     characterization_tensor_generated = mock_lca_data_processor.characterization
     characterization_tensor_expected = abstract_system_model_inputs["characterization"]
     assert_dicts_equal_allowing_zeros(
