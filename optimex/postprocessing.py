@@ -37,6 +37,10 @@ class PostProcessor:
         return fig, ax
 
     def get_impacts(self) -> pd.DataFrame:
+        """
+        Extracts the specific impacts from the model and returns them as a DataFrame.
+        The DataFrame will have a MultiIndex with 'Category', 'Process', and 'Time'.
+        """
         impacts = {}
         cat_scales = getattr(self.m, "scales", {}).get("characterization", 1.0)
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
@@ -60,6 +64,11 @@ class PostProcessor:
         return self.df_impacts
 
     def get_installation(self) -> pd.DataFrame:
+        """
+        Extracts the installation data from the model and returns it as a DataFrame.
+        The DataFrame will have a MultiIndex with 'Time' and 'Process'.
+        The values are the installed capacities for each process at each time step.
+        """
         installation_matrix = {
             (t, p): pyo.value(self.m.var_installation[p, t])
             for p in self.m.PROCESS
@@ -75,6 +84,11 @@ class PostProcessor:
         return self.df_installation
 
     def get_operation(self) -> pd.DataFrame:
+        """
+        Extracts the operation data from the model and returns it as a DataFrame.
+        The DataFrame will have a MultiIndex with 'Time' and 'Process'.
+        The values are the operational levels for each process at each time step.
+        """
         operation_matrix = {
             (t, p): pyo.value(self.m.var_operation[p, t])
             for p in self.m.PROCESS
@@ -88,6 +102,12 @@ class PostProcessor:
         return self.df_operation
 
     def get_production(self) -> pd.DataFrame:
+        """
+        Extracts the production data from the model and returns it as a DataFrame.
+        The DataFrame will have a MultiIndex with 'Process', 'Functional Flow', and
+        'Time'. The values are the total production for each process and functional
+        flow at each time step.
+        """
         production_tensor = {}
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
 
@@ -122,6 +142,11 @@ class PostProcessor:
         return self.df_production
 
     def get_demand(self) -> pd.DataFrame:
+        """
+        Extracts the demand data from the model and returns it as a DataFrame.
+        The DataFrame will have a MultiIndex with 'Functional Flow' and 'Time'.
+        The values are the demand for each functional flow at each time step.
+        """
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
         demand_matrix = {
             (f, t): self.m.demand[f, t] * fg_scale
@@ -138,6 +163,12 @@ class PostProcessor:
         return self.df_demand
 
     def plot_production_and_demand(self, prod_df=None, demand_df=None):
+        """
+        Plot a stacked bar chart for production and line(s) for demand.
+        prod_df: DataFrame with Time as index, Processes as columns.
+        demand_df: DataFrame with Time as index, Functional Flows as columns.
+        """
+
         fig, ax = self._create_clean_ax()
         if prod_df is None:
             prod_df = self.get_production()
