@@ -3,22 +3,21 @@ This module contains the optimizer for the Optimex project.
 It provides functionality to perform optimization using Pyomo.
 """
 
-import logging
 from typing import Any, Dict, Tuple
 
 import pyomo.environ as pyo
+from loguru import logger
 from pyomo.contrib.iis import write_iis
 from pyomo.opt import ProblemFormat
 from pyomo.opt.results.results_ import SolverResults
 
-from optimex.converter import ModelInputs
+from optimex.converter import OptimizationModelInputs
 
 
 def create_model(
-    inputs: ModelInputs,
+    inputs: OptimizationModelInputs,
     name: str,
     objective_category: str,
-    scales: Dict[str, Any] = None,
     flexible_operation: bool = True,
     debug_path: str = None,
 ) -> pyo.ConcreteModel:
@@ -26,24 +25,19 @@ def create_model(
     Build a Pyomo ConcreteModel for the optimization problem based on the provided
     inputs.
 
-    This function constructs a fully defined Pyomo model using data from a `ModelInputs`
+    This function constructs a fully defined Pyomo model using data from a `OptimizationModelInputs`
     instance. It optionally supports flexible operation of processes and can save
     intermediate data to a specified path.
 
     Parameters
     ----------
-    inputs : ModelInputs
+    inputs : OptimizationModelInputs
         Structured input data containing all flows, mappings, and constraints
         required for model construction.
     name : str
         Name of the Pyomo model instance.
     objective_category : str
         The category of impact to be minimized in the optimization problem.
-    scales : dict, optional
-        Dictionary containing scaling factors for a scaled model. The keys should
-        include 'foreground' and 'characterization'. The values should be the
-        corresponding scaling factors. This is used to denormalize the objective
-        function and duals.
     flexible_operation : bool, optional
         Enables flexible operation mode for processes. When set to True, the model
         introduces additional variables that allow processes to operate between 0 and
@@ -65,48 +59,60 @@ def create_model(
     """
 
     model = pyo.ConcreteModel(name=name)
-    model._scales = scales or {}
     model._objective_category = objective_category
+    scaled_inputs, scales = inputs.get_scaled_copy()
+    model.scales = scales  # Store scales for denormalization later
+    model.flexible_operation = flexible_operation
 
-    logging.info("Creating sets")
+    logger.info("Creating sets")
     # Sets
     model.PROCESS = pyo.Set(
-        doc="Set of processes (or activities), indexed by p", initialize=inputs.PROCESS
+        doc="Set of processes (or activities), indexed by p",
+        initialize=scaled_inputs.PROCESS,
     )
     model.FUNCTIONAL_FLOW = pyo.Set(
         doc="Set of functional flows (or products), indexed by r",
-        initialize=inputs.FUNCTIONAL_FLOW,
+        initialize=scaled_inputs.FUNCTIONAL_FLOW,
     )
     model.INTERMEDIATE_FLOW = pyo.Set(
         doc="Set of intermediate flows, indexed by i",
-        initialize=inputs.INTERMEDIATE_FLOW,
+        initialize=scaled_inputs.INTERMEDIATE_FLOW,
     )
     model.ELEMENTARY_FLOW = pyo.Set(
-        doc="Set of elementary flows, indexed by e", initialize=inputs.ELEMENTARY_FLOW
+        doc="Set of elementary flows, indexed by e",
+        initialize=scaled_inputs.ELEMENTARY_FLOW,
+    )
+    model.FLOW = pyo.Set(
+        initialize=lambda m: m.FUNCTIONAL_FLOW
+        | m.INTERMEDIATE_FLOW
+        | m.ELEMENTARY_FLOW,
+        doc="Set of all flows, indexed by f",
     )
     model.CATEGORY = pyo.Set(
-        doc="Set of impact categories, indexed by c", initialize=inputs.CATEGORY
+        doc="Set of impact categories, indexed by c", initialize=scaled_inputs.CATEGORY
     )
 
     model.BACKGROUND_ID = pyo.Set(
         doc="Set of identifiers of the prospective background databases, indexed by b",
-        initialize=inputs.BACKGROUND_ID,
+        initialize=scaled_inputs.BACKGROUND_ID,
     )
     model.PROCESS_TIME = pyo.Set(
-        doc="Set of process time points, indexed by tau", initialize=inputs.PROCESS_TIME
+        doc="Set of process time points, indexed by tau",
+        initialize=scaled_inputs.PROCESS_TIME,
     )
     model.SYSTEM_TIME = pyo.Set(
-        doc="Set of system time points, indexed by t", initialize=inputs.SYSTEM_TIME
+        doc="Set of system time points, indexed by t",
+        initialize=scaled_inputs.SYSTEM_TIME,
     )
 
     # Parameters
-    logging.info("Creating parameters")
+    logger.info("Creating parameters")
     model.process_names = pyo.Param(
         model.PROCESS,
         within=pyo.Any,
         doc="Names of the processes",
         default=None,
-        initialize=inputs.process_names,
+        initialize=scaled_inputs.process_names,
     )
     model.demand = pyo.Param(
         model.FUNCTIONAL_FLOW,
@@ -114,21 +120,8 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit demand vector d",
         default=0,
-        initialize=inputs.demand,
+        initialize=scaled_inputs.demand,
     )
-    model.process_operation_start = pyo.Param(
-        model.PROCESS,
-        within=model.PROCESS_TIME,
-        initialize={p: inputs.process_operation_time[p][0] for p in inputs.PROCESS},
-        doc="start of operation phase",
-    )
-    model.process_operation_end = pyo.Param(
-        model.PROCESS,
-        within=model.PROCESS_TIME,
-        initialize={p: inputs.process_operation_time[p][1] for p in inputs.PROCESS},
-        doc="end of operation phase",
-    )
-
     model.foreground_technosphere = pyo.Param(
         model.PROCESS,
         model.INTERMEDIATE_FLOW,
@@ -136,7 +129,7 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit foreground technosphere tensor A",
         default=0,
-        initialize=inputs.foreground_technosphere,
+        initialize=scaled_inputs.foreground_technosphere,
     )
     model.foreground_biosphere = pyo.Param(
         model.PROCESS,
@@ -145,7 +138,7 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit foreground biosphere tensor B",
         default=0,
-        initialize=inputs.foreground_biosphere,
+        initialize=scaled_inputs.foreground_biosphere,
     )
     model.foreground_production = pyo.Param(
         model.PROCESS,
@@ -154,9 +147,8 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit foreground production tensor F",
         default=0,
-        initialize=inputs.foreground_production,
+        initialize=scaled_inputs.foreground_production,
     )
-    # TODO: check that first year production is 1
     model.background_inventory = pyo.Param(
         model.BACKGROUND_ID,
         model.INTERMEDIATE_FLOW,
@@ -164,7 +156,7 @@ def create_model(
         within=pyo.Reals,
         doc="prospective background inventory tensor G",
         default=0,
-        initialize=inputs.background_inventory,
+        initialize=scaled_inputs.background_inventory,
     )
     model.mapping = pyo.Param(
         model.BACKGROUND_ID,
@@ -172,7 +164,7 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit background mapping tensor M",
         default=0,
-        initialize=inputs.mapping,
+        initialize=scaled_inputs.mapping,
     )
     model.characterization = pyo.Param(
         model.CATEGORY,
@@ -181,16 +173,40 @@ def create_model(
         within=pyo.Reals,
         doc="time-explicit characterization tensor Q",
         default=0,
-        initialize=inputs.characterization,
+        initialize=scaled_inputs.characterization,
+    )
+    model.operation_flow = pyo.Param(
+        model.PROCESS,
+        model.FLOW,
+        within=pyo.Binary,
+        doc="operation flow matrix",
+        default=0,
+        initialize=scaled_inputs.operation_flow,
+    )
+    model.process_operation_start = pyo.Param(
+        model.PROCESS,
+        within=pyo.NonNegativeIntegers,
+        doc="start time of process operation",
+        default=0,
+        initialize={k: v[0] for k, v in scaled_inputs.operation_time_limits.items()},
+    )
+    model.process_operation_end = pyo.Param(
+        model.PROCESS,
+        within=pyo.NonNegativeIntegers,
+        doc="end time of process operation",
+        default=0,
+        initialize={k: v[1] for k, v in scaled_inputs.operation_time_limits.items()},
     )
     model.process_limits_max = pyo.Param(
         model.PROCESS,
         model.SYSTEM_TIME,
         within=pyo.Reals,
         doc="maximum time specific process limit S_max",
-        default=inputs.process_limits_max_default,
+        default=scaled_inputs.process_limits_max_default,
         initialize=(
-            inputs.process_limits_max if inputs.process_limits_max is not None else {}
+            scaled_inputs.process_limits_max
+            if scaled_inputs.process_limits_max is not None
+            else {}
         ),
     )
     model.process_limits_min = pyo.Param(
@@ -198,19 +214,21 @@ def create_model(
         model.SYSTEM_TIME,
         within=pyo.Reals,
         doc="minimum time specific process limit S_min",
-        default=inputs.process_limits_min_default,
+        default=scaled_inputs.process_limits_min_default,
         initialize=(
-            inputs.process_limits_min if inputs.process_limits_min is not None else {}
+            scaled_inputs.process_limits_min
+            if scaled_inputs.process_limits_min is not None
+            else {}
         ),
     )
     model.cumulative_process_limits_max = pyo.Param(
         model.PROCESS,
         within=pyo.Reals,
         doc="maximum cumulatative process limit S_max,cum",
-        default=inputs.cumulative_process_limits_max_default,
+        default=scaled_inputs.cumulative_process_limits_max_default,
         initialize=(
-            inputs.cumulative_process_limits_max
-            if inputs.cumulative_process_limits_max is not None
+            scaled_inputs.cumulative_process_limits_max
+            if scaled_inputs.cumulative_process_limits_max is not None
             else {}
         ),
     )
@@ -218,10 +236,10 @@ def create_model(
         model.PROCESS,
         within=pyo.Reals,
         doc="minimum cumulatative process limit S_min,cum",
-        default=inputs.cumulative_process_limits_min_default,
+        default=scaled_inputs.cumulative_process_limits_min_default,
         initialize=(
-            inputs.cumulative_process_limits_min
-            if inputs.cumulative_process_limits_min is not None
+            scaled_inputs.cumulative_process_limits_min
+            if scaled_inputs.cumulative_process_limits_min is not None
             else {}
         ),
     )
@@ -231,7 +249,9 @@ def create_model(
         within=pyo.NonNegativeReals,
         doc="coupling matrix",
         initialize=(
-            inputs.process_coupling if inputs.process_coupling is not None else {}
+            scaled_inputs.process_coupling
+            if scaled_inputs.process_coupling is not None
+            else {}
         ),
         default=0,  # Set default coupling value to 0 if not defined
     )
@@ -242,14 +262,14 @@ def create_model(
         doc="maximum impact limit",
         default=float("inf"),
         initialize=(
-            inputs.category_impact_limit
-            if inputs.category_impact_limit is not None
+            scaled_inputs.category_impact_limit
+            if scaled_inputs.category_impact_limit is not None
             else {}
         ),
     )
 
     # Variables
-    logging.info("Creating variables")
+    logger.info("Creating variables")
     model.var_installation = pyo.Var(
         model.PROCESS,
         model.SYSTEM_TIME,
@@ -296,96 +316,88 @@ def create_model(
         model.PROCESS, model.PROCESS, model.SYSTEM_TIME, rule=process_coupling_rule
     )
 
+    def in_operation_phase(p, tau):
+        return model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+
     if flexible_operation:
-        # Operation variable
         model.var_operation = pyo.Var(
             model.PROCESS,
             model.SYSTEM_TIME,
             within=pyo.NonNegativeReals,
-            doc="Operation of the process",
+            doc="Operational level",
         )
 
-        def in_operation_phase(p, tau):
-            return (
-                model.process_operation_start[p]
-                <= tau
-                <= model.process_operation_end[p]
-            )
-
-        # Scaled technosphere (capacity and operation)
-        def tech_cap(model, p, i, t):
-            return sum(
-                model.foreground_technosphere[p, i, tau]
-                * model.var_installation[p, t - tau]
-                for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME) and not in_operation_phase(p, tau)
-            )
-
-        model.scaled_technosphere_cap = pyo.Expression(
-            model.PROCESS, model.INTERMEDIATE_FLOW, model.SYSTEM_TIME, rule=tech_cap
-        )
-
-        def tech_op(model, p, i, t):
-            tau0 = model.process_operation_start[p]
-            return model.foreground_technosphere[p, i, tau0] * model.var_operation[p, t]
-
-        model.scaled_technosphere_op = pyo.Expression(
-            model.PROCESS, model.INTERMEDIATE_FLOW, model.SYSTEM_TIME, rule=tech_op
-        )
-
-        # Scaled biosphere (capacity and operation)
-        def bio_cap(model, p, e, t):
-            return sum(
-                model.foreground_biosphere[p, e, tau]
-                * model.var_installation[p, t - tau]
-                for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME) and not in_operation_phase(p, tau)
-            )
-
-        model.scaled_biosphere_cap = pyo.Expression(
-            model.PROCESS, model.ELEMENTARY_FLOW, model.SYSTEM_TIME, rule=bio_cap
-        )
-
-        def bio_op(model, p, e, t):
-            tau0 = model.process_operation_start[p]
-            return model.foreground_biosphere[p, e, tau0] * model.var_operation[p, t]
-
-        model.scaled_biosphere_op = pyo.Expression(
-            model.PROCESS, model.ELEMENTARY_FLOW, model.SYSTEM_TIME, rule=bio_op
-        )
-
-        # Time process-specific impact
-        def impact_op(model, c, p, t):
-            return sum(
-                model.characterization[c, e, t]
-                * (
-                    sum(
-                        (
-                            model.scaled_technosphere_cap[p, i, t]
-                            + model.scaled_technosphere_op[p, i, t]
-                        )
-                        * sum(
-                            model.background_inventory[bkg, i, e]
-                            * model.mapping[bkg, t]
-                            for bkg in model.BACKGROUND_ID
-                        )
-                        for i in model.INTERMEDIATE_FLOW
-                    )
-                    + (
-                        model.scaled_biosphere_cap[p, e, t]
-                        + model.scaled_biosphere_op[p, e, t]
+        # Expressions builder
+        def scale_tensor_by_installation(tensor: pyo.Param, flow_set):
+            def expr(m, p, x, t):
+                return sum(
+                    tensor[p, x, tau] * m.var_installation[p, t - tau]
+                    for tau in m.PROCESS_TIME
+                    if (t - tau in m.SYSTEM_TIME)
+                    and (
+                        not flexible_operation
+                        or not in_operation_phase(p, tau)
+                        or not m.operation_flow[p, x]
                     )
                 )
-                for e in model.ELEMENTARY_FLOW
+
+            return pyo.Expression(
+                model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
             )
 
-        # impact of process p at time t in category c
-        model.specific_impact = pyo.Expression(
-            model.CATEGORY, model.PROCESS, model.SYSTEM_TIME, rule=impact_op
+        def scale_tensor_by_operation(tensor: pyo.Param, flow_set):
+            def expr(m, p, x, t):
+                tau0 = m.process_operation_start[p]
+                return tensor[p, x, tau0] * m.var_operation[p, t]
+
+            return pyo.Expression(
+                model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
+            )
+
+        model.scaled_technosphere_dependent_on_installation = (
+            scale_tensor_by_installation(
+                model.foreground_technosphere, "INTERMEDIATE_FLOW"
+            )
+        )
+        model.scaled_biosphere_dependent_on_installation = scale_tensor_by_installation(
+            model.foreground_biosphere, "ELEMENTARY_FLOW"
+        )
+        model.scaled_technosphere_dependent_on_operation = scale_tensor_by_operation(
+            model.foreground_technosphere, "INTERMEDIATE_FLOW"
+        )
+        model.scaled_biosphere_dependent_on_operation = scale_tensor_by_operation(
+            model.foreground_biosphere, "ELEMENTARY_FLOW"
         )
 
-        # Operation limit
-        def op_limit(model, p, f, t):
+        def scaled_inventory_tensor(model, p, e, t):
+            """
+            Returns a Pyomo expression for the total inventory impact for a given
+            process p, elementary flow e, and time step t.
+            """
+
+            return sum(
+                (
+                    model.scaled_technosphere_dependent_on_installation[p, i, t]
+                    + model.scaled_technosphere_dependent_on_operation[p, i, t]
+                )
+                * sum(
+                    model.background_inventory[bkg, i, e] * model.mapping[bkg, t]
+                    for bkg in model.BACKGROUND_ID
+                )
+                for i in model.INTERMEDIATE_FLOW
+            ) + (
+                model.scaled_biosphere_dependent_on_installation[p, e, t]
+                + model.scaled_biosphere_dependent_on_operation[p, e, t]
+            )
+
+        model.scaled_inventory = pyo.Expression(
+            model.PROCESS,
+            model.ELEMENTARY_FLOW,
+            model.SYSTEM_TIME,
+            rule=scaled_inventory_tensor,
+        )
+
+        def operation_limited_by_installation_rule(model, p, f, t):
             return model.var_operation[p, t] * model.foreground_production[
                 p, f, model.process_operation_start[p]
             ] <= sum(
@@ -396,11 +408,13 @@ def create_model(
             )
 
         model.OperationLimit = pyo.Constraint(
-            model.PROCESS, model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=op_limit
+            model.PROCESS,
+            model.FUNCTIONAL_FLOW,
+            model.SYSTEM_TIME,
+            rule=operation_limited_by_installation_rule,
         )
 
-        # Demand driven by operation
-        def demand_op(model, f, t):
+        def fulfill_demand_rule(model, f, t):
             return model.demand[f, t] == sum(
                 model.foreground_production[p, f, model.process_operation_start[p]]
                 * model.var_operation[p, t]
@@ -408,66 +422,70 @@ def create_model(
             )
 
         model.DemandConstraint = pyo.Constraint(
-            model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=demand_op
+            model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=fulfill_demand_rule
         )
+
     else:
-        # Scaled technosphere
-        def scaled_tech_orig(model, p, i, t):
+
+        def operation_at_full_capacity(model, p, t):
             return sum(
-                model.foreground_technosphere[p, i, tau]
-                * model.var_installation[p, t - tau]
+                model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME)
+                if (t - tau in model.SYSTEM_TIME) and in_operation_phase(p, tau)
             )
 
-        model.scaled_technosphere = pyo.Expression(
+        model.var_operation = pyo.Expression(
             model.PROCESS,
-            model.INTERMEDIATE_FLOW,
             model.SYSTEM_TIME,
-            rule=scaled_tech_orig,
+            rule=operation_at_full_capacity,
+            doc="Operational level at full capacity",
         )
 
-        # Scaled biosphere
-        def scaled_bio_orig(model, p, e, t):
-            return sum(
-                model.foreground_biosphere[p, e, tau]
-                * model.var_installation[p, t - tau]
-                for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME)
+        def scale_tensor_by_installation(tensor: pyo.Param, flow_set: str):
+            def expr(m, p, x, t):
+                return sum(
+                    tensor[p, x, tau] * m.var_installation[p, t - tau]
+                    for tau in m.PROCESS_TIME
+                    if (t - tau in m.SYSTEM_TIME)
+                )
+
+            return pyo.Expression(
+                model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
             )
 
-        model.scaled_biosphere = pyo.Expression(
+        model.scaled_technosphere = scale_tensor_by_installation(
+            model.foreground_technosphere, "INTERMEDIATE_FLOW"
+        )
+        model.scaled_biosphere = scale_tensor_by_installation(
+            model.foreground_biosphere, "ELEMENTARY_FLOW"
+        )
+
+        def scaled_inventory_tensor(model, p, e, t):
+            """
+            Returns a Pyomo expression for the total inventory impact for a given
+            process p, elementary flow e, and time step t.
+            """
+
+            return (
+                sum(
+                    model.scaled_technosphere[p, i, t]
+                    * sum(
+                        model.background_inventory[bkg, i, e] * model.mapping[bkg, t]
+                        for bkg in model.BACKGROUND_ID
+                    )
+                    for i in model.INTERMEDIATE_FLOW
+                )
+                + model.scaled_biosphere[p, e, t]
+            )
+
+        model.scaled_inventory = pyo.Expression(
             model.PROCESS,
             model.ELEMENTARY_FLOW,
             model.SYSTEM_TIME,
-            rule=scaled_bio_orig,
+            rule=scaled_inventory_tensor,
         )
 
-        # Time process-specific impact
-        def impact_orig(model, c, p, t):
-            return sum(
-                model.characterization[c, e, t]
-                * (
-                    sum(
-                        model.scaled_technosphere[p, i, t]
-                        * sum(
-                            model.background_inventory[bkg, i, e]
-                            * model.mapping[bkg, t]
-                            for bkg in model.BACKGROUND_ID
-                        )
-                        for i in model.INTERMEDIATE_FLOW
-                    )
-                    + model.scaled_biosphere[p, e, t]
-                )
-                for e in model.ELEMENTARY_FLOW
-            )
-
-        model.specific_impact = pyo.Expression(
-            model.CATEGORY, model.PROCESS, model.SYSTEM_TIME, rule=impact_orig
-        )
-
-        # Demand constraint
-        def demand_orig(model, f, t):
+        def fulfill_demand_rule(model, f, t):
             return (
                 sum(
                     model.foreground_production[p, f, tau]
@@ -480,35 +498,46 @@ def create_model(
             )
 
         model.DemandConstraint = pyo.Constraint(
-            model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=demand_orig
+            model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=fulfill_demand_rule
         )
+
+    def category_process_time_specific_impact(model, c, p, t):
+        return sum(
+            model.characterization[c, e, t]
+            * (model.scaled_inventory[p, e, t])  # Total inventory impact
+            for e in model.ELEMENTARY_FLOW
+        )
+
+    # impact of process p at time t in category c
+    model.specific_impact = pyo.Expression(
+        model.CATEGORY,
+        model.PROCESS,
+        model.SYSTEM_TIME,
+        rule=category_process_time_specific_impact,
+    )
+
+    # Total impact
+    def total_impact_in_category(model, c):
+        return sum(
+            model.specific_impact[c, p, t]
+            for p in model.PROCESS
+            for t in model.SYSTEM_TIME
+        )
+
+    model.total_impact = pyo.Expression(model.CATEGORY, rule=total_impact_in_category)
 
     # Category impact limit
     def category_impact_limit_rule(model, c):
-        return (
-            sum(
-                model.specific_impact[c, p, t]
-                for p in model.PROCESS
-                for t in model.SYSTEM_TIME
-            )
-            <= model.category_impact_limit[c]
-        )
+        return model.total_impact[c] <= model.category_impact_limit[c]
 
     model.CategoryImpactLimit = pyo.Constraint(
         model.CATEGORY, rule=category_impact_limit_rule
     )
 
-    # Objective: Direct computation
-    logging.info("Creating objective function")
+    def objective_function(model):
+        return model.total_impact[model._objective_category]
 
-    def expression_objective_function(model):
-        return sum(
-            model.specific_impact[objective_category, p, t]
-            for p in model.PROCESS
-            for t in model.SYSTEM_TIME
-        )
-
-    model.OBJ = pyo.Objective(sense=pyo.minimize, rule=expression_objective_function)
+    model.OBJ = pyo.Objective(sense=pyo.minimize, rule=objective_function)
 
     if debug_path is not None:
         model.write(
@@ -535,7 +564,7 @@ def solve_model(
     Parameters
     ----------
     model : pyo.ConcreteModel
-        The Pyomo model to be solved. Must have attribute `_scales` with keys
+        The Pyomo model to be solved. Must have attribute `scales` with keys
         'foreground' and 'characterization'.
     solver_name : str, optional
         Name of the solver (default: "gurobi").
@@ -569,7 +598,7 @@ def solve_model(
     # 2) Solve model
     results = solver.solve(model, tee=tee, **solve_kwargs)
     model.solutions.load_from(results)
-    logging.info(
+    logger.info(
         f"Solver [{solver_name}] termination: {results.solver.termination_condition}"
     )
 
@@ -580,22 +609,22 @@ def solve_model(
     ):
         try:
             write_iis(model, iis_file_name="model_iis.ilp", solver=solver)
-            logging.info("IIS written to model_iis.ilp")
+            logger.info("IIS written to model_iis.ilp")
         except Exception as e:
-            logging.warning(f"IIS generation failed: {e}")
+            logger.warning(f"IIS generation failed: {e}")
 
     # 4) Denormalize objective
     scaled_obj = pyo.value(model.OBJ)
-    fg_scale = getattr(model, "_scales", {}).get("foreground", 1.0)
-    cat_scales = getattr(model, "_scales", {}).get("characterization", {})
-    if model._objective_category and model._objective_category in cat_scales:
-        cat_scale = cat_scales[model._objective_category]
+    fg_scale = getattr(model, "scales", {}).get("foreground", 1.0)
+    catscales = getattr(model, "scales", {}).get("characterization", {})
+    if model._objective_category and model._objective_category in catscales:
+        cat_scale = catscales[model._objective_category]
     else:
         cat_scale = 1.0
 
     true_obj = scaled_obj * fg_scale * cat_scale
-    logging.info(f"Objective (scaled): {scaled_obj:.6g}")
-    logging.info(f"Objective (real):   {true_obj:.6g}")
+    logger.info(f"Objective (scaled): {scaled_obj:.6g}")
+    logger.info(f"Objective (real):   {true_obj:.6g}")
 
     # 5) (Optional) Denormalize duals
     if hasattr(model, "dual"):
@@ -609,7 +638,7 @@ def solve_model(
         for c, con in getattr(model, "category_impact_constraint", {}).items():
             μ = model.dual.get(con, None)
             if μ is not None:
-                denorm_duals[f"impact_{c}"] = μ * cat_scales.get(c, 1.0)
-        logging.info(f"Denormalized duals: {denorm_duals}")
+                denorm_duals[f"impact_{c}"] = μ * catscales.get(c, 1.0)
+        logger.info(f"Denormalized duals: {denorm_duals}")
 
     return model, true_obj, results

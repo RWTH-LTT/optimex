@@ -1,140 +1,227 @@
+import math
+
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 
 
 class PostProcessor:
-    def __init__(self, solved_model: pyo.ConcreteModel):
-        raise NotImplementedError(
-            "PostProcessor is currently disabled due to major refactoring. "
-            "This class will be updated in a future version."
-        )
+    """
+    A class for post-processing and visualizing results from a solved Pyomo model.
+
+    This class provides plotting utilities with configurable styles for generating
+    visualizations such as stacked bar charts, line plots, etc., from model outputs.
+
+    Parameters
+    ----------
+    solved_model : pyo.ConcreteModel
+        A solved Pyomo model instance containing the data to be processed and visualized.
+
+    plot_config : dict, optional
+        A dictionary of plot styling options to override default settings. Recognized keys include:
+            - "figsize" : tuple of (width, height) in inches
+            - "fontsize" : int, font size for labels and titles
+            - "grid_alpha" : float, transparency of grid lines
+            - "grid_linestyle" : str, line style for grid (e.g., "--", ":", "-.")
+            - "rotation" : int, angle of x-axis tick label rotation
+            - "bar_width" : float, width of bars in bar charts
+            - "colormap" : list of colors used for plotting
+            - "line_color" : str, color of lines in line plots
+            - "line_marker" : str, marker style for line plots
+            - "line_width" : float, width of lines in line plots
+
+        Unrecognized keys are ignored.
+
+    Attributes
+    ----------
+    m : pyo.ConcreteModel
+        The solved Pyomo model.
+
+    _plot_config : dict
+        The finalized configuration dictionary used for plotting.
+    """
+
+    def __init__(self, solved_model: pyo.ConcreteModel, plot_config: dict = None):
         self.m = solved_model
-        self.df_scaling = None
-        self.df_production = None
-        self.df_demand = None
 
-    def get_impact(self) -> float:
-        return self.m.OBJ()
+        # Default plot config
+        default_config = {
+            "figsize": (10, 6),
+            "fontsize": 12,
+            "grid_alpha": 0.6,
+            "grid_linestyle": "--",
+            "rotation": 45,
+            "bar_width": 0.8,
+            "colormap": plt.colormaps["tab20"].colors,
+            "line_color": "black",
+            "line_marker": "o",
+            "line_width": 2,
+        }
 
-    def get_scaling(self) -> pd.DataFrame:
-        scaling_matrix = {
-            (t, p): self.m.scaling[p, t].value
+        # If user provided config, update defaults with it
+        if plot_config:
+            default_config.update(
+                {k: v for k, v in plot_config.items() if k in default_config}
+            )
+
+        self._plot_config = default_config
+
+    def _create_clean_axes(self, nrows=1, ncols=1):
+        """
+        Create a grid of clean axes with consistent formatting.
+        Returns fig, flattened list of axes.
+        """
+        fig, axes = plt.subplots(
+            nrows=nrows, ncols=ncols, figsize=self._plot_config["figsize"], sharex=True
+        )
+        axes = axes.flatten() if isinstance(axes, (np.ndarray, list)) else [axes]
+
+        for ax in axes:
+            ax.grid(
+                axis="y",
+                linestyle=self._plot_config["grid_linestyle"],
+                alpha=self._plot_config["grid_alpha"],
+            )
+            ax.tick_params(
+                axis="x",
+                rotation=self._plot_config["rotation"],
+                labelsize=self._plot_config["fontsize"],
+            )
+            ax.tick_params(axis="y", labelsize=self._plot_config["fontsize"])
+            ax.set_xlabel("Time", fontsize=self._plot_config["fontsize"])
+            ax.set_ylabel("Value", fontsize=self._plot_config["fontsize"])
+        if nrows == 1 and ncols == 1:
+            axes = axes[0]
+        return fig, axes
+
+    def get_impacts(self) -> pd.DataFrame:
+        """
+        Extracts the specific impacts from the model and returns them as a DataFrame.
+        The DataFrame will have a MultiIndex with 'Category', 'Process', and 'Time'.
+        """
+        impacts = {}
+        cat_scales = getattr(self.m, "scales", {}).get("characterization", 1.0)
+        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
+        impacts = {
+            (c, p, t): pyo.value(self.m.specific_impact[c, p, t])
+            * cat_scales[c]
+            * fg_scale
+            for c in self.m.CATEGORY
             for p in self.m.PROCESS
             for t in self.m.SYSTEM_TIME
         }
-        df = pd.DataFrame.from_dict(scaling_matrix, orient="index", columns=["Value"])
+        df = pd.DataFrame.from_dict(impacts, orient="index", columns=["Value"])
+        df.index = pd.MultiIndex.from_tuples(
+            df.index, names=["Category", "Process", "Time"]
+        )
+        df = df.reset_index()
+        df_pivot = df.pivot(
+            index="Time", columns=["Category", "Process"], values="Value"
+        )
+        self.df_impacts = df_pivot
+        return self.df_impacts
+
+    def get_radiative_forcing(self) -> pd.DataFrame:
+        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
+        inventory = {
+            (p, e, t): pyo.value(self.m.scaled_inventory[p, e, t]) * fg_scale
+            for p in self.m.PROCESS
+            for e in self.m.ELEMENTARY_FLOW
+            for t in self.m.SYSTEM_TIME
+        }
+        # do something with inventory
+        return NotImplementedError(
+            "Radiative forcing extraction is not implemented yet."
+        )
+
+    def get_installation(self) -> pd.DataFrame:
+        """
+        Extracts the installation data from the model and returns it as a DataFrame.
+        The DataFrame will have a MultiIndex with 'Time' and 'Process'.
+        The values are the installed capacities for each process at each time step.
+        """
+        installation_matrix = {
+            (t, p): pyo.value(self.m.var_installation[p, t])
+            for p in self.m.PROCESS
+            for t in self.m.SYSTEM_TIME
+        }
+        df = pd.DataFrame.from_dict(
+            installation_matrix, orient="index", columns=["Value"]
+        )
         df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process"])
         df = df.reset_index()
         df_pivot = df.pivot(index="Time", columns="Process", values="Value")
-        self.df_scaling = df_pivot
-        return self.df_scaling
+        self.df_installation = df_pivot
+        return self.df_installation
 
-    def plot_scaling(self, plot_name: str, df_scaling: pd.DataFrame = None):
-        if df_scaling is None:
-            df_scaling = self.df_scaling
-
-        core_processes = {
-            col.split("_")[2]: col for col in df_scaling.columns
-        }  # Mapping core name to column
-        unique_processes = sorted(
-            set(core_processes.keys())
-        )  # Unique process names (without prefixes)
-        colormap = plt.colormaps["tab20"]  # A palette with more unique colors
-        color_map = {
-            process: colormap(i / len(unique_processes))
-            for i, process in enumerate(unique_processes)
+    def get_operation(self) -> pd.DataFrame:
+        """
+        Extracts the operation data from the model and returns it as a DataFrame.
+        The DataFrame will have a MultiIndex with 'Time' and 'Process'.
+        The values are the operational levels for each process at each time step.
+        """
+        operation_matrix = {
+            (t, p): pyo.value(self.m.var_operation[p, t])
+            for p in self.m.PROCESS
+            for t in self.m.SYSTEM_TIME
         }
-        categories = [
-            f[:4] for f in self.m.FUNCTIONAL_FLOW
-        ]  # Extract the first four letters of each functional flow
-
-        # Function to get the color for a process based on its core name
-        def get_color(process):
-            core_name = process.split("_")[2]  # Extract the core name (without prefix)
-            return color_map[core_name]
-
-        # Create horizontal subplots
-        fig, axes = plt.subplots(1, len(categories), figsize=(14, 6), sharey=True)
-
-        for ax, category in zip(axes, categories):
-            # Identify corresponding processes
-            columns = [
-                col for col in df_scaling.columns if col.startswith(f"{category}_prod_")
-            ]
-
-            # Plot each category
-            df_scaling[columns].plot(
-                kind="bar",
-                stacked=True,
-                ax=ax,
-                color=[get_color(col) for col in columns],
-                legend=False,  # Suppress legend to add custom ones later
-            )
-            # Apply best practices
-            ax.set_title(
-                f"Scaling Factors for {category.capitalize()} Production",
-                fontsize=14,
-                pad=10,
-            )
-            ax.set_xlabel("Time", fontsize=12)
-            ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
-
-            # Add simplified legend
-            handles, labels = ax.get_legend_handles_labels()
-            # Remove first two prefixes from the process names for the legend
-            simplified_labels = [
-                process.split("_", 2)[-1].replace("_", " ").capitalize()
-                for process in columns
-            ]
-            ax.legend(
-                handles,
-                simplified_labels,
-                title="Process Type",
-                fontsize=10,
-                loc="upper right",
-                frameon=False,
-            )
-
-        # Final layout adjustments
-        axes[0].set_ylabel("Scaling Factor", fontsize=12)
-        plt.xticks(rotation=45, ha="right", fontsize=10)
-        plt.yticks(fontsize=10)
-        plt.tight_layout()
-
-        # Save and show the plot
-        plt.savefig(plot_name, dpi=300, bbox_inches="tight")
-        return fig
+        df = pd.DataFrame.from_dict(operation_matrix, orient="index", columns=["Value"])
+        df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process"])
+        df = df.reset_index()
+        df_pivot = df.pivot(index="Time", columns="Process", values="Value")
+        self.df_operation = df_pivot
+        return self.df_operation
 
     def get_production(self) -> pd.DataFrame:
-        production_matrices = {}
-        self.dfs_production = {}
-        for f in self.m.FUNCTIONAL_FLOW:  # Loop over factors f
-            production_matrices[f] = {}
+        """
+        Extracts the production data from the model and returns it as a DataFrame.
+        The DataFrame will have a MultiIndex with 'Process', 'Functional Flow', and
+        'Time'. The values are the total production for each process and functional
+        flow at each time step.
+        """
+        production_tensor = {}
+        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
 
-            for p in self.m.PROCESS:
+        for p in self.m.PROCESS:
+            for f in self.m.FUNCTIONAL_FLOW:
                 for t in self.m.SYSTEM_TIME:
-                    total_production = 0
-                    for tau in self.m.PROCESS_TIME:
-                        if t - tau in self.m.SYSTEM_TIME:
-                            total_production += (
-                                self.m.foreground_production[p, f, tau]
-                                * self.m.scaling[p, t - tau].value
-                            )
-                    production_matrices[f][(p, t)] = total_production
+                    if not self.m.flexible_operation:
+                        total_production = sum(
+                            self.m.foreground_production[p, f, tau]
+                            * pyo.value(self.m.var_installation[p, t - tau])
+                            for tau in self.m.PROCESS_TIME
+                            if (t - tau in self.m.SYSTEM_TIME)
+                        )
+                    else:
+                        tau0 = self.m.process_operation_start[p]
+                        total_production = self.m.foreground_production[
+                            p, f, tau0
+                        ] * pyo.value(self.m.var_operation[p, t])
+                    production_tensor[(p, f, t)] = total_production * fg_scale
 
-            df = pd.DataFrame.from_dict(
-                production_matrices[f], orient="index", columns=["Value"]
-            )
-            df.index = pd.MultiIndex.from_tuples(df.index, names=["Process", "Time"])
-            df = df.reset_index()
-            df_pivot = df.pivot(index="Time", columns="Process", values="Value")
-            self.dfs_production[f] = df_pivot
-        return self.dfs_production
+        df = pd.DataFrame.from_dict(
+            production_tensor, orient="index", columns=["Value"]
+        )
+        df.index = pd.MultiIndex.from_tuples(
+            df.index, names=["Process", "Functional Flow", "Time"]
+        )
+        df = df.reset_index()
+        df_pivot = df.pivot(
+            index="Time", columns=["Process", "Functional Flow"], values="Value"
+        )
+        self.df_production = df_pivot
+        return self.df_production
 
     def get_demand(self) -> pd.DataFrame:
+        """
+        Extracts the demand data from the model and returns it as a DataFrame.
+        The DataFrame will have a MultiIndex with 'Functional Flow' and 'Time'.
+        The values are the demand for each functional flow at each time step.
+        """
+        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
         demand_matrix = {
-            (f, t): self.m.demand[f, t]
+            (f, t): self.m.demand[f, t] * fg_scale
             for f in self.m.FUNCTIONAL_FLOW
             for t in self.m.SYSTEM_TIME
         }
@@ -147,125 +234,188 @@ class PostProcessor:
         self.df_demand = df_pivot
         return self.df_demand
 
-    def plot_production(self, plot_name: str, dfs_production: pd.DataFrame = None):
-        if dfs_production is None:
-            dfs_production = self.dfs_production
-        if self.df_demand is None:
-            self.df_demand = self.get_demand()
+    def plot_impacts(self, df_impacts=None):
+        """
+        Plot a stacked bar chart for impacts.
+        df_impacts: DataFrame with Time as index, Categories and Processes as columns.
+        Columns must be a MultiIndex: (Category, Process)
+        """
+        if df_impacts is None:
+            df_impacts = self.get_impacts()
 
-        core_processes = {
-            col.split("_")[2]: col for col in self.m.PROCESS
-        }  # Mapping core name to process
-        unique_processes = sorted(
-            set(core_processes.keys())
-        )  # Unique process names (without prefixes)
-        colormap = plt.colormaps["tab20"]  # A palette with more unique colors
-        color_map = {
-            process: colormap(i / len(unique_processes))
-            for i, process in enumerate(unique_processes)
-        }
-        categories = {
-            f: f[:4] for f in self.m.FUNCTIONAL_FLOW
-        }  # Map first four letters to functional flows
+        categories = df_impacts.columns.get_level_values(0).unique()
+        n_categories = len(categories)
 
-        # Function to get the color for a process based on its core name
-        def get_color(process):
-            core_name = process.split("_")[2]  # Extract the core name (without prefix)
-            return color_map[core_name]
+        ncols = 2
+        nrows = math.ceil(n_categories / ncols)
 
-        # Create horizontal subplots
-        fig, axes = plt.subplots(1, len(categories), figsize=(14, 6), sharey=True)
+        fig, axes = self._create_clean_axes(nrows=nrows, ncols=ncols)
 
-        for ax, f in zip(axes, categories):
-            # Identify corresponding processes
-            df_production = dfs_production[f]
-            columns = [
-                col
-                for col in df_production.columns
-                if col.startswith(f"{categories[f]}_prod_")
-            ]
+        for i, category in enumerate(categories):
+            ax = axes[i]
+            sub_df = df_impacts[category]
+            sub_df.plot(kind="bar", stacked=True, ax=ax)
+            ax.set_title(category, fontsize=self._plot_config["fontsize"])
+            ax.legend(title="Process", fontsize=self._plot_config["fontsize"] - 2)
 
-            # Plot each category
-            df_production[columns].plot(
-                kind="bar",
-                stacked=True,
-                ax=ax,
-                color=[get_color(col) for col in columns],
-                legend=False,  # Suppress legend to add custom ones later
-                zorder=1,
+        # Hide unused axes
+        for j in range(i + 1, len(axes)):
+            fig.delaxes(axes[j])
+
+        fig.tight_layout()
+        plt.show()
+        return fig, axes
+
+    def plot_production_and_demand(self, prod_df=None, demand_df=None):
+        """
+        Plot a stacked bar chart for production and line(s) for demand.
+        prod_df: DataFrame with Time as index, Processes as columns.
+        demand_df: DataFrame with Time as index, Functional Flows as columns.
+        """
+
+        fig, ax = self._create_clean_axes()
+        if prod_df is None:
+            prod_df = self.get_production()
+        if demand_df is None:
+            demand_df = self.get_demand()
+        prod_df = prod_df.copy()
+        demand_df = demand_df.copy()
+
+        # Ensure string index for x-axis labels
+        prod_df.index = prod_df.index.astype(str)
+        demand_df.index = demand_df.index.astype(str)
+
+        import numpy as np
+
+        x_positions = np.arange(len(prod_df.index))
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(
+            prod_df.index,
+            rotation=self._plot_config["rotation"],
+            ha="right",
+            fontsize=10,
+        )
+
+        # Plot stacked bar chart for production
+        prod_df.plot(
+            kind="bar",
+            stacked=True,
+            ax=ax,
+            edgecolor="black",
+            width=self._plot_config["bar_width"],
+            color=self._plot_config["colormap"][: len(prod_df.columns)],
+            legend=False,  # We'll handle legend below
+        )
+
+        # Plot demand as line(s)
+        for col in demand_df.columns:
+            ax.plot(
+                x_positions,
+                demand_df[col].values,
+                marker=self._plot_config["line_marker"],
+                linewidth=self._plot_config["line_width"],
+                label=f"Demand {col}",
+                color=self._plot_config["line_color"],
             )
-            line_plot = self.df_demand[f].plot(
-                kind="line",
-                ax=ax,
-                color="black",
-                linewidth=2,
-                legend=False,
-                zorder=2,
-            )
-            # Apply best practices
-            ax.set_title(f"Production for {f.capitalize()}", fontsize=14, pad=10)
-            ax.set_xticks(ax.get_xticks()[::5])
-            ax.set_xlabel("Time", fontsize=12)
-            ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
 
-            # Add simplified legend
-            handles, labels = ax.get_legend_handles_labels()
-            handles += [line_plot]
-            # Remove first two prefixes from the process names for the legend
-            simplified_labels = ["Demand"]
-            simplified_labels += [
-                process.split("_", 2)[-1].replace("_", " ").capitalize()
-                for process in columns
-            ]
-            ax.legend(
-                handles,
-                simplified_labels,
-                title="Process Type",
-                fontsize=10,
-                loc="upper right",
-                frameon=False,
-            )
+        # Custom legend combining both
+        handles1, labels1 = ax.get_legend_handles_labels()
 
-        # Final layout adjustments
-        axes[0].set_ylabel("Production", fontsize=12)
-        plt.xticks(rotation=45, ha="right", fontsize=10)
-        plt.yticks(fontsize=10)
-        plt.tight_layout()
+        ax.legend(
+            handles=handles1,
+            loc="upper left",
+            fontsize=10,
+            title="Processes / Demand",
+            title_fontsize=12,
+            frameon=False,
+        )
 
-        # Save and show the plot
-        plt.savefig(plot_name, dpi=300, bbox_inches="tight")
-        return fig
+        ax.set_title("Production and Demand", fontsize=16)
+        fig.tight_layout()
+        plt.show()
 
-    def get_specific_impacts(self) -> pd.DataFrame:
-        # precompute expression values
-        self.scaled_technosphere_values = {
-            (p, i, t): pyo.value(self.m.scaled_technosphere[p, i, t])
-            for p in self.m.PROCESS
-            for i in self.m.INTERMEDIATE_FLOW
-            for t in self.m.SYSTEM_TIME
-        }
-        self.scaled_biosphere_values = {
-            (p, e, t): pyo.value(self.m.scaled_biosphere[p, e, t])
-            for p in self.m.PROCESS
-            for e in self.m.ELEMENTARY_FLOW
-            for t in self.m.SYSTEM_TIME
-        }
-        self.time_process_specific_impact_values = {
-            (p, t): pyo.value(self.m.time_process_specific_impact(p, t))
-            for p in self.m.PROCESS
-            for t in self.m.SYSTEM_TIME
-        }
-        impact_matrix = {
-            (t, self.m.process_names[p]): self.time_process_specific_impact_values(
-                self.m, p, t
-            )
-            for p in self.m.PROCESS
-            for t in self.m.SYSTEM_TIME
-        }
-        df = pd.DataFrame.from_dict(impact_matrix, orient="index", columns=["Value"])
-        df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process"])
-        df = df.reset_index()
-        df_pivot = df.pivot(index="Time", columns="Process", values="Value")
-        return df_pivot
+        return fig, ax
 
-    # TODO: calculate oversupply of functional flows
+    def plot_installation(self, df_installation=None):
+        """
+        Plot a stacked bar chart for installation data.
+        df_installation: DataFrame with Time as index, Processes as columns.
+        """
+        if df_installation is None:
+            df_installation = self.get_installation()
+        fig, ax = self._create_clean_axes()
+        df_installation.plot(
+            kind="bar",
+            stacked=True,
+            ax=ax,
+            width=self._plot_config["bar_width"],
+            color=self._plot_config["colormap"][: len(df_installation.columns)],
+            edgecolor="black",
+            legend=False,
+        )
+        ax.set_title("Installed Capacity", fontsize=self._plot_config["fontsize"] + 2)
+        ax.set_ylabel("Installation", fontsize=self._plot_config["fontsize"])
+        ax.grid(
+            axis="y",
+            linestyle=self._plot_config["grid_linestyle"],
+            alpha=self._plot_config["grid_alpha"],
+        )
+        ax.set_xticklabels(
+            df_installation.index.astype(str),
+            rotation=self._plot_config["rotation"],
+            ha="right",
+        )
+
+        # Legend outside top-right
+        ax.legend(
+            title="Processes",
+            fontsize=self._plot_config["fontsize"] - 2,
+            loc="upper right",
+            frameon=False,
+            bbox_to_anchor=(1.15, 1),
+        )
+        fig.tight_layout()
+        plt.show()
+        return fig, ax
+
+    def plot_operation(self, df_operation=None):
+        """
+        Plot a stacked bar chart for operation data.
+        df_operation: DataFrame with Time as index, Processes as columns.
+        """
+        if df_operation is None:
+            df_operation = self.get_operation()
+        fig, ax = self._create_clean_ax()
+        df_operation.plot(
+            kind="bar",
+            stacked=True,
+            ax=ax,
+            width=self._plot_config["bar_width"],
+            color=self._plot_config["colormap"][: len(df_operation.columns)],
+            edgecolor="black",
+            legend=False,
+        )
+        ax.set_title("Operational Level", fontsize=self._plot_config["fontsize"] + 2)
+        ax.set_ylabel("Operation", fontsize=self._plot_config["fontsize"])
+        ax.grid(
+            axis="y",
+            linestyle=self._plot_config["grid_linestyle"],
+            alpha=self._plot_config["grid_alpha"],
+        )
+        ax.set_xticklabels(
+            df_operation.index.astype(str),
+            rotation=self._plot_config["rotation"],
+            ha="right",
+        )
+
+        # Legend outside top-right
+        ax.legend(
+            title="Processes",
+            fontsize=self._plot_config["fontsize"] - 2,
+            loc="upper right",
+            frameon=False,
+            bbox_to_anchor=(1.15, 1),
+        )
+        fig.tight_layout()
+        plt.show()
+        return fig, ax

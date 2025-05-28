@@ -1,14 +1,143 @@
-import logging
 import pickle
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
+from enum import Enum
+from typing import Dict, List, Optional, Tuple, Union
 
 import bw2calc as bc
 import bw2data as bd
 import numpy as np
 import pandas as pd
+from bw_temporalis import TemporalDistribution
 from dynamic_characterization import characterize
+from loguru import logger
+from pydantic import BaseModel, Field
 from tqdm import tqdm
+
+
+class MetricEnum(str, Enum):
+    GWP = "GWP"
+    CRF = "CRF"
+
+
+class TemporalResolutionEnum(str, Enum):
+    year = "year"
+
+
+class CharacterizationMethodConfig(BaseModel):
+    """
+    Configuration for a single LCIA characterization method.
+
+    Attributes:
+        name: User-defined identifier for the impact category
+        (e.g., 'climate_change_dynamic_gwp').
+        brightway_method: Brightway method identifier tuple, either 2 or 3 elements
+            (e.g., ('GWP', 'example') or ('IPCC', 'climate change', 'GWP 100a')).
+        metric: Impact metric used for dynamic characterization.
+            None implies static method.
+            Supported values: 'GWP', 'CRF'.
+    """
+
+    category_name: str = Field(
+        ...,
+        description="User-defined name for the impact category "
+        "(e.g., 'climate_change_dynamic_gwp').",
+    )
+    brightway_method: Union[Tuple[str, str], Tuple[str, str, str]] = Field(
+        ...,
+        description=(
+            "The Brightway method tuple with 2 or 3 elements "
+            "(e.g., ('IPCC', 'climate change', 'GWP 100a'))."
+        ),
+    )
+    metric: Optional[MetricEnum] = Field(
+        None,
+        description="Impact metric for dynamic characterization. "
+        "Use None for static methods.",
+    )
+
+    @property
+    def dynamic(self) -> bool:
+        """Indicates whether this is a dynamic characterization method."""
+        return self.metric is not None
+
+
+class TemporalConfig(BaseModel):
+    """
+    Configuration related to temporal aspects of the model.
+
+    Attributes:
+        start_date: The start date of the time horizon.
+        temporal_resolution: Temporal resolution for the model.
+            Options: 'year', 'month', 'day'.
+        time_horizon: Length of the time horizon (in units of `temporal_resolution`).
+        database_dates: Mapping from database names to their respective reference dates.
+    """
+
+    start_date: datetime = Field(
+        ..., description="The start date for the time horizon."
+    )
+    temporal_resolution: TemporalResolutionEnum = Field(
+        TemporalResolutionEnum.year,
+        description="Temporal resolution for the model (e.g., 'year').",
+    )
+    time_horizon: int = Field(
+        100, description="Length of the time horizon in units of temporal resolution."
+    )
+    database_dates: Optional[Dict[str, Union[datetime, str]]] = Field(
+        None,
+        description="Mapping from database names to their respective reference dates.",
+    )
+
+
+class BackgroundInventoryConfig(BaseModel):
+    """
+    Configuration for background inventory data.
+
+    Attributes:
+        cutoff: Cutoff threshold for the number of top elementary flows to retain based on impact magnitude.
+        calculation_method: Method for calculating the inventory tensor. Options: 'sequential', 'parallel'.
+        path_to_save: Optional path to save the inventory tensor.
+        path_to_load: Optional path to load the inventory tensor.
+    """
+
+    cutoff: float = Field(
+        1e4,
+        description="Cutoff threshold for the number of top elementary flows to retain "
+        "based on impact magnitude.",
+    )
+    calculation_method: str = Field(
+        "sequential",
+        description="Method for calculating the inventory tensor. "
+        "Options: 'sequential', 'parallel'.",
+    )
+    path_to_save: Optional[str] = Field(
+        None, description="Optional path to save the inventory tensor."
+    )
+    path_to_load: Optional[str] = Field(
+        None,
+        description="Optional path to load the inventory tensor. "
+        "If provided, the tensor will be loaded instead of calculated.",
+    )
+
+
+class LCAConfig(BaseModel):
+    """
+    Configuration class for Life Cycle Assessment (LCA) data processing.
+
+    Attributes:
+        demand: Dictionary {(Functional_flow_name, temporal_distribution)} containing time-explicit demands for each flow.
+        temporal: Temporal configuration for model time behavior.
+        characterization_methods: List of characterization method configurations.
+        background_inventory: Configuration for background inventory data calculation.
+    """
+
+    demand: Dict[str, TemporalDistribution]
+    temporal: TemporalConfig
+    characterization_methods: List[CharacterizationMethodConfig]
+    background_inventory: BackgroundInventoryConfig
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 class LCADataProcessor:
@@ -17,97 +146,64 @@ class LCADataProcessor:
     computations and gather necessary data for building an optimization model.
 
     This class is primarily responsible for executing the LCA-based computations
-    required to collect all the data needed for building `ModelInputs`. It is reliant on
+    required to collect all the data needed for building `OptimizationModelInputs`. It is reliant on
     Brightway2, an open-source framework for Life Cycle Assessment, to perform the
     calculations and retrieve LCA results.
     """
 
-    def __init__(
-        self,
-        demand: dict,
-        start_date: datetime,
-        methods: dict,
-        database_date_dict: dict,
-        temporal_resolution: str = "year",
-        timehorizon: int = 100,
-    ) -> None:
+    def __init__(self, config: LCAConfig) -> None:
         """
-        Initialize the LCADataProcessor class to compute and collect LCA data
-        for creating input to an optimization model. This class is designed to
-        gather the necessary LCA data based on processes and their intermediate
-        and elementary flows that produce outputs matching the required demand.
-
-        For unique identification of processes, the class uses the `code`
-        attribute of a `bw2data.parameters.ActivityParameter` instance.
+        Initialize the LCADataProcessor with the LCA configuration.
 
         Parameters
         ----------
-        demand : dict
-            A dictionary containing time-explicit demands for each flow.
-        start_date : datetime
-            The start date for the time horizon, used to calculate future years.
-        methods : Dict[str, tuple]
-            A dictionary mapping user-defined impact category names to their respective
-            LCIA methods represented by a tuple (e.g.,
-            `("EF v3.1", "climate change", "global warming potential (GWP100)")`).
-        database_date_dict : dict
-            A dictionary mapping database names to their respective dates.
-        temporal_resolution : str, optional
-            The temporal resolution for the optimization model (e.g., "year").
-            Default is "year".
-        timehorizon : int, optional
-            The length of the time horizon in years. Default is 100 years.
+        config : LCAConfig
+            The configuration object containing all settings for demand,
+            temporal parameters, characterization methods, and background inventory.
         """
-        # Store the provided values as instance variables
-        self.demand_raw = demand
-        self.timehorizon = timehorizon
-        self.methods = methods
+        self.config = config
+        if "foreground" not in bd.databases:
+            raise ValueError("Foreground database 'foreground' is not defined.")
+        self.foreground_db = bd.Database("foreground")
+        self.background_dbs = {}
+        if config.temporal.database_dates is not None:
+            self.background_dbs = {
+                db: date
+                for db, date in config.temporal.database_dates.items()
+                if db != self.foreground_db.name
+            }
+        else:
+            for db_name in bd.databases:
+                db = bd.Database(db_name)
+                if (date := db.metadata.get("representative_time")) is not None:
+                    self.background_dbs[db.name] = datetime.fromisoformat(date)
 
-        if temporal_resolution != "year":
-            raise NotImplementedError("Only 'year' is currently supported.")
-        self.start_date = start_date
-
-        # Extract dynamic database(s)
-        dynamic_dbs = {
-            db for db, date in database_date_dict.items() if date == "dynamic"
-        }
-
-        if len(dynamic_dbs) != 1:
-            raise ValueError("There should be exactly one dynamic database.")
-        self.foreground_db = bd.Database(dynamic_dbs.pop())
         self.biosphere_db = bd.Database(bd.config.biosphere)
 
-        # Remove foreground DB from background DBs dictionary
-        self.background_dbs = {
-            db: date
-            for db, date in database_date_dict.items()
-            if db != self.foreground_db.name
-        }
-
-        # Dictionaries for optimization model
-
-        self._processes = {}  # dict: {process code: process name}
-        self._intermediate_flows = (
-            {}
-        )  # dict: {intermediate flow code: intermediate flow name}
-        self._elementary_flows = (
-            {}
-        )  # dict: {elementary flow code: elementary flow name}
-        self._functional_flows = set()  # set: functional flow names
-        self._system_time = set()  # set: absolute time points
-        self._process_time = set()  # set: relative process time points
-        self._category = set(self.methods.keys())  # set: impact categories
-
-        # Tensors/matrices for optimization model
         self._demand = {}
+        self._processes = {}
+        self._intermediate_flows = {}
+        self._elementary_flows = {}
+
+        self._functional_flows = set()
+        self._system_time = set()
+        self._process_time = set()
+        self._category = set()
+
         self._foreground_technosphere = {}
         self._foreground_biosphere = {}
         self._foreground_production = {}
         self._background_inventory = {}
         self._mapping = {}
         self._characterization = {}
+        self._operation_flow = {}
+        self._operation_time_limits = {}
 
-        self._process_operation_time = {}  # dict: {process code: (start, end)}
+        self._parse_demand()
+        self._construct_foreground_tensors()
+        self._prepare_background_inventory()
+        self._construct_characterization_tensor()
+        self._construct_mapping_matrix()
 
     @property
     def processes(self) -> dict:
@@ -180,28 +276,36 @@ class LCADataProcessor:
         return self._demand
 
     @property
-    def process_operation_time(self) -> dict:
-        """Read-only access to the process operation time dictionary."""
-        return self._process_operation_time
+    def operation_flow(self) -> dict:
+        """Read-only access to the operation flow dictionary."""
+        return self._operation_flow
 
-    def parse_demand(self) -> dict:
+    @property
+    def operation_time_limits(self) -> dict:
+        """Read-only access to the operation time limits dictionary."""
+        return self._operation_time_limits
+
+    def _parse_demand(self) -> None:
         """
-        Parse the demand dictionary into a format that can be used by the optimization
-        model.
+        Parse and process the demand dictionary from the configuration.
 
-        This method creates a new dictionary that maps each flow and year to the
-        corresponding amount from the demand data. The year is extracted from the 'date'
-        field, and the amount is associated with the corresponding flow and year.
+        This method transforms the demand data into a dictionary mapping (flow, year)
+        tuples to their corresponding amounts, and identifies the set of functional
+        flows. It also determines the system time range based on the longest demand
+        interval found.
 
-        Returns
-        -------
-        dict
-            Dictionary containing the parsed demand with (flow, year) as the key and
-            amount as the value.
+        Side Effects
+        ------------
+        Updates the following instance attributes:
+            - self._demand: dict with keys (flow, year) and values as amounts.
+            - self._functional_flows: set of flow codes present in the demand.
+            - self._system_time: range of years covering the longest demand interval.
         """
-        longest_demand_interval = 0
+        raw_demand = self.config.demand
+        start_year = self.config.temporal.start_date.year
         # find longest defined demand for initialization of system time
-        for flow, td in self.demand_raw.items():
+        longest_demand_interval = 0
+        for flow, td in raw_demand.items():
             years = td.date.astype("datetime64[Y]").astype(int) + 1970
             if len(years) > longest_demand_interval:
                 longest_demand_interval = len(years)
@@ -213,62 +317,63 @@ class LCADataProcessor:
             )
             self._functional_flows.add(flow)
 
-        self._system_time = range(
-            self.start_date.year, self.start_date.year + longest_demand_interval
+        self._system_time = range(start_year, start_year + longest_demand_interval)
+        logger.info(
+            "Identified demand in system time range of %s for functional flows %s",
+            self._system_time,
+            self._functional_flows,
         )
 
-        return self._demand
-
-    def construct_foreground_tensors(self) -> tuple[dict, dict, dict]:
+    def _construct_foreground_tensors(self) -> None:
         """
-        Constructs the foreground technosphere, biosphere, and production tensors by
-        expanding the standard techno- and biosphere matrices with a new dimension:
-        process time (tau). These tensors represent the amounts of flows associated with
-        processes in the system, distributed over time according to the temporal
-        distributions of the exchanges.
+        Construct foreground technosphere, biosphere, and production tensors with
+        time-explicit structure.
 
-        The method iterates through the processes in the foreground database and, for
-        each exchange, collects temporal distribution data (i.e., years and amounts).
-        This data is then aggregated into three separate tensors that represent
-        different types of flows.
+        This method constructs tensors based on the brightway databases. For tensor
+        construction it expands the standard technosphere and biosphere matrices by
+        adding a process time dimension. For each process in the foreground
+        database, it iterates through exchanges and collects temporal distribution
+        data (date and amounts). The resulting tensors represent the amounts of
+        flows associated with each process, distributed over time.
 
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        tuple of dict
-            A tuple containing:
-            - Foreground Technosphere Tensor: A dictionary where the keys are tuples
-            of (process_code, flow_code, year) and the values are the corresponding
-            amounts for each flow in the technosphere.
-            - Foreground Biosphere Tensor: A dictionary where the keys are tuples
-            of (process_code, flow_code, year) and the values are the corresponding
-            amounts for each elementary flow to the biosphere.
-            - Foreground Production Tensor: A dictionary where the keys are tuples
-            of (process_code, functional_flow, year) and the values are the
-            corresponding amounts for each produced functional flow.
-
+        Side Effects
+        -----------
+        Updates the following instance attributes:
+            - self._foreground_technosphere: dict mapping
+              (process_code, flow_code, year) to amount for technosphere flows.
+            - self._foreground_biosphere: dict mapping
+              (process_code, flow_code, year) to amount for biosphere flows.
+            - self._foreground_production: dict mapping
+              (process_code, functional_flow, year) to amount for produced
+              functional flows.
+            - self._intermediate_flows: dict mapping intermediate flow codes to
+              their names.
+            - self._elementary_flows: dict mapping elementary flow codes to their
+              names.
+            - self._processes: dict mapping process codes to their names.
+            - self._operation_flow: dict mapping process codes to flow codes, that
+              are occurring in the operation phase.
+            - self._operation_time_limits: dict mapping process codes to their
+              operation time limits, if defined.
         Notes
         -----
-        Conventionally, functional flows are a subset of intermediate flows and are
-        included within the technosphere matrix. However, for clarity and easier
-        downstream processing, we explicitly extract functional flows and store them in
-        a separate production tensor.
+        Functional flows are a subset of intermediate flows and are included within
+        the technosphere matrix, but are also extracted into a separate production
+        tensor for clarity and downstream processing.
         """
-
         technosphere_tensor = {}
         production_tensor = {}
         biosphere_tensor = {}
 
         for act in self.foreground_db:
             # Only process activities present in the demand
-            if act["functional flow"] not in self.demand_raw.keys():
+            if act["functional_flow"] not in self._functional_flows:
                 continue
 
             # Store process information
             self._processes.setdefault(act["code"], act["name"])
+            if (limits := act.get("operation_time_limits")) is not None:
+                self._operation_time_limits[act["code"]] = limits
 
             for exc in act.exchanges():
                 # Extract temporal distribution
@@ -297,6 +402,8 @@ class LCADataProcessor:
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
+                    if exc.get("operation"):
+                        self._operation_flow.update({(act["code"], input_code): True})
                     self._intermediate_flows.setdefault(input_code, input_name)
                 elif type == "biosphere":
                     biosphere_tensor.update(
@@ -305,61 +412,45 @@ class LCADataProcessor:
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
+                    if exc.get("operation"):
+                        self._operation_flow.update({(act["code"], input_code): True})
                     self._elementary_flows.setdefault(input_code, input_name)
                 elif type == "production":
                     production_tensor.update(
                         {
-                            (act["code"], act["functional flow"], year): exc["amount"]
+                            (act["code"], act["functional_flow"], year): exc["amount"]
                             * factor
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
+                    if exc.get("operation"):
+                        self._operation_flow.update(
+                            {(act["code"], act["functional_flow"]): True}
+                        )
 
         # Store the tensors as protected variables
         self._foreground_technosphere = technosphere_tensor
         self._foreground_biosphere = biosphere_tensor
         self._foreground_production = production_tensor
 
-        return technosphere_tensor, biosphere_tensor, production_tensor
+        # Compute and log tensor shapes
+        def log_tensor_dimensions(tensor, name):
+            processes = {k[0] for k in tensor}
+            flows = {k[1] for k in tensor}
+            years = {k[2] for k in tensor}
+            logger.info(
+                f"{name} shape: ({len(processes)} processes, {len(flows)} flows, "
+                f"{len(years)} years) with {len(tensor)} total entries."
+            )
 
-    def set_process_operation_time(self, operation_time: dict[str, tuple[int, int]]):
-        """
-        Set the user-defined operation time for processes.
+        logger.info("Constructed foreground tensors.")
+        log_tensor_dimensions(technosphere_tensor, "Technosphere")
+        log_tensor_dimensions(biosphere_tensor, "Biosphere")
+        log_tensor_dimensions(production_tensor, "Production")
 
-        Parameters
-        ----------
-        operation_time : dict of str to (int, int)
-            A dictionary mapping process codes to a tuple representing
-            their (start_time, end_time). Both start and end must be integers.
-
-        Raises
-        ------
-        ValueError
-            If the input is not properly structured or contains invalid values.
-        """
-        for proc_code, period in operation_time.items():
-            if not isinstance(proc_code, str):
-                raise ValueError("Process code must be a string.")
-            if proc_code not in self._processes:
-                raise ValueError(
-                    f"Process code '{proc_code}' not found in the processes dictionary."
-                )
-            if (
-                not isinstance(period, tuple)
-                or len(period) != 2
-                or not all(isinstance(t, int) for t in period)
-            ):
-                raise ValueError(
-                    "Each value must be a tuple of two integers (start, end)."
-                )
-            if period[0] > period[1]:
-                raise ValueError(
-                    f"Start time must not exceed end time for process '{proc_code}'."
-                )
-        self._process_operation_time = operation_time
-        return self._process_operation_time
-
-    def _calculate_inventory_of_db(self, db_name, intermediate_flows, methods, cutoff):
+    def _calculate_inventory_of_db(
+        self, db_name: str, intermediate_flows: dict, methods: list, cutoff: float
+    ) -> Tuple[dict, dict]:
         """
         Calculate the life cycle inventory for a specified background database.
 
@@ -374,9 +465,8 @@ class LCADataProcessor:
             Name of the background database to analyze.
         intermediate_flows : dict
             Dictionary mapping intermediate flow codes to flow names.
-        methods : Dict[str, tuple]
-            A dictionary mapping user-defined impact category names to their respective
-            LCIA methods represented by a tuple (e.g.,
+        methods : List[tuple]
+            A List of LCIA methods represented by a tuple (e.g.,
             `("EF v3.1", "climate change", "global warming potential (GWP100)")`).
         cutoff : float
             Number of top elementary flows (per intermediate flow) to retain based on
@@ -391,7 +481,7 @@ class LCADataProcessor:
             Dictionary mapping elementary flow codes to their names.
         """
 
-        logging.info(f"Calculating inventory for database: {db_name}")
+        logger.info(f"Calculating inventory for database: {db_name}")
         db = bd.Database(name=db_name)
         inventory_tensor = {}
         elementary_flows = {}
@@ -402,19 +492,19 @@ class LCADataProcessor:
             try:
                 activity_cache[key] = db.get(code=key)
             except Exception as e:  # Catch exceptions (e.g., if key is not valid)
-                logging.warning(f"Failed to get activity for key '{key}': {e}")
+                logger.warning(f"Failed to get activity for key '{key}': {e}")
         function_unit_dict = {activity: 1 for activity in activity_cache.values()}
 
-        lca = bc.LCA(function_unit_dict, next(iter(methods.values())))
+        lca = bc.LCA(function_unit_dict, next(iter(methods)))
         lca.lci(factorize=len(function_unit_dict) > 10)  # factorize if many activities
-        logging.info(f"Factorized LCI for database: {db_name}")
+        logger.info(f"Factorized LCI for database: {db_name}")
         for intermediate_flow_code, activity in tqdm(activity_cache.items()):
-            # logging.info(f"Calculating inventory for activity: {activity}")
-            for method in methods.values():
+            # logger.info(f"Calculating inventory for activity: {activity}")
+            for method in methods:
                 lca.switch_method(method)
                 lca.lci(demand={activity.id: 1})
                 if lca.inventory.nnz == 0:
-                    logging.warning(
+                    logger.warning(
                         f"Skipping activity {activity} as it has no non-zero inventory."
                     )
                     continue
@@ -447,7 +537,7 @@ class LCADataProcessor:
                 elementary_flows.update(
                     dict(zip(inventory_df["row_code"], inventory_df["row_name"]))
                 )
-        logging.info(f"Finished calculating inventory for database: {db_name}")
+        logger.info(f"Finished calculating inventory for database: {db_name}")
         return inventory_tensor, elementary_flows
 
     def parallel_inventory_tensor_calculation(self, cutoff=1e4, n_jobs=None) -> dict:
@@ -456,84 +546,49 @@ class LCADataProcessor:
         """
         raise NotImplementedError("This method is not yet functionally implemented.")
 
-        # Define a function to wrap the call to _calculate_inventory_of_db
-        def process_db(db_name):
-            try:
-                # Call the _calculate_inventory_of_db method for each db
-                inventory_tensor, elementary_flows = self._calculate_inventory_of_db(
-                    db_name, self._intermediate_flows, self.method, cutoff
-                )
-                return inventory_tensor, elementary_flows
-            except Exception as e:
-                logging.error(
-                    f"Error occurred while processing database {db_name}: {str(e)}"
-                )
-                return None, None  # Return None for failed jobs
-
-        results = []
-
-        # Use ProcessPoolExecutor to parallelize the processing of databases
-        with ProcessPoolExecutor(max_workers=n_jobs) as executor:
-            # Submit tasks to the executor
-            future_to_db = {
-                executor.submit(process_db, db_name): db_name
-                for db_name in self.background_dbs
-            }
-
-            # Wait for results to be completed
-            for future in as_completed(future_to_db):
-                db_name = future_to_db[future]
-                try:
-                    inventory_tensor, elementary_flows = future.result()
-                    if inventory_tensor is not None and elementary_flows is not None:
-                        results.append((inventory_tensor, elementary_flows))
-                except Exception as e:
-                    logging.error(f"Error processing database {db_name}: {e}")
-
-        # Combine results from all databases
-        for inventory_tensor, elementary_flows in results:
-            self._background_inventory.update(inventory_tensor)
-            self._elementary_flows.update(elementary_flows)
-
-        return self._background_inventory
-
-    def sequential_inventory_tensor_calculation(self, cutoff=1e4) -> dict:
+    def _sequential_inventory_tensor_calculation(self) -> None:
         """
-        Calculate the inventory tensor for all background databases sequentially.
+        Compute the background inventory tensor for all background databases
+        sequentially.
 
-        For each background database, this method performs LCA calculations and
-        constructs an inventory matrix. The results are aggregated into a single
-        dictionary representing the background inventory tensor.
+        This method performs time-explicit LCA calculations for each background
+        database listed in `self.background_dbs`. For each intermediate flow in the
+        foreground system, it calculates associated elementary flows using the
+        configured characterization methods and applies a cutoff to retain only the
+        most relevant contributions.
 
-        See also `parallel_inventory_tensor_calculation` for a parallelized version.
+        The results are stored in a sparse tensor structure that maps:
+            (database name, intermediate flow code, elementary flow code) → amount
 
-        Parameters
-        ----------
-        cutoff : float, optional
-            Maximum number of elementary flows to retain per activity based on
-            total impact (from `lca.to_dataframe()`). Defaults to 1e4, meaning
-            only the top 10,000 flows ordered by impact score will be included.
+        Errors during database processing are logged, and processing continues for
+        remaining databases.
 
-        Returns
-        -------
-        dict
-            A dictionary containing the combined inventory tensor for all
-            background databases.
+        Side Effects
+        ------------
+        Updates internal tensors and flow mappings used in downstream modeling.
+            - self._background_inventory: Combined inventory tensor for all
+              background databases.
+            - self._elementary_flows: Updated dictionary of all observed elementary
+              flows.
         """
         results = []
 
         # Iterate over each database in self.background_dbs sequentially
+        cutoff = self.config.background_inventory.cutoff
+        brightway_methods = [
+            char.brightway_method for char in self.config.characterization_methods
+        ]
         for db_name in self.background_dbs:
             try:
                 # Directly call the _calculate_inventory_of_db method for each db
                 inventory_tensor, elementary_flows = self._calculate_inventory_of_db(
-                    db_name, self._intermediate_flows, self.methods, cutoff
+                    db_name, self._intermediate_flows, brightway_methods, cutoff
                 )
                 # Store the result in the results list
                 results.append((inventory_tensor, elementary_flows))
 
             except Exception as e:
-                logging.error(
+                logger.error(
                     f"Error occurred while processing database {db_name}: {str(e)}"
                 )
                 continue  # Continue with the next database if one fails
@@ -543,255 +598,221 @@ class LCADataProcessor:
             self._background_inventory.update(inventory_tensor)
             self._elementary_flows.update(elementary_flows)
 
-        return self._background_inventory
-
-    def load_inventory_tensors(self, file_path: str) -> None:
+    def _prepare_background_inventory(self) -> None:
         """
-        Load inventory tensors from a pickle file.
+        Prepare the background inventory tensor, either by loading from a file or
+        computing it.
 
-        This method unpickles pre-computed inventory tensors and updates the
-        internal background inventory and elementary flow mappings.
+        If a file path is provided in the configuration (`path_to_load`), the
+        inventory tensor is loaded from that pickle file. Otherwise, it is computed
+        based on the specified method (`sequential` or `parallel`). After computation
+        or loading, the tensor may be saved to disk if `path_to_save` is provided.
+
+        The background inventory tensor maps (database, intermediate flow, elementary
+        flow) to amount. It updates internal state:
+            - self._background_inventory
+            - self._elementary_flows
 
         .. warning::
-            Only unpickle data you trust. Loading pickle files from untrusted
-            sources can be insecure.
-
-        Parameters
-        ----------
-        file_path : str
-            Path to the pickle file containing the saved inventory tensors.
+            Only unpickle data you trust. Loading pickle files from untrusted sources
+            can be insecure.
         """
+        load_path = self.config.background_inventory.path_to_load
+        save_path = self.config.background_inventory.path_to_save
+        method = self.config.background_inventory.calculation_method
 
-        # Load the inventory tensor from the pickle file
-        with open(file_path, "rb") as file:
-            inventory_tensor = pickle.load(file)
+        if load_path:
+            # Load from file
+            with open(load_path, "rb") as file:
+                self._background_inventory = pickle.load(file)
 
-        # Update the background inventory with the loaded tensor
-        self._background_inventory = inventory_tensor
+            # Populate missing elementary flow names from biosphere database
+            for _, _, ef_code in self._background_inventory.keys():
+                if ef_code not in self._elementary_flows:
+                    self._elementary_flows[ef_code] = self.biosphere_db.get(
+                        code=ef_code
+                    )["name"]
+            logger.info(f"Loaded background inventory from: {load_path}")
 
-        # Update the elementary flows dictionary with names from the biosphere database
-        for key in inventory_tensor.keys():
-            _, _, elementary_flow_code = key
-            if elementary_flow_code not in self._elementary_flows:
-                self._elementary_flows[elementary_flow_code] = self.biosphere_db.get(
-                    code=elementary_flow_code
-                )["name"]
-        return self._background_inventory
+        else:
+            # Compute the background inventory
+            if method == "sequential":
+                self._sequential_inventory_tensor_calculation()
+            elif method == "parallel":
+                self.parallel_inventory_tensor_calculation()
+            else:
+                raise ValueError(
+                    f"Unsupported background inventory calculation method: {method}"
+                )
+            logger.info(f"Computed background inventory using method: {method}")
 
-    def save_inventory_tensors(self, file_path: str) -> None:
+            # Optionally save the computed tensor
+            if save_path:
+                with open(save_path, "wb") as file:
+                    pickle.dump(self._background_inventory, file)
+                logger.info(f"Saved background inventory to: {save_path}")
+
+    def _construct_mapping_matrix(self) -> None:
         """
-        Save the inventory tensors to a pickle file for later use.
+        Construct a linear interpolation-based mapping matrix between system time points
+        and background databases, based on their associated reference years.
 
-        Parameters
-        ----------
-        file_path : str
-            The path to the pickle file where the inventory tensors will be saved.
+        For each year in the system timeline, this method computes interpolation weights
+        for each background database based on their configured reference dates. The
+        result is stored in `self._mapping`, mapping (db_name, year) tuples to
+        interpolation weights.
+
+        The weights sum to 1 for each year and are linearly interpolated between the
+        closest two databases. If the year is outside the range of database reference
+        years, all weight  is assigned to the nearest boundary database.
+
+        Side Effects
+        ------------
+        Updates
+            - `self._mapping`: dict with keys (db_name, year) and float values
+        representing weights.
         """
-        with open(file_path, "wb") as file:
-            pickle.dump(self._background_inventory, file)
+        years = sorted(self._system_time)  # Ensure chronological order
 
-    def construct_mapping_matrix(self) -> dict:
-        """
-        Construct the mapping matrix that links the background databases to the system
-        time points. The matrix is constructed with linear interpolation between
-        background databases.
+        # Sort background DBs by year and extract mapping
+        db_year_map = {db: self.background_dbs[db].year for db in self.background_dbs}
+        db_names_sorted = sorted(db_year_map, key=lambda db: db_year_map[db])
+        db_years_sorted = [db_year_map[db] for db in db_names_sorted]
 
-        Returns
-        -------
-        dict
-            Dictionary containing the mapping matrix with keys as tuples (year, db_key).
-        """
-        # Generate a list of datetime objects for the years in the range
-        years = self.system_time
-
-        # Sort database entries by their year (extract year from datetime)
-        db_names = sorted(
-            self.background_dbs.keys(), key=lambda k: self.background_dbs[k].year
-        )
-        db_years = [self.background_dbs[k].year for k in db_names]
-
-        # Initialize an empty list to hold matrix rows
-        matrix = []
+        mapping_matrix = {}
 
         for year in years:
-            row = np.zeros(len(db_names))
-
-            # Handle edge cases for the first and last database years
-            if year <= db_years[0]:
-                row[0] = 1.0  # All weight to the first DB
-            elif year >= db_years[-1]:
-                row[-1] = 1.0  # All weight to the last DB
+            if year <= db_years_sorted[0]:
+                mapping_matrix.update({(db_names_sorted[0], year): 1.0})
+            elif year >= db_years_sorted[-1]:
+                mapping_matrix.update({(db_names_sorted[-1], year): 1.0})
             else:
-                # Linear interpolation between databases
-                for k in range(len(db_years) - 1):
-                    if db_years[k] <= year <= db_years[k + 1]:
-                        t0, t1 = db_years[k], db_years[k + 1]
-                        w1 = (year - t0) / (t1 - t0)
-                        w0 = 1 - w1
-                        row[k] = w0
-                        row[k + 1] = w1
+                for i in range(len(db_years_sorted) - 1):
+                    y0, y1 = db_years_sorted[i], db_years_sorted[i + 1]
+                    if y0 <= year <= y1:
+                        db0, db1 = db_names_sorted[i], db_names_sorted[i + 1]
+                        weight1 = (year - y0) / (y1 - y0)
+                        weight0 = 1.0 - weight1
+                        mapping_matrix[(db0, year)] = weight0
+                        mapping_matrix[(db1, year)] = weight1
                         break
-            matrix.append(row)
-
-        # Create a dictionary with tupled keys (year, db_name)
-        mapping_matrix = {
-            (db_names[j], years[i]): matrix[i][j]
-            for i in range(len(years))
-            for j in range(len(db_names))
-        }
 
         self._mapping = mapping_matrix
-
-        return mapping_matrix
-
-    def construct_characterization_matrix(
-        self,
-        base_method_name: str,
-        dynamic: bool = False,
-        metric: str = None,
-    ) -> dict:
-        """
-        Construct the dynamic characterization matrix for elementary flows for a
-        certain method.
-
-        This method generates a time-sensitive characterization matrix that maps each
-        elementary flow and system year to a corresponding impact factor. It supports
-        two metrics from the `dynamic_characterization` package: Global Warming
-        Potential (GWP) and Cumulative Radiative Forcing (CRF).
-
-        The characterization is computed over a specified time horizon, and results are
-        stored as a dictionary with keys in the form of `(elementary_flow, system_year)`
-        and corresponding float values representing the impact.
-
-        Parameters
-        ----------
-
-        base_method_name : str
-            The user-define dictionary key in `methods` representing the LCIA method to
-            use for pre-processing characterization.
-        dynamic : bool, optional
-            Whether to perform dynamic characterization. Currently dynamic approaches
-            using the dynamic_characterization package for the impact category of
-            climate change are supported.
-            If `True`, the characterization factors are computed for each year in the
-            time horizon using time-series radiative forcing. If `False`, static
-            characterization with the given base method (like GWP100) is used for
-            all system time points.
-            Default is `False`.
-        metric : str, optional
-            The impact metric to use for dynamic characterization. When performing
-            static characterization leave at default. Currently supported
-            metrics for the impact category of climate change include:
-            - `"GWP"`: Global Warming Potential, which normalizes cumulative radiative
-            forcing (RF) using a reference CO₂ pulse  occurring in the middle of
-            the time horizon.
-            - `"CRF"`: Cumulative Radiative Forcing, which integrates RF values across
-            the entire time horizon without normalization.
-            Default is `None`.
-
-        Returns
-        -------
-        Dict[Tuple[str, str, int], float]
-            A dictionary representing the dynamic characterization matrix. Each key is a
-            tuple of the form `(impact_category, elementary_flow, system_year)` and the 
-            corresponding value is the computed impact factor (e.g., GWP or CRF value) for that 
-            year.
-
-            This dictionary is also stored internally in `self._characterization`
-
-        """
-
-        method = self.methods[base_method_name]
-
-        # Create a DataFrame based on self.elementary_flows
-        df = pd.DataFrame({"code": list(self.elementary_flows.keys())})
-
-        dates = pd.date_range(
-            start=self.start_date, periods=len(self._system_time), freq="YE"
+        logger.info(
+            "Constructed mapping matrix for background databases "
+            "based on linear interpolation."
         )
 
-        # Get the id of each flow and add it to the DataFrame
-        df["flow"] = df["code"].map(lambda code: self.biosphere_db.get(code=code).id)
-        if dynamic:
+    def _construct_characterization_tensor(self) -> None:
+        """
+        Construct the characterization tensor for LCIA methods over system time points.
+
+        This method computes characterization factors for elementary flows across all
+        system years, supporting both static and dynamic methods. It handles metrics
+        like Global Warming Potential (GWP) and Cumulative Radiative Forcing (CRF)
+        when dynamic characterization is requested.
+
+        Side Effects
+        -----------
+        Updates the following instance attribute:
+            - self._characterization: dict mapping (method_name, elementary_flow_code,
+            system_year) to characterization factor values.
+        """
+        start_date = self.config.temporal.start_date
+        time_horizon = self.config.temporal.time_horizon
+        dates = pd.date_range(
+            start=start_date, periods=len(self._system_time), freq="YE"
+        )
+        flow_codes = list(self.elementary_flows.keys())
+
+        # Pre-map flow codes to Brightway flow IDs
+        flow_df = pd.DataFrame({"code": flow_codes})
+        flow_df["flow"] = flow_df["code"].map(
+            lambda code: self.biosphere_db.get(code=code).id
+        )
+
+        characterization_tensor = {}
+
+        for config in self.config.characterization_methods:
+            category_name = config.category_name
+            self._category.add(category_name)
+            method = config.brightway_method
+            metric = config.metric
+
+            df = flow_df.copy()
             df["amount"] = 1
             df["activity"] = np.nan
 
-            if metric == "GWP":
-                df = df.loc[np.repeat(df.index, len(dates))].reset_index(drop=True)
+            if metric is None:
+                # Static LCIA
+                method_data = bd.Method(method).load()
+                method_dict = {flow: value for flow, value in method_data if value != 0}
 
-                # Tile the dates and ensure 'date' is in datetime format
-                df["date"] = np.tile(dates, len(df) // len(dates))
+                for _, row in df.iterrows():
+                    flow_code, flow_id = row["code"], row["flow"]
+                    if flow_id in method_dict:
+                        for year in dates.year:
+                            characterization_tensor[
+                                (category_name, flow_code, year)
+                            ] = method_dict[flow_id]
+                logger.info(
+                    f"Static characterization for method {category_name} completed."
+                )
+
+            elif metric == "GWP":
+                # Dynamic GWP (year-specific values)
+                df = df.loc[np.repeat(df.index, len(dates))].reset_index(drop=True)
+                df["date"] = np.tile(dates, len(flow_codes))
                 df["date"] = df["date"].astype("datetime64[s]")
 
-                # dynamic characterization needs dates in datetime64 format
-                df_characterized = characterize(
+                df_char = characterize(
                     df,
-                    metric=metric,
+                    metric="GWP",
                     fixed_time_horizon=True,
                     base_lcia_method=method,
-                    time_horizon=self.timehorizon,
+                    time_horizon=time_horizon,
                 )
-                df_characterized["date"] = df_characterized["date"].dt.to_pydatetime()
-                characterization_matrix = {
-                    (
-                        base_method_name,
-                        df.loc[df["flow"] == row["flow"], "code"].values[0],
-                        row["date"].year,
-                    ): row["amount"]
-                    for _, row in df_characterized.iterrows()
-                }
+                df_char["date"] = df_char["date"].dt.year
+
+                for _, row in df_char.iterrows():
+                    flow_code = df.loc[df["flow"] == row["flow"], "code"].values[0]
+                    characterization_tensor[(category_name, flow_code, row["date"])] = (
+                        row["amount"]
+                    )
+                logger.info(
+                    f"Dynamic GWP characterization for {category_name} completed."
+                )
+
             elif metric == "CRF":
-                characterization_matrix = {}
-                df["date"] = pd.Timestamp(self.start_date)
-                for idx, _ in df.iterrows():
-                    df_row = df.iloc[[idx]][["date", "flow", "amount", "activity"]]
-                    df_characterized = characterize(
+                # Dynamic CRF (cumulative RF over time horizon)
+                df["date"] = pd.Timestamp(self.config.temporal.start_date)
+
+                for _, row in df.iterrows():
+                    flow_code = row["code"]
+                    flow_id = row["flow"]
+                    df_row = row[["date", "flow", "amount", "activity"]].to_frame().T
+
+                    df_char = characterize(
                         df_row,
                         metric="radiative_forcing",
                         fixed_time_horizon=True,
                         base_lcia_method=method,
-                        time_horizon=self.timehorizon,
-                        time_horizon_start=pd.Timestamp(self.start_date),
+                        time_horizon=time_horizon,
+                        time_horizon_start=pd.Timestamp(start_date),
                     )
-                    df_characterized["date"] = np.array(
-                        df_characterized["date"].dt.to_pydatetime()
-                    )
-                    flow = df_characterized["flow"].values[0]
-                    code = df.loc[df["flow"] == flow, "code"].values[0]
-                    # add values from emissionpoint till end of time horizon for each
-                    # year in system time
-                    for year in self.system_time:
-                        cutoff_year = self.start_date.year + self.timehorizon - year - 1
-                        rf_values = df_characterized.head(cutoff_year)["amount"]
-                        cumulative_rf = rf_values.sum()
+                    rf_series = df_char["amount"].values
 
-                        characterization_matrix[(base_method_name, code, year)] = (
+                    for year in self.system_time:
+                        cutoff = start_date.year + time_horizon - year - 1
+                        cumulative_rf = rf_series[:cutoff].sum()
+                        characterization_tensor[(category_name, flow_code, year)] = (
                             cumulative_rf
                         )
-        else:
-            method_data = bd.Method(method).load()
-            # Preprocess method_data into a dictionary for fast lookups
-            method_data_dict = {
-                flow: value for flow, value in method_data if value != 0
-            }
-            characterization_matrix = {
-                (base_method_name, row["code"], year): method_data_dict[row["flow"]]
-                for _, row in df.iterrows()
-                for year in dates.year
-                if row["flow"] in method_data_dict
-            }
+                logger.info(
+                    f"Dynamic CRF characterization for {category_name} completed."
+                )
 
-        self._characterization.update(characterization_matrix)
+            else:
+                raise ValueError(f"Unsupported dynamic metric: {metric}")
 
-    def set_characterization(self, characterization: dict) -> None:
-        """
-        Set the characterization matrix directly.
-
-        Parameters
-        ----------
-        characterization : dict
-            A dictionary representing the characterization matrix.
-            Each key is a tuple of the form (elementary_flow, system_year)
-            and the corresponding value is the computed impact factor.
-        """
-        self._characterization = characterization
+        self._characterization.update(characterization_tensor)
