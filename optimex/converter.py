@@ -295,7 +295,7 @@ class OptimizationModelInputs(BaseModel):
 
                 if len(set(values)) > 1:
                     raise ValueError(
-                        f"{flow_type} flow ({proc}, {flow}) is not constant over time: "
+                        f"{flow_type} ({proc}, {flow}) is not constant over time: "
                         f"values = {values}. If you want to conduct an optimization "
                         "with these values, don't flag any as operational and use "
                         "fixed operation in the optimization later."
@@ -378,7 +378,8 @@ class ModelInputManager:
     The `ModelInputManager` is responsible for transforming, validating, and managing
     structured data inputs for optimization models derived from an `LCADataProcessor`.
 
-    ### Responsibilities:
+    Responsibilities:
+    
     - Extracts raw structural and quantitative data from an `LCADataProcessor` instance.
     - Constructs and validates a `ModelInputs` Pydantic model, ensuring all necessary
       fields are populated and internally consistent.
@@ -393,27 +394,25 @@ class ModelInputManager:
     assessment (LCA) data and downstream optimization workflows, abstracting away
     validation, preprocessing, and I/O concerns from both ends.
 
-    ### Typical Usage:
-
-    ```python
-    # Initialize
-    manager = ModelInputManager()
-
-    # Parse data from LCA data processor
-    inputs = manager.parse_from_lca_processor(lca_data_processor)
-
-    # Optionally override fields
-    inputs = manager.override_inputs(PROCESS=["P1", "P2"], demand={...})
-
-    # Save to disk
-    manager.save("inputs.json")
-
-    # Load from disk
-    manager.load("inputs.json")
-
-    # Get a numerically scaled version
-    scaled_inputs, scale_factors = inputs.get_scaled_copy()
-    ```
+    Example
+    -------
+    >>> # Initialize
+    >>> manager = ModelInputManager()
+    >>> 
+    >>> # Parse data from LCA data processor
+    >>> inputs = manager.parse_from_lca_processor(lca_data_processor)
+    >>> 
+    >>> # Optionally override fields
+    >>> inputs = manager.override_inputs(PROCESS=["P1", "P2"], demand={...})
+    >>>
+    >>> # Save to disk
+    >>> manager.save("inputs.json")
+    >>>
+    >>> # Load from disk
+    >>> manager.load("inputs.json")
+    >>>
+    >>> # Get a numerically scaled version
+    >>> scaled_inputs, scale_factors = inputs.get_scaled_copy()
     """
 
     def __init__(self):
