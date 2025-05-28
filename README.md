@@ -12,7 +12,7 @@
 
 This is a Python package for transition pathway optimization based on time-explicit Life Cycle Assessment (LCA). `optimex` helps identify optimal process portfolios and deployment timing in systems with multiple processes producing the same product, aiming to minimize dynamically accumulating environmental impacts over time. 
 
-`optimex` builds on top of the [Brightway LCA framework](https://docs.brightway.dev/en/latest). If you are looking for a time-explicit assessment rather than an optimization tool, make sure to check out our time-explicit LCA package [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
+`optimex` builds on top of the optimization framework [pyomo](https://github.com/Pyomo/pyomo) the LCA framework [Brightway](https://docs.brightway.dev/en/latest). If you are looking for a time-explicit LCA rather than an optimization tool, make sure to check out [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
 
 ## Installation
 
@@ -37,7 +37,12 @@ _optimex_ is free and open source software.
 If you encounter any problems,
 please [file an issue][Issue Tracker] along with a detailed description.
 
+## Support
 
+If you have any questions or need help, do not hesitate to contact us:
+- Jan Tautorus ([jan.tautorus@rwth-aachen.de](mailto:jan.tautorus@rwth-aachen.de))
+- Timo Diepers ([timo.diepers@ltt.rwth-aachen.de](mailto:timo.diepers@ltt.rwth-aachen.de))
+- 
 <!-- github-only -->
 
 [command-line reference]: https://optimex.readthedocs.io/en/latest/usage.html
@@ -45,21 +50,3 @@ please [file an issue][Issue Tracker] along with a detailed description.
 [Contributor Guide]: https://github.com/TimoDiepers/optimex/blob/main/CONTRIBUTING.md
 [Issue Tracker]: https://github.com/TimoDiepers/optimex/issues
 
-
-## Acknowledgments
-
-We’d like to thank the authors and contributors of the following key packages that _optimex_ is based on:
-
-- [**pyomo**](https://github.com/Pyomo/pyomo)
-- [**brightway2.5**](https://github.com/brightway-lca/brightway25)
-
-Additionally, we want to give a shoutout to the pioneering ideas and contributions from the following works:
-
-- [**bw_timex**](https://github.com/brightway-lca/bw_timex)
-- [**pulpo**](https://github.com/flechtenberg/pulpo)
-- [**premise**](https://github.com/polca/premise)
-
-## Support
-If you have any questions or need help, do not hesitate to contact us:
-- Jan Tautorus ([jan.tautorus@rwth-aachen.de](mailto:jan.tautorus@rwth-aachen.de))
-- Timo Diepers ([timo.diepers@ltt.rwth-aachen.de](mailto:timo.diepers@ltt.rwth-aachen.de))
