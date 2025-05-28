@@ -91,9 +91,34 @@ class PostProcessor:
             ax.tick_params(axis="y", labelsize=self._plot_config["fontsize"])
             ax.set_xlabel("Time", fontsize=self._plot_config["fontsize"])
             ax.set_ylabel("Value", fontsize=self._plot_config["fontsize"])
-        if nrows == 1 and ncols == 1:
-            axes = axes[0]
         return fig, axes
+
+    def _apply_bar_styles(self, df, ax, title=None, legend_title=None):
+        """
+        Apply standard bar plot styling.
+        """
+        df.plot(
+            kind="bar",
+            stacked=True,
+            ax=ax,
+            width=self._plot_config["bar_width"],
+            color=self._plot_config["colormap"][: len(df.columns)],
+            edgecolor="black",
+            legend=False,
+        )
+        ax.set_title(title or "", fontsize=self._plot_config["fontsize"] + 2)
+        ax.set_xticklabels(
+            df.index.astype(str),
+            rotation=self._plot_config["rotation"],
+            ha="right",
+        )
+        ax.legend(
+            title=legend_title or "",
+            fontsize=self._plot_config["fontsize"] - 2,
+            loc="upper right",
+            frameon=False,
+            bbox_to_anchor=(1.15, 1),
+        )
 
     def get_impacts(self) -> pd.DataFrame:
         """
@@ -244,19 +269,15 @@ class PostProcessor:
             df_impacts = self.get_impacts()
 
         categories = df_impacts.columns.get_level_values(0).unique()
-        n_categories = len(categories)
-
         ncols = 2
-        nrows = math.ceil(n_categories / ncols)
+        nrows = math.ceil(len(categories) / ncols)
 
         fig, axes = self._create_clean_axes(nrows=nrows, ncols=ncols)
 
         for i, category in enumerate(categories):
             ax = axes[i]
             sub_df = df_impacts[category]
-            sub_df.plot(kind="bar", stacked=True, ax=ax)
-            ax.set_title(category, fontsize=self._plot_config["fontsize"])
-            ax.legend(title="Process", fontsize=self._plot_config["fontsize"] - 2)
+            self._apply_bar_styles(sub_df, ax, title=category, legend_title="Process")
 
         # Hide unused axes
         for j in range(i + 1, len(axes)):
@@ -269,34 +290,37 @@ class PostProcessor:
     def plot_production_and_demand(self, prod_df=None, demand_df=None):
         """
         Plot a stacked bar chart for production and line(s) for demand.
-        prod_df: DataFrame with Time as index, Processes as columns.
-        demand_df: DataFrame with Time as index, Functional Flows as columns.
+
+        Parameters:
+            prod_df: DataFrame with Time as index, Processes as columns.
+            demand_df: DataFrame with Time as index, Functional Flows as columns.
         """
 
-        fig, ax = self._create_clean_axes()
         if prod_df is None:
             prod_df = self.get_production()
         if demand_df is None:
             demand_df = self.get_demand()
+
+        # Convert indices to strings for consistent tick labeling
         prod_df = prod_df.copy()
         demand_df = demand_df.copy()
-
-        # Ensure string index for x-axis labels
         prod_df.index = prod_df.index.astype(str)
         demand_df.index = demand_df.index.astype(str)
 
-        import numpy as np
+        fig, axes = self._create_clean_axes()
+        ax = axes[0]
 
+        # Define x positions for line plotting
         x_positions = np.arange(len(prod_df.index))
         ax.set_xticks(x_positions)
         ax.set_xticklabels(
             prod_df.index,
             rotation=self._plot_config["rotation"],
             ha="right",
-            fontsize=10,
+            fontsize=self._plot_config["fontsize"],
         )
 
-        # Plot stacked bar chart for production
+        # Plot production (stacked bars)
         prod_df.plot(
             kind="bar",
             stacked=True,
@@ -304,36 +328,38 @@ class PostProcessor:
             edgecolor="black",
             width=self._plot_config["bar_width"],
             color=self._plot_config["colormap"][: len(prod_df.columns)],
-            legend=False,  # We'll handle legend below
+            legend=False,  # We'll handle legend separately
         )
 
-        # Plot demand as line(s)
+        # Plot demand (lines)
         for col in demand_df.columns:
             ax.plot(
                 x_positions,
                 demand_df[col].values,
                 marker=self._plot_config["line_marker"],
                 linewidth=self._plot_config["line_width"],
-                label=f"Demand {col}",
+                label=f"Demand: {col}",
                 color=self._plot_config["line_color"],
             )
 
-        # Custom legend combining both
-        handles1, labels1 = ax.get_legend_handles_labels()
-
+        # Create combined legend
+        handles, labels = ax.get_legend_handles_labels()
         ax.legend(
-            handles=handles1,
+            handles=handles,
             loc="upper left",
-            fontsize=10,
+            fontsize=self._plot_config["fontsize"] - 2,
             title="Processes / Demand",
-            title_fontsize=12,
+            title_fontsize=self._plot_config["fontsize"],
             frameon=False,
         )
 
-        ax.set_title("Production and Demand", fontsize=16)
+        ax.set_title(
+            "Production and Demand", fontsize=self._plot_config["fontsize"] + 2
+        )
+        ax.set_ylabel("Quantity", fontsize=self._plot_config["fontsize"])
+
         fig.tight_layout()
         plt.show()
-
         return fig, ax
 
     def plot_installation(self, df_installation=None):
@@ -343,37 +369,13 @@ class PostProcessor:
         """
         if df_installation is None:
             df_installation = self.get_installation()
-        fig, ax = self._create_clean_axes()
-        df_installation.plot(
-            kind="bar",
-            stacked=True,
-            ax=ax,
-            width=self._plot_config["bar_width"],
-            color=self._plot_config["colormap"][: len(df_installation.columns)],
-            edgecolor="black",
-            legend=False,
-        )
-        ax.set_title("Installed Capacity", fontsize=self._plot_config["fontsize"] + 2)
-        ax.set_ylabel("Installation", fontsize=self._plot_config["fontsize"])
-        ax.grid(
-            axis="y",
-            linestyle=self._plot_config["grid_linestyle"],
-            alpha=self._plot_config["grid_alpha"],
-        )
-        ax.set_xticklabels(
-            df_installation.index.astype(str),
-            rotation=self._plot_config["rotation"],
-            ha="right",
-        )
 
-        # Legend outside top-right
-        ax.legend(
-            title="Processes",
-            fontsize=self._plot_config["fontsize"] - 2,
-            loc="upper right",
-            frameon=False,
-            bbox_to_anchor=(1.15, 1),
+        fig, axes = self._create_clean_axes()
+        ax = axes[0]
+        self._apply_bar_styles(
+            df_installation, ax, title="Installed Capacity", legend_title="Processes"
         )
+        ax.set_ylabel("Installation", fontsize=self._plot_config["fontsize"])
         fig.tight_layout()
         plt.show()
         return fig, ax
@@ -385,37 +387,13 @@ class PostProcessor:
         """
         if df_operation is None:
             df_operation = self.get_operation()
-        fig, ax = self._create_clean_ax()
-        df_operation.plot(
-            kind="bar",
-            stacked=True,
-            ax=ax,
-            width=self._plot_config["bar_width"],
-            color=self._plot_config["colormap"][: len(df_operation.columns)],
-            edgecolor="black",
-            legend=False,
-        )
-        ax.set_title("Operational Level", fontsize=self._plot_config["fontsize"] + 2)
-        ax.set_ylabel("Operation", fontsize=self._plot_config["fontsize"])
-        ax.grid(
-            axis="y",
-            linestyle=self._plot_config["grid_linestyle"],
-            alpha=self._plot_config["grid_alpha"],
-        )
-        ax.set_xticklabels(
-            df_operation.index.astype(str),
-            rotation=self._plot_config["rotation"],
-            ha="right",
-        )
 
-        # Legend outside top-right
-        ax.legend(
-            title="Processes",
-            fontsize=self._plot_config["fontsize"] - 2,
-            loc="upper right",
-            frameon=False,
-            bbox_to_anchor=(1.15, 1),
+        fig, axes = self._create_clean_axes()
+        ax = axes[0]
+        self._apply_bar_styles(
+            df_operation, ax, title="Installed Capacity", legend_title="Processes"
         )
+        ax.set_ylabel("Installation", fontsize=self._plot_config["fontsize"])
         fig.tight_layout()
         plt.show()
         return fig, ax
