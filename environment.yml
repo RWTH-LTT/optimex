@@ -1,0 +1,12 @@
+# in your terminal, run conda: conda env create -f environment.yml
+name: optimex
+channels:
+  - conda-forge
+  - cmutel
+  - diepers
+dependencies:
+  - optimex
+  - glpk # can be replaced with other solvers
+  # - brightway25_nosolver # uncomment for macOS ARM machines
+  # - scikit-umfpack # uncomment for macOS ARM machines
+  # - numpy==1.24 # uncomment for macOS ARM machines
