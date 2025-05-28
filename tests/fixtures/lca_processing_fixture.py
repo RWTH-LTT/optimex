@@ -13,9 +13,6 @@ from optimex import lca_processor
 @bw2test
 def setup_brightway_databases():
     bd.projects.set_current("__test_standalone_db__")
-    for db in bd.databases:
-        del db
-
     bio_db = bd.Database("biosphere3")
     bio_db.write(
         {
@@ -230,7 +227,7 @@ def mock_lca_data_processor(setup_brightway_databases):
     # Define functional flows for optimex
     foreground = bd.Database("foreground")
     for act in foreground:
-        act["functional flow"] = "F1"
+        act["functional_flow"] = "F1"
         act.save()
 
     lca_config = lca_processor.LCAConfig(
@@ -238,7 +235,7 @@ def mock_lca_data_processor(setup_brightway_databases):
         temporal={
             "start_date": datetime(2020, 1, 1),
             "temporal_resolution": "year",
-            "timehorizon": 100,
+            "time_horizon": 100,
         },
         characterization_methods=[
             {

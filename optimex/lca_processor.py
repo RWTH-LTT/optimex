@@ -69,7 +69,7 @@ class TemporalConfig(BaseModel):
         start_date: The start date of the time horizon.
         temporal_resolution: Temporal resolution for the model.
             Options: 'year', 'month', 'day'.
-        timehorizon: Length of the time horizon (in units of `temporal_resolution`).
+        time_horizon: Length of the time horizon (in units of `temporal_resolution`).
         database_dates: Mapping from database names to their respective reference dates.
     """
 
@@ -80,7 +80,7 @@ class TemporalConfig(BaseModel):
         TemporalResolutionEnum.year,
         description="Temporal resolution for the model (e.g., 'year').",
     )
-    timehorizon: int = Field(
+    time_horizon: int = Field(
         100, description="Length of the time horizon in units of temporal resolution."
     )
     database_dates: Optional[Dict[str, Union[datetime, str]]] = Field(
@@ -94,10 +94,10 @@ class BackgroundInventoryConfig(BaseModel):
     Configuration for background inventory data.
 
     Attributes:
-        cutoff: Cutoff threshold for the number of top elementary flows
-            to retain based on impact magnitude.
-        calculation_method: Method for calculating the inventory tensor.
-            Options: 'sequential', 'parallel'.
+        cutoff: Cutoff threshold for the number of top elementary flows to retain based on impact magnitude.
+        calculation_method: Method for calculating the inventory tensor. Options: 'sequential', 'parallel'.
+        path_to_save: Optional path to save the inventory tensor.
+        path_to_load: Optional path to load the inventory tensor.
     """
 
     cutoff: float = Field(
@@ -125,7 +125,7 @@ class LCAConfig(BaseModel):
     Configuration class for Life Cycle Assessment (LCA) data processing.
 
     Attributes:
-        demand: Dictionary containing time-explicit demands for each flow.
+        demand: Dictionary {(Functional_flow_name, temporal_distribution)} containing time-explicit demands for each flow.
         temporal: Temporal configuration for model time behavior.
         characterization_methods: List of characterization method configurations.
         background_inventory: Configuration for background inventory data calculation.
@@ -163,9 +163,7 @@ class LCADataProcessor:
         """
         self.config = config
         if "foreground" not in bd.databases:
-            raise ValueError(
-                "Foreground database 'foreground' is not defined in Brightway2."
-            )
+            raise ValueError("Foreground database 'foreground' is not defined.")
         self.foreground_db = bd.Database("foreground")
         self.background_dbs = {}
         if config.temporal.database_dates is not None:
@@ -331,10 +329,11 @@ class LCADataProcessor:
         Construct foreground technosphere, biosphere, and production tensors with
         time-explicit structure.
 
-        This method expands the standard technosphere and biosphere matrices by
-        adding a process time (year) dimension. For each process in the foreground
+        This method constructs tensors based on the brightway databases. For tensor
+        construction it expands the standard technosphere and biosphere matrices by
+        adding a process time dimension. For each process in the foreground
         database, it iterates through exchanges and collects temporal distribution
-        data (years and amounts). The resulting tensors represent the amounts of
+        data (date and amounts). The resulting tensors represent the amounts of
         flows associated with each process, distributed over time.
 
         Side Effects
@@ -368,7 +367,7 @@ class LCADataProcessor:
 
         for act in self.foreground_db:
             # Only process activities present in the demand
-            if act["functional flow"] not in self._functional_flows:
+            if act["functional_flow"] not in self._functional_flows:
                 continue
 
             # Store process information
@@ -419,14 +418,14 @@ class LCADataProcessor:
                 elif type == "production":
                     production_tensor.update(
                         {
-                            (act["code"], act["functional flow"], year): exc["amount"]
+                            (act["code"], act["functional_flow"], year): exc["amount"]
                             * factor
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
                     if exc.get("operation"):
                         self._operation_flow.update(
-                            {(act["code"], act["functional flow"]): True}
+                            {(act["code"], act["functional_flow"]): True}
                         )
 
         # Store the tensors as protected variables
@@ -720,7 +719,7 @@ class LCADataProcessor:
             system_year) to characterization factor values.
         """
         start_date = self.config.temporal.start_date
-        timehorizon = self.config.temporal.timehorizon
+        time_horizon = self.config.temporal.time_horizon
         dates = pd.date_range(
             start=start_date, periods=len(self._system_time), freq="YE"
         )
@@ -771,7 +770,7 @@ class LCADataProcessor:
                     metric="GWP",
                     fixed_time_horizon=True,
                     base_lcia_method=method,
-                    time_horizon=timehorizon,
+                    time_horizon=time_horizon,
                 )
                 df_char["date"] = df_char["date"].dt.year
 
@@ -798,13 +797,13 @@ class LCADataProcessor:
                         metric="radiative_forcing",
                         fixed_time_horizon=True,
                         base_lcia_method=method,
-                        time_horizon=timehorizon,
+                        time_horizon=time_horizon,
                         time_horizon_start=pd.Timestamp(start_date),
                     )
                     rf_series = df_char["amount"].values
 
                     for year in self.system_time:
-                        cutoff = start_date.year + timehorizon - year - 1
+                        cutoff = start_date.year + time_horizon - year - 1
                         cumulative_rf = rf_series[:cutoff].sum()
                         characterization_tensor[(category_name, flow_code, year)] = (
                             cumulative_rf
