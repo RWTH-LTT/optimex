@@ -10,10 +10,9 @@
 [![Conda Version](https://img.shields.io/conda/v/diepers/optimex?label=conda)](https://anaconda.org/diepers/optimex)
 [![Conda - License](https://img.shields.io/conda/l/diepers/optimex)](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
 
-This is a python package for time-explicit Life Cylce Optimization that helps you identify transition pathways of systems with minimal environmental impacts.
+This is a Python package for transition pathway optimization based on time-explicit Life Cycle Assessment (LCA). `optimex` helps identify optimal process portfolios and deployment timing in systems with multiple processes producing the same product, aiming to minimize dynamically accumulating environmental impacts over time. 
 
->[!WARNING]
-> This is an early access version of the package developed during [@JanTautorus](https://github.com/JanTautorus)' master thesis. While it's functional, it’s not fully configured to handle all use cases yet.
+`optimex` builds on top of the [Brightway LCA framework](https://docs.brightway.dev/en/latest). If you are looking for a time-explicit assessment rather than an optimization tool, make sure to check out our time-explicit LCA package [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
 
 ## Installation
 
@@ -46,26 +45,6 @@ please [file an issue][Issue Tracker] along with a detailed description.
 [Contributor Guide]: https://github.com/TimoDiepers/optimex/blob/main/CONTRIBUTING.md
 [Issue Tracker]: https://github.com/TimoDiepers/optimex/issues
 
-
-## Building the Documentation
-
-You can build the documentation locally by installing the documentation Conda environment:
-
-```bash
-conda env create -f docs/environment.yml
-```
-
-activating the environment
-
-```bash
-conda activate sphinx_optimex
-```
-
-and [running the build command](https://www.sphinx-doc.org/en/master/man/sphinx-build.html#sphinx-build):
-
-```bash
-sphinx-build docs _build/html --builder=html --jobs=auto --write-all; open _build/html/index.html
-```
 
 ## Acknowledgments
 
