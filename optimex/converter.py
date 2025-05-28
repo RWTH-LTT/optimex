@@ -457,10 +457,10 @@ class ModelInputManager:
 
     def override(self, **overrides) -> OptimizationModelInputs:
         """
-        Override fields of the current ModelInputs instance and re-validate.
+        Override fields of the current OptimizationModelInputs instance and re-validate.
 
         Parameters:
-            overrides: Keyword arguments matching ModelInputs fields to override.
+            overrides: Keyword arguments matching OptimizationModelInputs fields to override.
         """
         data = self.model_inputs.model_dump()
         data.update(overrides)
@@ -469,7 +469,7 @@ class ModelInputManager:
 
     def save(self, path: str) -> None:
         """
-        Save the current ModelInputs to a JSON or pickle file based on extension.
+        Save the current OptimizationModelInputs to a JSON or pickle file based on extension.
         Supports .json and .pkl extensions.
         """
         if self.model_inputs is None:
