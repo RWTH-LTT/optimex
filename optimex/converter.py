@@ -422,7 +422,7 @@ class ModelInputManager:
         self, lca_processor: LCADataProcessor
     ) -> OptimizationModelInputs:
         """
-        Extracts data from the LCADataProcessor and constructs ModelInputs.
+        Extracts data from the LCADataProcessor and constructs OptimizationModelInputs.
         """
         # Extract data
         data = {
