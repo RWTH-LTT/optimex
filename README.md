@@ -12,37 +12,37 @@
 
 This is a Python package for transition pathway optimization based on time-explicit Life Cycle Assessment (LCA). `optimex` helps identify optimal process portfolios and deployment timing in systems with multiple processes producing the same product, aiming to minimize dynamically accumulating environmental impacts over time. 
 
-`optimex` builds on top of the optimization framework [pyomo](https://github.com/Pyomo/pyomo) the LCA framework [Brightway](https://docs.brightway.dev/en/latest). If you are looking for a time-explicit LCA rather than an optimization tool, make sure to check out [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
+`optimex` builds on top of the optimization framework [pyomo](https://github.com/Pyomo/pyomo) and the LCA framework [Brightway](https://docs.brightway.dev/en/latest). If you are looking for a time-explicit LCA rather than an optimization tool, make sure to check out [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
 
-## Installation
+## Features
 
-You can install _optimex_ via [pip] from [PyPI]:
+This package enables you to:
+- Optimize the **timing and scale** of process deployments over a transition period
+- Jointly consider the **temporal distribution and evolution** of processes (e.g., electricity consumption over a 20-year use phase dynamically sources from the appropriate electricity mix based on the actual time of consumption)
+- Account for the **timing and accumulation of emissions** using dynamic Life Cycle Impact Assessment
+  
+## Getting Started
 
-```console
-$ pip install optimex
-```
-
-## Contributing
-
-Contributions are very welcome.
-To learn more, see the [Contributor Guide][Contributor Guide].
-
-## License
-
-Distributed under the terms of the [BSD 3 Clause license][License],
-_optimex_ is free and open source software.
-
-## Issues
-
-If you encounter any problems,
-please [file an issue][Issue Tracker] along with a detailed description.
+- [Installation Guide](https://optimex.readthedocs.io/en/latest/content/installation.html)
+- [Getting Started Tutorial](https://optimex.readthedocs.io/en/latest/content/getting_started.html)
+- [Example Collection](https://optimex.readthedocs.io/en/latest/content/examples/index.html)
 
 ## Support
 
 If you have any questions or need help, do not hesitate to contact us:
 - Jan Tautorus ([jan.tautorus@rwth-aachen.de](mailto:jan.tautorus@rwth-aachen.de))
 - Timo Diepers ([timo.diepers@ltt.rwth-aachen.de](mailto:timo.diepers@ltt.rwth-aachen.de))
-- 
+
+## Contributing
+
+We welcome contributions! If you have suggestions or want to fix a bug, please:
+- [Open an Issue](https://github.com/TimoDiepers/optimex/issues)
+- [Send a Pull Request](https://github.com/TimoDiepers/optimex/pulls)
+
+## License
+
+Distributed under the terms of the [BSD 3 Clause license][License], `optimex` is free and open source software.
+
 <!-- github-only -->
 
 [command-line reference]: https://optimex.readthedocs.io/en/latest/usage.html
