@@ -5,7 +5,7 @@ channels:
   - cmutel
   - diepers
 dependencies:
-  - optimex
+  - optimex>=0.2.0
   - glpk # can be replaced with other solvers
   # - brightway25_nosolver # uncomment for macOS ARM machines
   # - scikit-umfpack # uncomment for macOS ARM machines
