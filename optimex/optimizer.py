@@ -25,13 +25,13 @@ def create_model(
     Build a Pyomo ConcreteModel for the optimization problem based on the provided
     inputs.
 
-    This function constructs a fully defined Pyomo model using data from a `ModelInputs`
+    This function constructs a fully defined Pyomo model using data from a `OptimizationModelInputs`
     instance. It optionally supports flexible operation of processes and can save
     intermediate data to a specified path.
 
     Parameters
     ----------
-    inputs : ModelInputs
+    inputs : OptimizationModelInputs
         Structured input data containing all flows, mappings, and constraints
         required for model construction.
     name : str

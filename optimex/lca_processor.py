@@ -146,7 +146,7 @@ class LCADataProcessor:
     computations and gather necessary data for building an optimization model.
 
     This class is primarily responsible for executing the LCA-based computations
-    required to collect all the data needed for building `ModelInputs`. It is reliant on
+    required to collect all the data needed for building `OptimizationModelInputs`. It is reliant on
     Brightway2, an open-source framework for Life Cycle Assessment, to perform the
     calculations and retrieve LCA results.
     """

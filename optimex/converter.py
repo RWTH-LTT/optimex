@@ -308,7 +308,7 @@ class OptimizationModelInputs(BaseModel):
 
     def get_scaled_copy(self) -> Tuple["OptimizationModelInputs", Dict[str, Any]]:
         """
-        Returns a deep-copied, scaled version of ModelInputs for numerical stability,
+        Returns a deep-copied, scaled version of OptimizationModelInputs for numerical stability,
         along with the scaling factors used.
         """
         # Deep copy to preserve raw data
@@ -381,11 +381,11 @@ class ModelInputManager:
     Responsibilities:
     
     - Extracts raw structural and quantitative data from an `LCADataProcessor` instance.
-    - Constructs and validates a `ModelInputs` Pydantic model, ensuring all necessary
+    - Constructs and validates a `OptimizationModelInputs` Pydantic model, ensuring all necessary
       fields are populated and internally consistent.
     - Allows for user-defined overrides of any input fields to enable customization,
       correction, or scenario-specific tuning.
-    - Supports serialization and deserialization of `ModelInputs` for reproducibility,
+    - Supports serialization and deserialization of `OptimizationModelInputs` for reproducibility,
       sharing, or caching via `.json` or `.pickle`.
     - Provides access to scaled versions of the model inputs (e.g., for numerical
       stability in optimization solvers), with metadata on scaling transformations.
@@ -473,7 +473,7 @@ class ModelInputManager:
         Supports .json and .pkl extensions.
         """
         if self.model_inputs is None:
-            raise ValueError("No ModelInputs to save.")
+            raise ValueError("No OptimizationModelInputs to save.")
         if path.endswith(".json"):
             with open(path, "w") as f:
                 json.dump(self.model_inputs.model_dump(), f, indent=2)
@@ -485,7 +485,7 @@ class ModelInputManager:
 
     def load(self, path: str) -> OptimizationModelInputs:
         """
-        Load ModelInputs from a JSON or pickle file.
+        Load OptimizationModelInputs from a JSON or pickle file.
         """
         if path.endswith(".json"):
             with open(path, "r") as f:
