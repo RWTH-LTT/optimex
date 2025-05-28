@@ -134,7 +134,9 @@ class LCAConfig(BaseModel):
     demand: Dict[str, TemporalDistribution]
     temporal: TemporalConfig
     characterization_methods: List[CharacterizationMethodConfig]
-    background_inventory: BackgroundInventoryConfig
+    background_inventory: Optional[BackgroundInventoryConfig] = Field(
+        default_factory=BackgroundInventoryConfig
+    )
 
     class Config:
         arbitrary_types_allowed = True
