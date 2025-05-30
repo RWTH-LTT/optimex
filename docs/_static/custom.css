@@ -5,17 +5,26 @@
 html[data-theme="light"] {
     --pst-color-primary: #00549f;
     --pst-color-secondary: #f6a800;
+    --pst-color-inline-code: #b77d00;
+    --pst-color-inline-code-links: #b77d00;
+    --pst-color-accent: #f6a800;
 }
 
 html[data-theme="dark"] {
     --pst-color-primary: #8ebae5;
     --pst-color-secondary: #fdd48f;
+    --pst-color-inline-code: #fdd48f;
+    --pst-color-inline-code-links: #fdd48f;
 }
 
 body {
     width: 100vw;
     margin-right: calc(100vw - 100%);
     overflow-x: hidden;
+}
+
+#pst-back-to-top:hover {
+    background-color: #b77d00;
 }
 
 .logo {
