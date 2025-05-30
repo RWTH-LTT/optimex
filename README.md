@@ -17,10 +17,15 @@ This is a Python package for transition pathway optimization based on time-expli
 
 ## Features
 
-This package enables you to:
-- Optimize the **timing and scale** of process deployments over a transition period
-- Jointly consider the **temporal distribution and evolution** of processes (e.g., electricity consumption over a 20-year use phase dynamically sources from the appropriate electricity mix based on the actual time of consumption)
-- Account for the **timing and accumulation of emissions** using dynamic Life Cycle Impact Assessment
+Like other transition pathway optimization tools, `optimex` identifies the optimal timing and scale of process deployments to minimize environmental impacts over a transition period. What sets `optimex` apart is its integration of three additional, temporal considerations for environmental impacts:
+
+1. **Timing within Process Life Cycles:** Environmental impacts are spread across a process’s life cycle: construction happens first, use comes later, and end-of-life impacts follow. `optimex` captures this by distributing process inputs and outputs over time.
+
+2. **Technology Evolution:** Future technologies may become more sustainable, reducing the environmental impacts later in the expansion period. `optimex` reflects this by allowing process inventories to evolve over time.
+
+3.	**Accumulation of Emissions and Impacts:** Most impacts arise from the accumulation of emissions, but are typically modeled as discrete and independent pulses. `optimex` retains the timing of emissions during inventory calculations and applies dynamic characterization to account for impact accumulation
+
+During the transition pathway optimization, `optimex` simultaneously accounts for these temporal considerations, identifying the environmentally optimal process deployment over the transition period.
   
 ## Getting Started
 
