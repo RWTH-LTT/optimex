@@ -15,6 +15,7 @@ Here is a list of important resources for contributors:
 [Source Code]: https://github.com/TimoDiepers/optimex
 [Documentation]: https://optimex.readthedocs.io/
 [Issue Tracker]: https://github.com/TimoDiepers/optimex/issues
+[Code of Conduct]: https://github.com/TimoDiepers/optimex/blob/main/CODE_OF_CONDUCT.md
 
 ## How to report a bug
 
