@@ -9,7 +9,7 @@ def abstract_system_model_inputs():
     of an abstract system."""
     return {
         "PROCESS": ["P1", "P2"],
-        "FUNCTIONAL_FLOW": ["F1"],
+        "REFERENCE_PRODUCT": ["R1"],
         "INTERMEDIATE_FLOW": ["I1", "I2"],
         "ELEMENTARY_FLOW": ["CO2", "CH4"],
         "BACKGROUND_ID": ["db_2020", "db_2030"],
@@ -21,14 +21,14 @@ def abstract_system_model_inputs():
             "P2": (1, 2),
         },
         "demand": {
-            ("F1", 2022): 10,
-            ("F1", 2023): 5,
-            ("F1", 2024): 10,
-            ("F1", 2025): 5,
-            ("F1", 2026): 10,
-            ("F1", 2027): 5,
-            ("F1", 2028): 10,
-            ("F1", 2029): 5,
+            ("R1", 2022): 10,
+            ("R1", 2023): 5,
+            ("R1", 2024): 10,
+            ("R1", 2025): 5,
+            ("R1", 2026): 10,
+            ("R1", 2027): 5,
+            ("R1", 2028): 10,
+            ("R1", 2029): 5,
         },
         "foreground_technosphere": {
             ("P1", "I1", 0): 27.5,
@@ -41,15 +41,15 @@ def abstract_system_model_inputs():
             ("P2", "CO2", 2): 10,
         },
         "foreground_production": {
-            ("P1", "F1", 1): 0.5,
-            ("P1", "F1", 2): 0.5,
-            ("P2", "F1", 1): 0.5,
-            ("P2", "F1", 2): 0.5,
+            ("P1", "R1", 1): 0.5,
+            ("P1", "R1", 2): 0.5,
+            ("P2", "R1", 1): 0.5,
+            ("P2", "R1", 2): 0.5,
         },
         "operation_flow": {
-            ("P1", "F1"): True,
+            ("P1", "R1"): True,
             ("P1", "CO2"): True,
-            ("P2", "F1"): True,
+            ("P2", "R1"): True,
             ("P2", "CO2"): True,
         },
         "background_inventory": {
@@ -154,4 +154,4 @@ def abstract_system_model(request, abstract_system_model_inputs):
 @pytest.fixture(scope="module")
 def solved_system_model(request, abstract_system_model):
     """Fixture to solve the abstract system model (fixed or flexible)."""
-    return optimizer.solve_model(abstract_system_model, solver_name="glpk")
+    return optimizer.solve_model(abstract_system_model, solver_name="gurobi")

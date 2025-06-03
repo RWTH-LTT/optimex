@@ -70,9 +70,9 @@ def create_model(
         doc="Set of processes (or activities), indexed by p",
         initialize=scaled_inputs.PROCESS,
     )
-    model.FUNCTIONAL_FLOW = pyo.Set(
-        doc="Set of functional flows (or products), indexed by r",
-        initialize=scaled_inputs.FUNCTIONAL_FLOW,
+    model.REFERENCE_PRODUCT = pyo.Set(
+        doc="Set of reference products, indexed by r",
+        initialize=scaled_inputs.REFERENCE_PRODUCT,
     )
     model.INTERMEDIATE_FLOW = pyo.Set(
         doc="Set of intermediate flows, indexed by i",
@@ -83,7 +83,7 @@ def create_model(
         initialize=scaled_inputs.ELEMENTARY_FLOW,
     )
     model.FLOW = pyo.Set(
-        initialize=lambda m: m.FUNCTIONAL_FLOW
+        initialize=lambda m: m.REFERENCE_PRODUCT
         | m.INTERMEDIATE_FLOW
         | m.ELEMENTARY_FLOW,
         doc="Set of all flows, indexed by f",
@@ -115,7 +115,7 @@ def create_model(
         initialize=scaled_inputs.process_names,
     )
     model.demand = pyo.Param(
-        model.FUNCTIONAL_FLOW,
+        model.REFERENCE_PRODUCT,
         model.SYSTEM_TIME,
         within=pyo.Reals,
         doc="time-explicit demand vector d",
@@ -142,7 +142,7 @@ def create_model(
     )
     model.foreground_production = pyo.Param(
         model.PROCESS,
-        model.FUNCTIONAL_FLOW,
+        model.REFERENCE_PRODUCT,
         model.PROCESS_TIME,
         within=pyo.Reals,
         doc="time-explicit foreground production tensor F",
@@ -409,7 +409,7 @@ def create_model(
 
         model.OperationLimit = pyo.Constraint(
             model.PROCESS,
-            model.FUNCTIONAL_FLOW,
+            model.REFERENCE_PRODUCT,
             model.SYSTEM_TIME,
             rule=operation_limited_by_installation_rule,
         )
@@ -422,7 +422,7 @@ def create_model(
             )
 
         model.DemandConstraint = pyo.Constraint(
-            model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=fulfill_demand_rule
+            model.REFERENCE_PRODUCT, model.SYSTEM_TIME, rule=fulfill_demand_rule
         )
 
     else:
@@ -498,7 +498,7 @@ def create_model(
             )
 
         model.DemandConstraint = pyo.Constraint(
-            model.FUNCTIONAL_FLOW, model.SYSTEM_TIME, rule=fulfill_demand_rule
+            model.REFERENCE_PRODUCT, model.SYSTEM_TIME, rule=fulfill_demand_rule
         )
 
     def category_process_time_specific_impact(model, c, p, t):

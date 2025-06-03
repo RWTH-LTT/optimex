@@ -201,15 +201,15 @@ class PostProcessor:
     def get_production(self) -> pd.DataFrame:
         """
         Extracts the production data from the model and returns it as a DataFrame.
-        The DataFrame will have a MultiIndex with 'Process', 'Functional Flow', and
-        'Time'. The values are the total production for each process and functional
-        flow at each time step.
+        The DataFrame will have a MultiIndex with 'Process', 'Reference Product', and
+        'Time'. The values are the total production for each process and reference
+        product at each time step.
         """
         production_tensor = {}
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
 
         for p in self.m.PROCESS:
-            for f in self.m.FUNCTIONAL_FLOW:
+            for f in self.m.REFERENCE_PRODUCT:
                 for t in self.m.SYSTEM_TIME:
                     if not self.m.flexible_operation:
                         total_production = sum(
@@ -229,11 +229,11 @@ class PostProcessor:
             production_tensor, orient="index", columns=["Value"]
         )
         df.index = pd.MultiIndex.from_tuples(
-            df.index, names=["Process", "Functional Flow", "Time"]
+            df.index, names=["Process", "Reference Product", "Time"]
         )
         df = df.reset_index()
         df_pivot = df.pivot(
-            index="Time", columns=["Process", "Functional Flow"], values="Value"
+            index="Time", columns=["Process", "Reference Product"], values="Value"
         )
         self.df_production = df_pivot
         return self.df_production
@@ -241,21 +241,21 @@ class PostProcessor:
     def get_demand(self) -> pd.DataFrame:
         """
         Extracts the demand data from the model and returns it as a DataFrame.
-        The DataFrame will have a MultiIndex with 'Functional Flow' and 'Time'.
-        The values are the demand for each functional flow at each time step.
+        The DataFrame will have a MultiIndex with 'Reference Product' and 'Time'.
+        The values are the demand for each Reference Product at each time step.
         """
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
         demand_matrix = {
             (f, t): self.m.demand[f, t] * fg_scale
-            for f in self.m.FUNCTIONAL_FLOW
+            for f in self.m.REFERENCE_PRODUCT
             for t in self.m.SYSTEM_TIME
         }
         df = pd.DataFrame.from_dict(demand_matrix, orient="index", columns=["Value"])
         df.index = pd.MultiIndex.from_tuples(
-            df.index, names=["Functional Flow", "Time"]
+            df.index, names=["Reference Product", "Time"]
         )
         df = df.reset_index()
-        df_pivot = df.pivot(index="Time", columns="Functional Flow", values="Value")
+        df_pivot = df.pivot(index="Time", columns="Reference Product", values="Value")
         self.df_demand = df_pivot
         return self.df_demand
 
@@ -293,7 +293,7 @@ class PostProcessor:
 
         Parameters:
             prod_df: DataFrame with Time as index, Processes as columns.
-            demand_df: DataFrame with Time as index, Functional Flows as columns.
+            demand_df: DataFrame with Time as index, Reference Products as columns.
         """
 
         if prod_df is None:

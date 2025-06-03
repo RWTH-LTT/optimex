@@ -125,7 +125,7 @@ class LCAConfig(BaseModel):
     Configuration class for Life Cycle Assessment (LCA) data processing.
 
     Attributes:
-        demand: Dictionary {(Functional_flow_name, temporal_distribution)} containing time-explicit demands for each flow.
+        demand: Dictionary {(reference_product_name, temporal_distribution)} containing time-explicit demands for each flow.
         temporal: Temporal configuration for model time behavior.
         characterization_methods: List of characterization method configurations.
         background_inventory: Configuration for background inventory data calculation.
@@ -187,7 +187,7 @@ class LCADataProcessor:
         self._intermediate_flows = {}
         self._elementary_flows = {}
 
-        self._functional_flows = set()
+        self._reference_products = set()
         self._system_time = set()
         self._process_time = set()
         self._category = set()
@@ -223,9 +223,9 @@ class LCADataProcessor:
         return self._elementary_flows
 
     @property
-    def functional_flows(self) -> set:
+    def reference_products(self) -> set:
         """Read-only access to the functional flows list."""
-        return self._functional_flows
+        return self._reference_products
 
     @property
     def system_time(self) -> set:
@@ -300,7 +300,7 @@ class LCADataProcessor:
         ------------
         Updates the following instance attributes:
             - self._demand: dict with keys (flow, year) and values as amounts.
-            - self._functional_flows: set of flow codes present in the demand.
+            - self._reference_products: set of flow codes present in the demand.
             - self._system_time: range of years covering the longest demand interval.
         """
         raw_demand = self.config.demand
@@ -317,13 +317,13 @@ class LCADataProcessor:
             self._demand.update(
                 {(flow, year): amount for year, amount in zip(years, amounts)}
             )
-            self._functional_flows.add(flow)
+            self._reference_products.add(flow)
 
         self._system_time = range(start_year, start_year + longest_demand_interval)
         logger.info(
             "Identified demand in system time range of %s for functional flows %s",
             self._system_time,
-            self._functional_flows,
+            self._reference_products,
         )
 
     def _construct_foreground_tensors(self) -> None:
@@ -346,7 +346,7 @@ class LCADataProcessor:
             - self._foreground_biosphere: dict mapping
               (process_code, flow_code, year) to amount for biosphere flows.
             - self._foreground_production: dict mapping
-              (process_code, functional_flow, year) to amount for produced
+              (process_code, reference_product, year) to amount for produced
               functional flows.
             - self._intermediate_flows: dict mapping intermediate flow codes to
               their names.
@@ -369,7 +369,7 @@ class LCADataProcessor:
 
         for act in self.foreground_db:
             # Only process activities present in the demand
-            if act["functional_flow"] not in self._functional_flows:
+            if act["reference product"] not in self._reference_products:
                 continue
 
             # Store process information
@@ -420,14 +420,14 @@ class LCADataProcessor:
                 elif type == "production":
                     production_tensor.update(
                         {
-                            (act["code"], act["functional_flow"], year): exc["amount"]
+                            (act["code"], act["reference product"], year): exc["amount"]
                             * factor
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
                     if exc.get("operation"):
                         self._operation_flow.update(
-                            {(act["code"], act["functional_flow"]): True}
+                            {(act["code"], act["reference product"]): True}
                         )
 
         # Store the tensors as protected variables

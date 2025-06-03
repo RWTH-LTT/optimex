@@ -118,7 +118,7 @@ def setup_brightway_databases():
             ("foreground", "P1"): {
                 "name": "process P1",
                 "location": "somewhere",
-                "reference product": "F1",
+                "reference product": "R1",
                 "operation_time_limits": (
                     1,
                     2,
@@ -158,7 +158,7 @@ def setup_brightway_databases():
             ("foreground", "P2"): {
                 "name": "process P2",
                 "location": "somewhere",
-                "reference product": "F1",
+                "reference product": "R1",
                 "operation_time_limits": (
                     1,
                     2,
@@ -223,15 +223,8 @@ def mock_lca_data_processor(setup_brightway_databases):
         ),
         amount=np.asarray([0, 0, 10, 5, 10, 5, 10, 5, 10, 5]),
     )
-
-    # Define functional flows for optimex
-    foreground = bd.Database("foreground")
-    for act in foreground:
-        act["functional_flow"] = "F1"
-        act.save()
-
     lca_config = lca_processor.LCAConfig(
-        demand={"F1": td_demand},
+        demand={"R1": td_demand},
         temporal={
             "start_date": datetime(2020, 1, 1),
             "temporal_resolution": "year",
