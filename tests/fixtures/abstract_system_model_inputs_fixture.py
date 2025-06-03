@@ -154,4 +154,4 @@ def abstract_system_model(request, abstract_system_model_inputs):
 @pytest.fixture(scope="module")
 def solved_system_model(request, abstract_system_model):
     """Fixture to solve the abstract system model (fixed or flexible)."""
-    return optimizer.solve_model(abstract_system_model, solver_name="gurobi")
+    return optimizer.solve_model(abstract_system_model, solver_name="glpk")
