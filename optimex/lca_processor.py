@@ -42,10 +42,12 @@ class CharacterizationMethodConfig(BaseModel):
         description="User-defined name for the impact category "
         "(e.g., 'climate_change_dynamic_gwp').",
     )
-    brightway_method: Union[Tuple[str, str], Tuple[str, str, str]] = Field(
+    brightway_method: Union[
+        Tuple[str, str], Tuple[str, str, str], Tuple[str, str, str, str]
+    ] = Field(
         ...,
         description=(
-            "The Brightway method tuple with 2 or 3 elements "
+            "The Brightway method tuple with 2 to 4 elements "
             "(e.g., ('IPCC', 'climate change', 'GWP 100a'))."
         ),
     )
@@ -309,8 +311,8 @@ class LCADataProcessor:
         longest_demand_interval = 0
         for flow, td in raw_demand.items():
             years = td.date.astype("datetime64[Y]").astype(int) + 1970
-            if len(years) > longest_demand_interval:
-                longest_demand_interval = len(years)
+            if years[-1] - start_year > longest_demand_interval:
+                longest_demand_interval = years[-1] - start_year
             amounts = td.amount
 
             # Create a dictionary of (flow, year) -> amount
