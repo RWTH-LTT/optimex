@@ -26,6 +26,7 @@ extensions = [
     "sphinx.ext.inheritance_diagram",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
+    "sphinx_sitemap",
     # iPython extensions
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
@@ -48,6 +49,8 @@ extensions = [
     # carousels
     "sphinx_carousel.carousel",
 ]
+
+html_baseurl = 'https://optimex.readthedocs.io'
 
 autoapi_dirs = ["../optimex"]
 autoapi_type = "python"
