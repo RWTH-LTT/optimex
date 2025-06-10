@@ -50,8 +50,6 @@ extensions = [
     "sphinx_carousel.carousel",
 ]
 
-html_baseurl = 'https://optimex.readthedocs.io'
-
 autoapi_dirs = ["../optimex"]
 autoapi_type = "python"
 autoapi_ignore = [
@@ -271,3 +269,7 @@ favicons = [
     {"rel": "mask-icon", "href": "favicon_mask-icon.svg", "color": "#222832"},
     {"rel": "apple-touch-icon", "sizes": "500x500", "href": "favicon-500.png"},
 ]
+
+# sphinx-sitemap configuration #####################################
+html_baseurl = 'https://optimex.readthedocs.io'
+sitemap_include_hidden = True
