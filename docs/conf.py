@@ -271,5 +271,5 @@ favicons = [
 ]
 
 # sphinx-sitemap configuration #####################################
-html_baseurl = "https://optimex.readthedocs.io/en/latest"
+html_baseurl = "https://optimex.readthedocs.io/"
 sitemap_include_hidden = True
