@@ -265,9 +265,9 @@ nb_execution_mode = "off"
 
 favicons = [
     {"rel": "icon", "href": "favicon.svg", "type": "image/svg+xml"},
-    {"rel": "icon", "sizes": "144x144", "href": "favicon-144.png", "type": "image/png"},
+    {"rel": "icon", "sizes": "144x144", "href": "favicon_144.png", "type": "image/png"},
     {"rel": "mask-icon", "href": "favicon_mask-icon.svg", "color": "#222832"},
-    {"rel": "apple-touch-icon", "sizes": "500x500", "href": "favicon-500.png"},
+    {"rel": "apple-touch-icon", "sizes": "500x500", "href": "favicon_500.png"},
 ]
 
 # sphinx-sitemap configuration #####################################
