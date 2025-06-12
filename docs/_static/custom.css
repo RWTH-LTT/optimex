@@ -106,6 +106,6 @@ html[data-theme="dark"] .sd-card {
 }
 
 .no-pointer-events {
-    pointer-events: none;
+    pointer-events: none !important;
     cursor: default;
 }

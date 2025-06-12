@@ -158,10 +158,6 @@ html_css_files = [
     "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css",  # for https://fontawesome.com/ icons
 ]
 
-html_js_files = [
-    "custom.js",
-]
-
 html_sidebars = {
     "**": [
         "sidebar-nav-bs.html",
@@ -212,8 +208,8 @@ html_theme_options = {
     "use_edit_page_button": True,
     "navigation_with_keys": True,
     "logo": {
-        "image_light": "logo/optimex_light_rtd.svg",
-        "image_dark": "logo/optimex_dark_rtd.svg",
+        "image_light": "optimex_light_rtd.svg",
+        "image_dark": "optimex_dark_rtd.svg",
     },
 }
 

@@ -14,19 +14,10 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
 :::{grid-item-card}
 :text-align: left
 
-~~~{image} _static/life_cycle_timing_light.svg
-:align: center
-:width: 40%
-:alt: Life Cycle Timing
-:class: margin-bottom-16 no-pointer-events  only-light
-~~~
-
-~~~{image} _static/life_cycle_timing_dark.svg
-:align: center
-:width: 40%
-:alt: Life Cycle Timing
-:class: margin-bottom-16 no-pointer-events  only-dark
-~~~
+<div style="text-align: center;">
+    <img src="_static/life_cycle_timing_light.svg" alt="Life Cycle Timing" width="40%" class="margin-bottom-16 no-pointer-events only-light">
+    <img src="_static/life_cycle_timing_dark.svg" alt="Life Cycle Timing" width="40%" class="margin-bottom-16 no-pointer-events only-dark">
+</div>
 
 <div style="text-align: center; font-weight: bold; margin-bottom: 0.5em">Life Cycle Timing</div>
 
@@ -38,19 +29,10 @@ Processes are spread across a product's life cycle: construction happens first, 
 :::{grid-item-card}
 :text-align: left
 
-~~~{image} _static/technology_evolution_light.svg
-:align: center
-:width: 40%
-:alt: Technology Evolution
-:class: margin-bottom-16 no-pointer-events  only-light
-~~~
-
-~~~{image} _static/technology_evolution_dark.svg
-:align: center
-:width: 40%
-:alt: Technology Evolution
-:class: margin-bottom-16 no-pointer-events  only-dark
-~~~
+<div style="text-align: center;">
+    <img src="_static/technology_evolution_light.svg" alt="Technology Evolution" width="40%" class="margin-bottom-16 no-pointer-events only-light">
+    <img src="_static/technology_evolution_dark.svg" alt="Technology Evolution" width="40%" class="margin-bottom-16 no-pointer-events only-dark">
+</div>
 
 <div style="text-align: center; font-weight: bold; margin-bottom: 0.5em">Technology Evolution</div>
 
@@ -62,19 +44,10 @@ In the future, technologies will (hopefully) reduce their emissions. So, the tim
 :::{grid-item-card}
 :text-align: left
 
-~~~{image} _static/emission_accumulation_light.svg
-:align: center
-:width: 40%
-:alt: Emission Accumulation
-:class: margin-bottom-16 no-pointer-events  only-light
-~~~
-
-~~~{image} _static/emission_accumulation_dark.svg
-:align: center
-:width: 40%
-:alt: Emission Accumulation
-:class: margin-bottom-16 no-pointer-events  only-dark
-~~~
+<div style="text-align: center;">
+    <img src="_static/emission_accumulation_light.svg" alt="Emission Accumulation" width="40%" class="margin-bottom-16 no-pointer-events only-light">
+    <img src="_static/emission_accumulation_dark.svg" alt="Emission Accumulation" width="40%" class="margin-bottom-16 no-pointer-events only-dark">
+</div>
 
 <div style="text-align: center; font-weight: bold; margin-bottom: 0.5em">Emission Accumulation</div>
 

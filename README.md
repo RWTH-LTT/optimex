@@ -1,7 +1,7 @@
 <h1>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/logo/optimex_dark_nomargins.svg" height="50">
-    <img alt="optimex logo" src="docs/_static/logo/optimex_light_nomargins.svg" height="50">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/optimex_dark_nomargins.svg" height="50">
+    <img alt="optimex logo" src="docs/_static/optimex_light_nomargins.svg" height="50">
   </picture>
 </h1>
 
