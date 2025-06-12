@@ -19,9 +19,9 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
     <img src="_static/life_cycle_timing_dark.svg" alt="Life Cycle Timing" width="80px" class="margin-bottom-16 no-pointer-events only-dark">
 </div>
 
-<div style="text-align: center; font-weight: bold; margin-bottom: 0.60px">Life Cycle Timing</div>
+<div style="text-align: center; font-weight: bold; margin-bottom: 0.5rem">Life Cycle Timing</div>
 
-Processes are spread across a product's life cycle: construction happens first, use comes later, and end-of-life follows. Consequently, emissions occur at different times. 
+The processes within a product's life cycle occur in sequence rather than all at once: production comes first, the use phase and end-of-life follow. As a result, emissions are also spread over time.
 +++
 `optimex` captures this by distributing process inputs and outputs over time.
 :::
@@ -34,9 +34,9 @@ Processes are spread across a product's life cycle: construction happens first, 
     <img src="_static/technology_evolution_dark.svg" alt="Technology Evolution" width="80px" class="margin-bottom-16 no-pointer-events only-dark">
 </div>
 
-<div style="text-align: center; font-weight: bold; margin-bottom: 0.60px">Technology Evolution</div>
+<div style="text-align: center; font-weight: bold; margin-bottom: 0.5rem">Technology Evolution</div>
 
-In the future, technologies will (hopefully) reduce their emissions. So, the timing of a product's production affects its impacts, with later production often resulting in lower emissions.
+In the future, processes will (hopefully) reduce their emissions. So, the time at which a process happens affects its impacts, with later occurence often resulting in lower emissions.
 +++
 `optimex` reflects this by allowing process inventories to change over time.
 :::
@@ -49,7 +49,7 @@ In the future, technologies will (hopefully) reduce their emissions. So, the tim
     <img src="_static/emission_accumulation_dark.svg" alt="Emission Accumulation" width="80px" class="margin-bottom-16 no-pointer-events only-dark">
 </div>
 
-<div style="text-align: center; font-weight: bold; margin-bottom: 0.60px">Emission Accumulation</div>
+<div style="text-align: center; font-weight: bold; margin-bottom: 0.5rem">Emission Accumulation</div>
 
 Most impacts come from emission accumulation, but are typically modeled as separate pulses. Emission timing affects how they accumulate, influencing environmental impacts.
 +++
