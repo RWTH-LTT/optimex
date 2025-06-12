@@ -158,6 +158,10 @@ html_css_files = [
     "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css",  # for https://fontawesome.com/ icons
 ]
 
+html_js_files = [
+    "custom.js",
+]
+
 html_sidebars = {
     "**": [
         "sidebar-nav-bs.html",
@@ -208,8 +212,8 @@ html_theme_options = {
     "use_edit_page_button": True,
     "navigation_with_keys": True,
     "logo": {
-        "image_light": "optimex_light_rtd.svg",
-        "image_dark": "optimex_dark_rtd.svg",
+        "image_light": "logo/optimex_light_rtd.svg",
+        "image_dark": "logo/optimex_dark_rtd.svg",
     },
 }
 
@@ -264,10 +268,10 @@ nb_execution_mode = "off"
 # https://github.com/tcmetzger/sphinx-favicon
 
 favicons = [
-    {"rel": "icon", "href": "favicon.svg", "type": "image/svg+xml"},
-    {"rel": "icon", "sizes": "144x144", "href": "favicon_144.png", "type": "image/png"},
-    {"rel": "mask-icon", "href": "favicon_mask-icon.svg", "color": "#222832"},
-    {"rel": "apple-touch-icon", "sizes": "500x500", "href": "favicon_500.png"},
+    {"rel": "icon", "href": "favicons/favicon.svg", "type": "image/svg+xml"},
+    {"rel": "icon", "sizes": "144x144", "href": "favicons/favicon_144.png", "type": "image/png"},
+    {"rel": "mask-icon", "href": "favicons/favicon_mask-icon.svg", "color": "#222832"},
+    {"rel": "apple-touch-icon", "sizes": "500x500", "href": "favicons/favicon_500.png"},
 ]
 
 # sphinx-sitemap configuration #####################################

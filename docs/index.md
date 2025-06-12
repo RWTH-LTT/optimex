@@ -8,11 +8,82 @@ This is a Python package for transition pathway optimization based on time-expli
 
 Like other transition pathway optimization tools, `optimex` identifies the optimal timing and scale of process deployments to minimize environmental impacts over a transition period. What sets `optimex` apart is its integration of three additional, temporal considerations for environmental impacts:
 
-1. **Timing within Process Life Cycles:** Environmental impacts are spread across a process’s life cycle: construction happens first, use comes later, and end-of-life impacts follow. `optimex` captures this by distributing process inputs and outputs over time.
+::::{grid} 1 1 3 3
+:gutter: 4
 
-2. **Technology Evolution:** Future technologies may become more sustainable, reducing the environmental impacts later in the expansion period. `optimex` reflects this by allowing process inventories to evolve over time.
+:::{grid-item-card}
+:text-align: left
 
-3.	**Accumulation of Emissions and Impacts:** Most impacts arise from the accumulation of emissions, but are typically modeled as discrete and independent pulses. `optimex` retains the timing of emissions during inventory calculations and applies dynamic characterization to account for impact accumulation.
+~~~{image} _static/life_cycle_timing_light.svg
+:align: center
+:width: 40%
+:alt: Life Cycle Timing
+:class: margin-bottom-16 no-pointer-events  only-light
+~~~
+
+~~~{image} _static/life_cycle_timing_dark.svg
+:align: center
+:width: 40%
+:alt: Life Cycle Timing
+:class: margin-bottom-16 no-pointer-events  only-dark
+~~~
+
+<div style="text-align: center; font-weight: bold; margin-bottom: 0.5em">Life Cycle Timing</div>
+
+Processes are spread across a product's life cycle: construction happens first, use comes later, and end-of-life follows. Consequently, emissions occur at different times. 
++++
+`optimex` captures this by distributing process inputs and outputs over time.
+:::
+
+:::{grid-item-card}
+:text-align: left
+
+~~~{image} _static/technology_evolution_light.svg
+:align: center
+:width: 40%
+:alt: Technology Evolution
+:class: margin-bottom-16 no-pointer-events  only-light
+~~~
+
+~~~{image} _static/technology_evolution_dark.svg
+:align: center
+:width: 40%
+:alt: Technology Evolution
+:class: margin-bottom-16 no-pointer-events  only-dark
+~~~
+
+<div style="text-align: center; font-weight: bold; margin-bottom: 0.5em">Technology Evolution</div>
+
+In the future, technologies will (hopefully) reduce their emissions. So, the timing of a product's production affects its impacts, with later production often resulting in lower emissions.
++++
+`optimex` reflects this by allowing process inventories to change over time.
+:::
+
+:::{grid-item-card}
+:text-align: left
+
+~~~{image} _static/emission_accumulation_light.svg
+:align: center
+:width: 40%
+:alt: Emission Accumulation
+:class: margin-bottom-16 no-pointer-events  only-light
+~~~
+
+~~~{image} _static/emission_accumulation_dark.svg
+:align: center
+:width: 40%
+:alt: Emission Accumulation
+:class: margin-bottom-16 no-pointer-events  only-dark
+~~~
+
+<div style="text-align: center; font-weight: bold; margin-bottom: 0.5em">Emission Accumulation</div>
+
+Most impacts come from emission accumulation, but are typically modeled as separate pulses. Emission timing affects how they accumulate, influencing environmental impacts.
++++
+`optimex` considers the emission timing, enabling characterization via dynamic LCIA.
+:::
+
+::::
 
 During the transition pathway optimization, `optimex` simultaneously accounts for these temporal considerations, identifying the environmentally optimal process deployment over the transition period.
 

@@ -34,11 +34,22 @@ body {
 
 .bd-page-width {
     margin: 0;
-    }
+}
 
 .bd-header {
     margin: 0;
-    }
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    /* border-bottom: 1px solid #0000001a; */
+}
+
+html[data-theme="light"] .bd-header {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+}
+
+html[data-theme="dark"] .bd-header {
+    background-color: rgba(34, 40, 50, 0.75) !important;
+}
 
 .bd-header button.sidebar-toggle {
     padding-bottom: .25rem;
@@ -49,7 +60,34 @@ body {
 
 .bd-header button.primary-toggle {
     margin-right: 0.35rem;
-    }
+}
+
+.bd-header button.secondary-toggle {
+    margin-left: 0.35rem;
+}
+
+.sd-card {
+    border-radius: 12px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+html[data-theme="light"] .sd-card {
+    background: white;
+}
+
+html[data-theme="dark"] .sd-card {
+    background: linear-gradient(
+        135deg,
+        rgba(34, 40, 50, 0.75),
+        rgba(34, 40, 50, 0.4)
+    );
+}
+
+.sd-card:hover {
+    border-color: var(--pst-color-secondary);
+    transform: scale(1.01);
+    transition: transform 0.3s ease;
+}
 
 @media (min-width: 370px) {
     .bd-header button.primary-toggle {
@@ -57,12 +95,17 @@ body {
     }
 }
 
-.bd-header button.secondary-toggle {
-    margin-left: 0.35rem;
-    }
-
 @media (min-width: 370px) {
     .bd-header button.secondary-toggle {
         margin-left: 1rem;
     }
+}
+
+.margin-bottom-16 {
+    margin-bottom: 16px;
+}
+
+.no-pointer-events {
+    pointer-events: none;
+    cursor: default;
 }
