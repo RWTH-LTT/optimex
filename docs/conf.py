@@ -48,6 +48,8 @@ extensions = [
     "sphinx_copybutton",
     # carousels
     "sphinx_carousel.carousel",
+    # improved tabs
+    "sphinx_inline_tabs",
 ]
 
 autoapi_dirs = ["../optimex"]

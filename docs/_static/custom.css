@@ -109,3 +109,32 @@ html[data-theme="dark"] .sd-card {
     pointer-events: none !important;
     cursor: default;
 }
+
+
+/* tabs */
+:root {
+  --tabs--label-text: var(--pst-color-text-muted);
+  --tabs--label-text--hover: var(--pst-color-secondary);
+  --tabs--label-text--active: var(--pst-color-primary);
+  --tabs--label-text--active--hover: var(--pst-color-secondary);
+  --tabs--label-background: transparent;
+  --tabs--label-background--hover: transparent;
+  --tabs--label-background--active: transparent;
+  --tabs--label-background--active--hover: transparent;
+  --tabs--label-border: var(--pst-color-border);
+  --tabs--label-border--hover: var(--pst-color-secondary);
+  --tabs--label-border--active: var(--pst-color-primary);
+  --tabs--label-border--active--hover: var(--pst-color-secondary);
+  --tabs--padding-x: 1.25em;
+  --tabs--margin-x: 0;
+  --tabs--border: var(--pst-color-border)
+}
+
+.tab-set > label {
+    font-size: 1em;
+}
+
+.tab-content {
+    padding-top: 1em;
+    /* box-shadow: none; */
+}

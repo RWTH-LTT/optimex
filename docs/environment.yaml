@@ -20,6 +20,7 @@ dependencies:
   - sphinx-favicon=1.0.1 # for custom favicons # https://anaconda.org/conda-forge/sphinx-favicon/files
   - sphinx-copybutton=0.5.2 # for copy button in code blocks # https://anaconda.org/conda-forge/sphinx-copybutton/files
   - sphinx-sitemap=2.6.0 # auto-create sitemap https://anaconda.org/conda-forge/sphinx-sitemap
+  - sphinx-inline-tabs=2023.4.21 # better tabs support # https://anaconda.org/conda-forge/sphinx-inline-tabs
   # build process
   - sphinx-autobuild=2024.4.16 # live-html support # https://anaconda.org/conda-forge/sphinx-autobuild/files
   - pip

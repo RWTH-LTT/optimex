@@ -11,9 +11,7 @@
 2. Basic knowledge of [Conda environments](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html)
 ```
 
-::::{tab-set}
-
-:::{tab-item} Linux, Windows, or MacOS (x64)
+:::{tab} Linux, Windows, or macOS (x64)
 
 1. Create a new Conda environment (in this example named `optimex`):
 
@@ -35,7 +33,7 @@ conda install -c conda-forge jupyterlab
 
 :::
 
-:::{tab-item} macOS (Apple Silicon/ARM)
+:::{tab} macOS (Apple Silicon/ARM)
 
 ```{note}
 Brightway runs on the new Apple Silicon ARM architecture. However, the super-fast linear algebra software library `pypardiso` is not compatible with the ARM processor architecture. To avoid critical errors during instruction that would break core functionality, a different version of Brightway (`brightway_nosolver`) and a different linear algebra software library (`scikit-umfpack`) must be installed.
@@ -59,13 +57,11 @@ conda activate optimex
 conda install -c conda-forge jupyterlab
 ```
 
-::::
+:::
 
 ## Installing `optimex` using `pip`
 
-::::{tab-set}
-
-:::{tab-item} Linux, Windows, or MacOS (x64)
+:::{tab} Linux, Windows, or macOS (x64)
 
 1. Install `python` from [the website](https://www.python.org/downloads/), your system package manager, or [Homebrew](https://docs.brew.sh/Homebrew-and-Python).
 
@@ -93,7 +89,7 @@ You can also use pip to install useful libraries like `jupyterlab`.
 
 :::
 
-:::{tab-item} MacOS (Apple Silicon/ARM)
+:::{tab} macOS (Apple Silicon/ARM)
 
 ```{note}
 Due to [an upstream bug](https://github.com/scikit-umfpack/scikit-umfpack/issues/98), there is currently no reliable way to install the fast sparse library `umfpack` on Apple Silicon using `pip`, and the `pypardiso` library is only for x64 systems. If you are doing computationally-intensive workflows, we recommend installing Brightway using `conda` or `mamba` for now. If you are doing fewer calculations or software development installation via `pip` is fine.
@@ -122,5 +118,3 @@ pip install optimex
 ```
 
 You can also use pip to install useful libraries like `jupyterlab`.
-
-::::
