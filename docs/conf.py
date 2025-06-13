@@ -26,6 +26,7 @@ extensions = [
     "sphinx.ext.inheritance_diagram",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
+    "sphinx_sitemap",
     # iPython extensions
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
@@ -47,6 +48,8 @@ extensions = [
     "sphinx_copybutton",
     # carousels
     "sphinx_carousel.carousel",
+    # improved tabs
+    "sphinx_inline_tabs",
 ]
 
 autoapi_dirs = ["../optimex"]
@@ -263,8 +266,12 @@ nb_execution_mode = "off"
 # https://github.com/tcmetzger/sphinx-favicon
 
 favicons = [
-    {"rel": "icon", "href": "favicon.svg", "type": "image/svg+xml"},
-    {"rel": "icon", "sizes": "144x144", "href": "favicon-144.png", "type": "image/png"},
-    {"rel": "mask-icon", "href": "favicon_mask-icon.svg", "color": "#222832"},
-    {"rel": "apple-touch-icon", "sizes": "500x500", "href": "favicon-500.png"},
+    {"rel": "icon", "href": "favicons/favicon.svg", "type": "image/svg+xml"},
+    {"rel": "icon", "sizes": "144x144", "href": "favicons/favicon_144.png", "type": "image/png"},
+    {"rel": "mask-icon", "href": "favicons/favicon_mask-icon.svg", "color": "#222832"},
+    {"rel": "apple-touch-icon", "sizes": "500x500", "href": "favicons/favicon_500.png"},
 ]
+
+# sphinx-sitemap configuration #####################################
+html_baseurl = "https://optimex.readthedocs.io/"
+sitemap_include_hidden = True
