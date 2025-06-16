@@ -136,5 +136,5 @@ html[data-theme="dark"] .sd-card {
 
 .tab-content {
     padding-top: 1em;
-    /* box-shadow: none; */
+    box-shadow: 0 -2px var(--tabs--border);
 }
