@@ -488,7 +488,7 @@ def create_model(
         def fulfill_demand_rule(model, f, t):
             return (
                 sum(
-                    model.foreground_production[p, f, tau]
+                    model.foreground_production[p, f, tau] # TODO: DOUBLE CHECK IF NECESSARY
                     * model.var_installation[p, t - tau]
                     for p in model.PROCESS
                     for tau in model.PROCESS_TIME
