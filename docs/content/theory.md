@@ -1,3 +1,24 @@
 # Theory
 
-This section explains some of the theory behind time-explicit transition pathway optimizations with `optimex`. In contrast to the [Getting Started section](getting_started/index.md), we explain a bit more of what`s going on in the background here. If this is still too vague for you, you can always check out our [API reference](api/index).
+The idea behind `optimex` is combining transition pathway optimization with time-explicit Life Cycle Assessment (LCA). 
+
+Transition pathway optimization aims to identify the optimal timing and scale of technology deployment to fulfil some kind of objective, like minimizing environmental impacts over a transition period. Traditional approaches model time as a sequence of capacity decisions but often ignore key temporal aspects considering environmental impacts.
+
+`optimex` addresses this gap by incorporating three essential temporal dependencies into the optimization:
+1.	Technology Evolution
+Future technologies are expected to become more sustainable. By allowing process inventories to change over time, optimex captures the reduced environmental impacts of deploying improved technologies later in the transition.
+
+2.	Life Cycle Timing
+Processes within a life cycle occur in a sequence—construction happens before use, and use precedes end-of-life. optimex models this by spreading process inputs and outputs across time, rather than assuming they occur at a single point.
+
+3.	Emission Accumulation
+Environmental impacts result from emissions accumulating over time, not from single pulses. By maintaining the time structure during inventory calculation and applying dynamic characterization functions, `optimex` enables more accurate modeling of impact accumulation.
+
+These temporal considerations are implemented by extending the standard 2D LCA matrices to 3D tensors, where the added time dimension allows inventories and impacts to vary over time. The optimization then determines the environmentally optimal deployment of technologies, accounting for how these temporal factors influence outcomes across the entire transition period. 
+
+
+This framework allows for a more representative modeling of environmental impacts, ultimately supporting better-informed decisions for sustainable system transitions.
+
+```{note}
+An explanation on how exactly `optimex` handles the dimensional expansion of LCA vectors and matrices will be added at some point in the near future.
+```

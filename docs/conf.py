@@ -184,7 +184,7 @@ html_theme_options = {
     "footer_start": ["copyright"],
     "footer_end": ["footer"],
     "secondary_sidebar_items": ["page-toc", "edit-this-page", "sourcelink", "support"],
-    "header_links_before_dropdown": 5,
+    "header_links_before_dropdown": 4,
     # page elements content
     "icon_links": [
         {

@@ -72,7 +72,6 @@ hidden:
 maxdepth: 1
 ---
 Installation <content/installation>
-Getting Started <content/getting_started>
 Theory <content/theory>
 Examples <content/examples/index>
 API <content/api/index>
