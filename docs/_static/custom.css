@@ -66,6 +66,15 @@ html[data-theme="dark"] .bd-header {
     margin-left: 0.35rem;
 }
 
+html[data-theme="light"] .bd-header-announcement {
+    color: 
+    background-color: #00549f;
+}
+
+html[data-theme="dark"] .bd-header-announcement {
+    background-color: #00549f;
+}
+
 .sd-card {
     border-radius: 12px;
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
