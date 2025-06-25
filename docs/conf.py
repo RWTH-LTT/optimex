@@ -176,7 +176,7 @@ html_sidebars = {
 
 html_theme_options = {
     # page elements
-    "announcement": "✨ More content updates are coming this week, stay tuned! ✨",
+    # "announcement": "✨ More content updates are coming this week, stay tuned! ✨",
     "navbar_start": ["navbar-logo"],
     "navbar_end": ["theme-switcher", "navbar-icon-links.html"],
     "navbar_align": "content",
