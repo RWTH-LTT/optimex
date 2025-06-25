@@ -67,12 +67,11 @@ html[data-theme="dark"] .bd-header {
 }
 
 html[data-theme="light"] .bd-header-announcement {
-    color: 
-    background-color: #00549f;
+    background-color: #b2d8ff;
 }
 
 html[data-theme="dark"] .bd-header-announcement {
-    background-color: #00549f;
+    background-color: #003f77;
 }
 
 .sd-card {
