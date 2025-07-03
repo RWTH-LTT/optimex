@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-07-04
+* Fixed an issue with process installation scaling
+
 ## [0.2.0] - 2025-05-28
 * Introduced automatic testing
 * Differentiation between capacity installment and actual operation
