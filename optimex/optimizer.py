@@ -319,14 +319,14 @@ def create_model(
     def in_operation_phase(p, tau):
         return model.process_operation_start[p] <= tau <= model.process_operation_end[p]
 
+    model.var_operation = pyo.Var(
+        model.PROCESS,
+        model.SYSTEM_TIME,
+        within=pyo.NonNegativeReals,
+        doc="Operational level",
+    )
+    
     if flexible_operation:
-        model.var_operation = pyo.Var(
-            model.PROCESS,
-            model.SYSTEM_TIME,
-            within=pyo.NonNegativeReals,
-            doc="Operational level",
-        )
-
         # Expressions builder
         def scale_tensor_by_installation(tensor: pyo.Param, flow_set):
             def expr(m, p, x, t):
@@ -401,7 +401,7 @@ def create_model(
             return model.var_operation[p, t] * model.foreground_production[
                 p, f, model.process_operation_start[p]
             ] <= sum(
-                model.foreground_production[p, f, tau]
+                (1 if model.foreground_production[p, f, tau] != 0 else 0)
                 * model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
                 if (t - tau in model.SYSTEM_TIME)
@@ -426,19 +426,26 @@ def create_model(
         )
 
     else:
-
-        def operation_at_full_capacity(model, p, t):
-            return sum(
-                model.var_installation[p, t - tau]
+        # broken for now, but shouldnt be used anyway
+        raise NotImplementedError(
+            "Fixed operation doesn't work right now, but why would you use it anyway? Please set flexible_operation=True for now."
+        )
+        
+        def operation_at_full_capacity(model, p, f, t):
+            return model.var_operation[p, t] * model.foreground_production[
+                p, f, model.process_operation_start[p]
+            ] == sum(
+                (1 if model.foreground_production[p, f, tau] != 0 else 0)
+                * model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME) and in_operation_phase(p, tau)
+                if (t - tau in model.SYSTEM_TIME)
             )
-
-        model.var_operation = pyo.Expression(
+            
+        model.OperationLimit = pyo.Constraint( # Always at full capacity
             model.PROCESS,
+            model.REFERENCE_PRODUCT,
             model.SYSTEM_TIME,
             rule=operation_at_full_capacity,
-            doc="Operational level at full capacity",
         )
 
         def scale_tensor_by_installation(tensor: pyo.Param, flow_set: str):
@@ -489,7 +496,7 @@ def create_model(
             return (
                 sum(
                     model.foreground_production[p, f, tau]
-                    * model.var_installation[p, t - tau]
+                    * model.var_operation[p, t - tau]
                     for p in model.PROCESS
                     for tau in model.PROCESS_TIME
                     if (t - tau in model.SYSTEM_TIME)

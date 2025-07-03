@@ -166,8 +166,9 @@ class PostProcessor:
         The DataFrame will have a MultiIndex with 'Time' and 'Process'.
         The values are the installed capacities for each process at each time step.
         """
+        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
         installation_matrix = {
-            (t, p): pyo.value(self.m.var_installation[p, t])
+            (t, p): pyo.value(self.m.var_installation[p, t]) * fg_scale
             for p in self.m.PROCESS
             for t in self.m.SYSTEM_TIME
         }
@@ -186,8 +187,9 @@ class PostProcessor:
         The DataFrame will have a MultiIndex with 'Time' and 'Process'.
         The values are the operational levels for each process at each time step.
         """
+        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
         operation_matrix = {
-            (t, p): pyo.value(self.m.var_operation[p, t])
+            (t, p): pyo.value(self.m.var_operation[p, t]) * fg_scale
             for p in self.m.PROCESS
             for t in self.m.SYSTEM_TIME
         }

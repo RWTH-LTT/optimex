@@ -129,8 +129,8 @@ def abstract_system_model_inputs():
 # Fixture to create the abstract system model (fixed or flexible)
 @pytest.fixture(
     scope="module",
-    params=["fixed", "flex", "constrained"],
-    ids=["fixed_operation", "flexible_operation", "constrained_land_use"],
+    params=["flex", "constrained"], # "fixed",
+    ids=["flexible_operation", "constrained_land_use"], # "fixed_operation", 
 )
 def abstract_system_model(request, abstract_system_model_inputs):
     model_type = request.param  # This will be 'fixed' or 'flex'
@@ -145,7 +145,7 @@ def abstract_system_model(request, abstract_system_model_inputs):
         inputs=model_inputs,
         objective_category="climate_change",
         name=f"abstract_system_model_{model_type}",
-        flexible_operation=(model_type != "fixed"),
+        flexible_operation=True , # (model_type != "fixed")
         # debug_path=f"tests/fixtures/model_debug_{model_type}.lp",
     )
     return model

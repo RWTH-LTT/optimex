@@ -42,10 +42,12 @@ class CharacterizationMethodConfig(BaseModel):
         description="User-defined name for the impact category "
         "(e.g., 'climate_change_dynamic_gwp').",
     )
-    brightway_method: Union[Tuple[str, str], Tuple[str, str, str]] = Field(
+    brightway_method: Union[
+        Tuple[str, str], Tuple[str, str, str], Tuple[str, str, str, str]
+    ] = Field(
         ...,
         description=(
-            "The Brightway method tuple with 2 or 3 elements "
+            "The Brightway method tuple with 2 to 4 elements "
             "(e.g., ('IPCC', 'climate change', 'GWP 100a'))."
         ),
     )
@@ -70,6 +72,8 @@ class TemporalConfig(BaseModel):
         temporal_resolution: Temporal resolution for the model.
             Options: 'year', 'month', 'day'.
         time_horizon: Length of the time horizon (in units of `temporal_resolution`).
+        fixed_time_horizon: If True, the time horizon is calculated from the time of the functional 
+            unit (FU) instead of the time of emission
         database_dates: Mapping from database names to their respective reference dates.
     """
 
@@ -82,6 +86,11 @@ class TemporalConfig(BaseModel):
     )
     time_horizon: int = Field(
         100, description="Length of the time horizon in units of temporal resolution."
+    )
+    fixed_time_horizon: bool = Field(
+        True,
+        description="If True, the time horizon is calculated from the time of the functional unit (FU) "
+        "instead of the time of emission.",
     )
     database_dates: Optional[Dict[str, Union[datetime, str]]] = Field(
         None,
@@ -309,8 +318,8 @@ class LCADataProcessor:
         longest_demand_interval = 0
         for flow, td in raw_demand.items():
             years = td.date.astype("datetime64[Y]").astype(int) + 1970
-            if len(years) > longest_demand_interval:
-                longest_demand_interval = len(years)
+            if years[-1] - start_year > longest_demand_interval:
+                longest_demand_interval = years[-1] - start_year
             amounts = td.amount
 
             # Create a dictionary of (flow, year) -> amount
@@ -319,7 +328,7 @@ class LCADataProcessor:
             )
             self._reference_products.add(flow)
 
-        self._system_time = range(start_year, start_year + longest_demand_interval)
+        self._system_time = range(start_year, start_year + longest_demand_interval + 1)
         logger.info(
             "Identified demand in system time range of %s for functional flows %s",
             self._system_time,
@@ -591,9 +600,9 @@ class LCADataProcessor:
 
             except Exception as e:
                 logger.error(
-                    f"Error occurred while processing database {db_name}: {str(e)}"
+                    f"Error occurred while processing database {db_name}: {str(e)}",
                 )
-                continue  # Continue with the next database if one fails
+                raise
 
         # Combine results from all databases
         for inventory_tensor, elementary_flows in results:
@@ -770,7 +779,7 @@ class LCADataProcessor:
                 df_char = characterize(
                     df,
                     metric="GWP",
-                    fixed_time_horizon=True,
+                    fixed_time_horizon=self.config.temporal.fixed_time_horizon,
                     base_lcia_method=method,
                     time_horizon=time_horizon,
                 )
@@ -797,7 +806,7 @@ class LCADataProcessor:
                     df_char = characterize(
                         df_row,
                         metric="radiative_forcing",
-                        fixed_time_horizon=True,
+                        fixed_time_horizon=self.config.temporal.fixed_time_horizon,
                         base_lcia_method=method,
                         time_horizon=time_horizon,
                         time_horizon_start=pd.Timestamp(start_date),
