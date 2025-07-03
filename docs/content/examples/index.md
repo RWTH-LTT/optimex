@@ -22,6 +22,34 @@ A simple example on how to use `optimex`, explaining its capabilities based on a
 by @JanTautorus
 :::
 
+:::{grid-item-card} 🌱💧 Mini Hydrogen Example
+:link: ./mini_hydrogen_case.html
+:link-type: url
+:class-body: sphinx-design-class-body-examples
+:text-align: left
+:style: margin-bottom: 20px;
+Demonstrating optimex on a very simple hydrogen case study, with production via SMR or PEM electrolysis.
+<!-- ```{image} ./data/ev_lifecycle_dark.svg
+:class: only-dark
+```
+```{image} ./data/ev_lifecycle_light.svg
+:class: only-light
+``` -->
++++
+by @TimoDiepers & @JanTautorus
+:::
+
+:::{grid-item-card} More Examples coming soon... ⏳🚧
+:link: ./index.html
+:link-type: url
+:class-body: sphinx-design-class-body-examples
+:text-align: left
+:style: margin-bottom: 20px;
+Just be patient...
++++
+by @You?
+:::
+
 :::{grid-item-card} Do you have anything to add? 🧐
 :link: ./index.html
 :link-type: url

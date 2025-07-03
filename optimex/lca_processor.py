@@ -430,7 +430,7 @@ class LCADataProcessor:
                     production_tensor.update(
                         {
                             (act["code"], act["reference product"], year): exc["amount"]
-                            * 1
+                            * factor
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
