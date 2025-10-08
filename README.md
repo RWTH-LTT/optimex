@@ -27,7 +27,7 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
 
 During the transition pathway optimization, `optimex` simultaneously accounts for these temporal considerations, identifying the environmentally optimal process deployment over the transition period.
   
-## Getting Started
+## First Steps
 
 - [Installation Guide](https://optimex.readthedocs.io/en/latest/content/installation.html)
 - [Getting Started Tutorial](https://optimex.readthedocs.io/en/latest/content/getting_started.html)
