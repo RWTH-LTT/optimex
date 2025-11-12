@@ -138,7 +138,7 @@ def abstract_system_model(request, abstract_system_model_inputs):
     if model_type == "constrained":
         # Set the impact limit for the constrained model
         model_inputs.category_impact_limit = {
-            "land_use": 100,
+            "land_use": 88.5,
         }
     # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(

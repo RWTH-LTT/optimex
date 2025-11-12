@@ -45,7 +45,7 @@ def test_all_params_scaled(abstract_system_model_inputs):
         inputs=raw,
         objective_category="climate_change",
         name="test_model",
-        flexible_operation=False,
+        flexible_operation=True,
     )
 
     # 3) Now assert model.param == scaled_inputs.param
@@ -88,8 +88,8 @@ def test_model_solution_is_optimal(solved_system_model):
     "model_type, expected_value",
     [
         # ("fixed", 3.15417e-10),  # Expected value for the fixed model
-        ("flex", 2.81685e-10),  # Expected value for the flexible model
-        ("constrained", 2.83062e-10),  # Expected value for the constrained model
+        ("flex", 1.05036e-10),  # Expected value for the flexible model
+        ("constrained", 1.05038e-10),  # Expected value for the constrained model
     ],
     ids=["flex_result", "constrained_result"], # "fixed_result", 
 )
@@ -117,18 +117,19 @@ def test_model_scaling_values_within_tolerance(solved_system_model):
         or model.name == "abstract_system_model_flex"
     ):
         expected_values = {
-            ("P1", 2025): 10.00,
-            ("P1", 2027): 10.00,
-            ("P2", 2021): 10.00,
-            ("P2", 2023): 10.00,
+            ("P1", 2025): 10.0,
+            ("P1", 2027): 10.0,
+            ("P2", 2021): 10.0,
+            ("P2", 2023): 10.0,
         }
     elif model.name == "abstract_system_model_constrained":
         expected_values = {
-            ("P1", 2027): 5.44/2,
-            ("P2", 2021): 20.00/2,
-            ("P2", 2023): 20.00/2,
-            ("P2", 2025): 20.00/2,
-            ("P2", 2027): 14.56/2,
+            ("P1", 2025): 7.554094,
+            ("P1", 2027): 10.0,
+            ("P2", 2021): 10.0,
+            ("P2", 2023): 10.0,
+            ("P2", 2025): 2.445906,
+
         }
     else:
         pytest.skip(f"Unknown model name: {model.name}")

@@ -131,7 +131,6 @@ class PostProcessor:
         impacts = {
             (c, p, t): pyo.value(self.m.specific_impact[c, p, t])
             * cat_scales[c]
-            * fg_scale
             for c in self.m.CATEGORY
             for p in self.m.PROCESS
             for t in self.m.SYSTEM_TIME
