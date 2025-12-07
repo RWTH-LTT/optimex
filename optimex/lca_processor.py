@@ -12,6 +12,7 @@ from dynamic_characterization import characterize
 from loguru import logger
 from pydantic import BaseModel, Field
 from tqdm import tqdm
+from bw2data.backends.proxies import Activity
 
 
 class MetricEnum(str, Enum):
@@ -140,7 +141,7 @@ class LCAConfig(BaseModel):
         background_inventory: Configuration for background inventory data calculation.
     """
 
-    demand: Dict[str, TemporalDistribution]
+    demand: Dict[Activity, TemporalDistribution]
     temporal: TemporalConfig
     characterization_methods: List[CharacterizationMethodConfig]
     background_inventory: Optional[BackgroundInventoryConfig] = Field(
@@ -196,7 +197,7 @@ class LCADataProcessor:
         self._intermediate_flows = {}
         self._elementary_flows = {}
 
-        self._reference_products = set()
+        self._products = set()
         self._system_time = set()
         self._process_time = set()
         self._category = set()
@@ -234,7 +235,7 @@ class LCADataProcessor:
     @property
     def reference_products(self) -> set:
         """Read-only access to the functional flows list."""
-        return self._reference_products
+        return self._products
 
     @property
     def system_time(self) -> set:
@@ -309,7 +310,7 @@ class LCADataProcessor:
         ------------
         Updates the following instance attributes:
             - self._demand: dict with keys (flow, year) and values as amounts.
-            - self._reference_products: set of flow codes present in the demand.
+            - self._products: set of flow codes present in the demand.
             - self._system_time: range of years covering the longest demand interval.
         """
         raw_demand = self.config.demand
@@ -324,15 +325,15 @@ class LCADataProcessor:
 
             # Create a dictionary of (flow, year) -> amount
             self._demand.update(
-                {(flow, year): amount for year, amount in zip(years, amounts)}
+                {(flow["code"], year): amount for year, amount in zip(years, amounts)}
             )
-            self._reference_products.add(flow)
+            self._products.add(flow["code"])
 
         self._system_time = range(start_year, start_year + longest_demand_interval + 1)
         logger.info(
             "Identified demand in system time range of %s for functional flows %s",
             self._system_time,
-            self._reference_products,
+            self._products,
         )
 
     def _construct_foreground_tensors(self) -> None:
@@ -376,17 +377,16 @@ class LCADataProcessor:
         production_tensor = {}
         biosphere_tensor = {}
 
-        for act in self.foreground_db:
-            # Only process activities present in the demand
-            if act["reference product"] not in self._reference_products:
-                continue
-
+        for node in self.foreground_db:
+            if node["type"] not in bd.labels.process_node_types:
+                continue  # Skip product & biosphere nodes
+            
             # Store process information
-            self._processes.setdefault(act["code"], act["name"])
-            if (limits := act.get("operation_time_limits")) is not None:
-                self._operation_time_limits[act["code"]] = limits
+            self._processes.setdefault(node["code"], node["name"])
+            if (limits := node.get("operation_time_limits")) is not None:
+                self._operation_time_limits[node["code"]] = limits
 
-            for exc in act.exchanges():
+            for exc in node.exchanges():
                 # Extract temporal distribution
                 temporal_dist = exc.get("temporal_distribution", {})
                 years = temporal_dist.date.astype("timedelta64[Y]").astype(int)
@@ -401,42 +401,43 @@ class LCADataProcessor:
                     continue
 
                 # Determine the tensor type (technosphere or biosphere)
-                type = exc["type"]
                 input_code = exc.input["code"]
                 input_name = exc.input["name"]
 
                 # Update tensors and flow dictionaries
-                if type == "technosphere":
+                if exc["type"] in bd.labels.consumption_edge_default:
                     technosphere_tensor.update(
                         {
-                            (act["code"], input_code, year): exc["amount"] * factor
+                            (node["code"], input_code, year): exc["amount"] * factor
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
                     if exc.get("operation"):
-                        self._operation_flow.update({(act["code"], input_code): True})
+                        self._operation_flow.update({(node["code"], input_code): True})
                     self._intermediate_flows.setdefault(input_code, input_name)
-                elif type == "biosphere":
+                    
+                elif exc["type"] in bd.labels.biosphere_edge_default:
                     biosphere_tensor.update(
                         {
-                            (act["code"], input_code, year): exc["amount"] * factor
+                            (node["code"], input_code, year): exc["amount"] * factor
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
                     if exc.get("operation"):
-                        self._operation_flow.update({(act["code"], input_code): True})
+                        self._operation_flow.update({(node["code"], input_code): True})
                     self._elementary_flows.setdefault(input_code, input_name)
-                elif type == "production":
+                    
+                elif exc["type"] == bd.labels.production_edge_default:
                     production_tensor.update(
                         {
-                            (act["code"], act["reference product"], year): exc["amount"]
+                            (node["code"], input_code, year): exc["amount"]
                             * factor
                             for year, factor in zip(years, temporal_factor)
                         }
                     )
                     if exc.get("operation"):
                         self._operation_flow.update(
-                            {(act["code"], act["reference product"]): True}
+                            {(node["code"], input_code): True}
                         )
 
         # Store the tensors as protected variables
