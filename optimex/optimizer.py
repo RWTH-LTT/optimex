@@ -70,9 +70,9 @@ def create_model(
         doc="Set of processes (or activities), indexed by p",
         initialize=scaled_inputs.PROCESS,
     )
-    model.REFERENCE_PRODUCT = pyo.Set(
-        doc="Set of reference products, indexed by r",
-        initialize=scaled_inputs.REFERENCE_PRODUCT,
+    model.PRODUCT_FLOW = pyo.Set(
+        doc="Set of product flows produced in foreground processes",
+        initialize=scaled_inputs.PRODUCT_FLOW,
     )
     model.INTERMEDIATE_FLOW = pyo.Set(
         doc="Set of intermediate flows, indexed by i",
@@ -83,7 +83,7 @@ def create_model(
         initialize=scaled_inputs.ELEMENTARY_FLOW,
     )
     model.FLOW = pyo.Set(
-        initialize=lambda m: m.REFERENCE_PRODUCT
+        initialize=lambda m: m.PRODUCT_FLOW
         | m.INTERMEDIATE_FLOW
         | m.ELEMENTARY_FLOW,
         doc="Set of all flows, indexed by f",
@@ -115,7 +115,7 @@ def create_model(
         initialize=scaled_inputs.process_names,
     )
     model.demand = pyo.Param(
-        model.REFERENCE_PRODUCT,
+        model.PRODUCT_FLOW,
         model.SYSTEM_TIME,
         within=pyo.Reals,
         doc="time-explicit demand vector d",
@@ -142,7 +142,7 @@ def create_model(
     )
     model.foreground_production = pyo.Param(
         model.PROCESS,
-        model.REFERENCE_PRODUCT,
+        model.PRODUCT_FLOW,
         model.PROCESS_TIME,
         within=pyo.Reals,
         doc="time-explicit foreground production tensor F",
@@ -397,10 +397,25 @@ def create_model(
             rule=scaled_inventory_tensor,
         )
 
+        fg_scale = getattr(model, "scales", {}).get("foreground", 1.0)
+
         def operation_limited_by_installation_rule(model, p, f, t):
-            return model.var_operation[p, t] * model.foreground_production[
-                p, f, model.process_operation_start[p]
-            ] <= sum(
+            """
+            Link operational output to the installed capacity.
+
+            Note: foreground inventories (including production) are scaled by
+            ``fg_scale`` in ``OptimizationModelInputs.get_scaled_copy`` for numerical
+            stability. The installation variable, however, is kept in real units
+            because process limits are expressed on the physical capacity. We therefore
+            rescale the (already scaled) production term back to real units inside this
+            constraint to avoid under‑estimating the required installation and any
+            installation-dependent flows (e.g., background exchanges).
+            """
+            return (
+                model.var_operation[p, t]
+                * model.foreground_production[p, f, model.process_operation_start[p]]
+                * fg_scale
+            ) <= sum(
                 (1 if model.foreground_production[p, f, tau] != 0 else 0)
                 * model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
@@ -409,20 +424,55 @@ def create_model(
 
         model.OperationLimit = pyo.Constraint(
             model.PROCESS,
-            model.REFERENCE_PRODUCT,
+            model.PRODUCT_FLOW,
             model.SYSTEM_TIME,
             rule=operation_limited_by_installation_rule,
         )
 
         def fulfill_demand_rule(model, f, t):
-            return model.demand[f, t] == sum(
+            """
+            Require production to at least cover external demand; the material
+            balance ensures total production also covers internal consumption.
+            """
+            return model.demand[f, t] <= sum(
                 model.foreground_production[p, f, model.process_operation_start[p]]
                 * model.var_operation[p, t]
                 for p in model.PROCESS
+                if (p, f, model.process_operation_start[p]) in model.foreground_production
             )
 
         model.DemandConstraint = pyo.Constraint(
-            model.REFERENCE_PRODUCT, model.SYSTEM_TIME, rule=fulfill_demand_rule
+            model.PRODUCT_FLOW, model.SYSTEM_TIME, rule=fulfill_demand_rule
+        )
+
+        def material_balance_rule(model, f, t):
+            """
+            For each foreground product (reference product) and time step, require
+            that production covers both internal consumption and external demand.
+
+            Production is tied to the process operation level (var_operation),
+            while consumption can occur in installation or operation phases, hence
+            the sum of both scaled technosphere expressions.
+            """
+            production = sum(
+                model.foreground_production[p, f, model.process_operation_start[p]]
+                * model.var_operation[p, t]
+                for p in model.PROCESS
+                if (p, f, model.process_operation_start[p])
+                in model.foreground_production
+            )
+            if f in model.INTERMEDIATE_FLOW:
+                consumption = sum(
+                    model.scaled_technosphere_dependent_on_installation[p, f, t]
+                    + model.scaled_technosphere_dependent_on_operation[p, f, t]
+                    for p in model.PROCESS
+                )
+            else:
+                consumption = 0
+            return production == consumption + model.demand[f, t]
+
+        model.MaterialBalance = pyo.Constraint(
+            model.PRODUCT_FLOW, model.SYSTEM_TIME, rule=material_balance_rule
         )
 
     else:
@@ -443,7 +493,7 @@ def create_model(
             
         model.OperationLimit = pyo.Constraint( # Always at full capacity
             model.PROCESS,
-            model.REFERENCE_PRODUCT,
+            model.PRODUCT_FLOW,
             model.SYSTEM_TIME,
             rule=operation_at_full_capacity,
         )
@@ -505,7 +555,7 @@ def create_model(
             )
 
         model.DemandConstraint = pyo.Constraint(
-            model.REFERENCE_PRODUCT, model.SYSTEM_TIME, rule=fulfill_demand_rule
+            model.PRODUCT_FLOW, model.SYSTEM_TIME, rule=fulfill_demand_rule
         )
 
     def category_process_time_specific_impact(model, c, p, t):

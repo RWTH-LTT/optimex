@@ -233,7 +233,7 @@ class LCADataProcessor:
         return self._elementary_flows
 
     @property
-    def reference_products(self) -> set:
+    def products(self) -> set:
         """Read-only access to the functional flows list."""
         return self._products
 
@@ -327,7 +327,10 @@ class LCADataProcessor:
             self._demand.update(
                 {(flow["code"], year): amount for year, amount in zip(years, amounts)}
             )
-            self._products.add(flow["code"])
+        
+        for node in self.foreground_db:
+            if node["type"] == bd.labels.product_node_default:
+                self._products.add(node["code"])
 
         self._system_time = range(start_year, start_year + longest_demand_interval + 1)
         logger.info(

@@ -20,8 +20,8 @@ class OptimizationModelInputs(BaseModel):
     PROCESS: List[str] = Field(
         ..., description="Identifiers for all modeled processes."
     )
-    REFERENCE_PRODUCT: List[str] = Field(
-        ..., description="Identifiers for flows delivering functional output."
+    PRODUCT_FLOW: List[str] = Field(
+        ..., description="Identifiers for product flows delivered by foreground processes."
     )
     INTERMEDIATE_FLOW: List[str] = Field(
         ..., description="Identifiers for flows exchanged between processes."
@@ -49,7 +49,7 @@ class OptimizationModelInputs(BaseModel):
     )
 
     demand: Dict[Tuple[str, int], float] = Field(
-        ..., description=("Maps (reference_product, system_time) to demand amount.")
+        ..., description=("Maps (product_flow, system_time) to demand amount.")
     )
     operation_flow: Dict[Tuple[str, str], bool] = Field(
         ...,
@@ -73,7 +73,7 @@ class OptimizationModelInputs(BaseModel):
     foreground_production: Dict[Tuple[str, str, int], float] = Field(
         ...,
         description=(
-            "Maps (process, reference_product, process_time) to produced amount."
+            "Maps (process, product_flow, process_time) to produced amount."
         ),
     )
 
@@ -166,7 +166,7 @@ class OptimizationModelInputs(BaseModel):
     def check_all_keys(cls, data):
         # Convert lists to sets for fast lookup
         processes = set(data.get("PROCESS", []))
-        reference_products = set(data.get("REFERENCE_PRODUCT", []))
+        product_flows = set(data.get("PRODUCT_FLOW", []))
         intermediate_flows = set(data.get("INTERMEDIATE_FLOW", []))
         elementary_flows = set(data.get("ELEMENTARY_FLOW", []))
         background_ids = set(data.get("BACKGROUND_ID", []))
@@ -185,7 +185,7 @@ class OptimizationModelInputs(BaseModel):
         # Now validate keys in all dict fields similarly
 
         for key in data.get("demand", {}).keys():
-            validate_keys([key[0]], reference_products, "demand functional flows")
+            validate_keys([key[0]], product_flows, "demand product flows")
             validate_keys([key[1]], system_times, "demand system times")
 
         for key in data.get("foreground_technosphere", {}).keys():
@@ -209,7 +209,7 @@ class OptimizationModelInputs(BaseModel):
         for key in data.get("foreground_production", {}).keys():
             validate_keys([key[0]], processes, "foreground_production processes")
             validate_keys(
-                [key[1]], reference_products, "foreground_production functional flows"
+                [key[1]], product_flows, "foreground_production products"
             )
             validate_keys(
                 [key[2]], process_times, "foreground_production process times"
@@ -425,10 +425,15 @@ class ModelInputManager:
         Extracts data from the LCADataProcessor and constructs OptimizationModelInputs.
         """
         # Extract data
+        product_flows = list(lca_processor.products)
+        # Fallback: include any flows appearing in demand as product flows
+        if not product_flows:
+            product_flows = list({k[0] for k in lca_processor.demand.keys()})
+
         data = {
             "PROCESS": list(lca_processor.processes.keys()),
             "process_names": lca_processor.processes,
-            "REFERENCE_PRODUCT": list(lca_processor.reference_products),
+            "PRODUCT_FLOW": product_flows,
             "INTERMEDIATE_FLOW": list(lca_processor.intermediate_flows.keys()),
             "ELEMENTARY_FLOW": list(lca_processor.elementary_flows.keys()),
             "BACKGROUND_ID": list(lca_processor.background_dbs.keys()),

@@ -1,4 +1,5 @@
 .DS_Store
+.bw2data/
 docs_local/
 
 # Byte-compiled / optimized / DLL files
