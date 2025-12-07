@@ -20,10 +20,7 @@ class OptimizationModelInputs(BaseModel):
     PROCESS: List[str] = Field(
         ..., description="Identifiers for all modeled processes."
     )
-    PRODUCT_FLOW: List[str] = Field(
-        ..., description="Identifiers for product flows delivered by foreground processes."
-    )
-    INTERMEDIATE_FLOW: List[str] = Field(
+    PRODUCT: List[str] = Field(
         ..., description="Identifiers for flows exchanged between processes."
     )
     ELEMENTARY_FLOW: List[str] = Field(
@@ -49,7 +46,7 @@ class OptimizationModelInputs(BaseModel):
     )
 
     demand: Dict[Tuple[str, int], float] = Field(
-        ..., description=("Maps (product_flow, system_time) to demand amount.")
+        ..., description=("Maps (intermediate_flow, system_time) to demand amount.")
     )
     operation_flow: Dict[Tuple[str, str], bool] = Field(
         ...,
@@ -72,9 +69,7 @@ class OptimizationModelInputs(BaseModel):
     )
     foreground_production: Dict[Tuple[str, str, int], float] = Field(
         ...,
-        description=(
-            "Maps (process, product_flow, process_time) to produced amount."
-        ),
+        description=("Maps (process, intermediate_flow, process_time) to produced amount."),
     )
 
     background_inventory: Dict[Tuple[str, str, str], float] = Field(
@@ -166,8 +161,7 @@ class OptimizationModelInputs(BaseModel):
     def check_all_keys(cls, data):
         # Convert lists to sets for fast lookup
         processes = set(data.get("PROCESS", []))
-        product_flows = set(data.get("PRODUCT_FLOW", []))
-        intermediate_flows = set(data.get("INTERMEDIATE_FLOW", []))
+        products = set(data.get("PRODUCT", []))
         elementary_flows = set(data.get("ELEMENTARY_FLOW", []))
         background_ids = set(data.get("BACKGROUND_ID", []))
         process_times = set(data.get("PROCESS_TIME", []))
@@ -185,16 +179,12 @@ class OptimizationModelInputs(BaseModel):
         # Now validate keys in all dict fields similarly
 
         for key in data.get("demand", {}).keys():
-            validate_keys([key[0]], product_flows, "demand product flows")
+            validate_keys([key[0]], products, "demand product flows")
             validate_keys([key[1]], system_times, "demand system times")
 
         for key in data.get("foreground_technosphere", {}).keys():
             validate_keys([key[0]], processes, "foreground_technosphere processes")
-            validate_keys(
-                [key[1]],
-                intermediate_flows,
-                "foreground_technosphere intermediate flows",
-            )
+            validate_keys([key[1]], products, "foreground_technosphere products")
             validate_keys(
                 [key[2]], process_times, "foreground_technosphere process times"
             )
@@ -208,9 +198,7 @@ class OptimizationModelInputs(BaseModel):
 
         for key in data.get("foreground_production", {}).keys():
             validate_keys([key[0]], processes, "foreground_production processes")
-            validate_keys(
-                [key[1]], product_flows, "foreground_production products"
-            )
+            validate_keys([key[1]], products, "foreground_production products")
             validate_keys(
                 [key[2]], process_times, "foreground_production process times"
             )
@@ -220,7 +208,7 @@ class OptimizationModelInputs(BaseModel):
                 [key[0]], background_ids, "background_inventory background IDs"
             )
             validate_keys(
-                [key[1]], intermediate_flows, "background_inventory intermediate flows"
+                [key[1]], products, "background_inventory products"
             )
             validate_keys(
                 [key[2]], elementary_flows, "background_inventory environmental flows"
@@ -301,7 +289,7 @@ class OptimizationModelInputs(BaseModel):
                         "fixed operation in the optimization later."
                     )
 
-        check_constancy(self.foreground_technosphere, "intermediate flow")
+        check_constancy(self.foreground_technosphere, "product flow")
         check_constancy(self.foreground_biosphere, "elementary flow")
 
         return self
@@ -424,17 +412,10 @@ class ModelInputManager:
         """
         Extracts data from the LCADataProcessor and constructs OptimizationModelInputs.
         """
-        # Extract data
-        product_flows = list(lca_processor.products)
-        # Fallback: include any flows appearing in demand as product flows
-        if not product_flows:
-            product_flows = list({k[0] for k in lca_processor.demand.keys()})
-
         data = {
             "PROCESS": list(lca_processor.processes.keys()),
             "process_names": lca_processor.processes,
-            "PRODUCT_FLOW": product_flows,
-            "INTERMEDIATE_FLOW": list(lca_processor.intermediate_flows.keys()),
+            "PRODUCT": list(lca_processor.products.keys()),
             "ELEMENTARY_FLOW": list(lca_processor.elementary_flows.keys()),
             "BACKGROUND_ID": list(lca_processor.background_dbs.keys()),
             "PROCESS_TIME": list(lca_processor.process_time),

@@ -194,10 +194,9 @@ class LCADataProcessor:
 
         self._demand = {}
         self._processes = {}
-        self._intermediate_flows = {}
+        self._products = {}
         self._elementary_flows = {}
 
-        self._products = set()
         self._system_time = set()
         self._process_time = set()
         self._category = set()
@@ -223,19 +222,14 @@ class LCADataProcessor:
         return self._processes
 
     @property
-    def intermediate_flows(self) -> dict:
-        """Read-only access to the intermediate flows dictionary."""
-        return self._intermediate_flows
+    def products(self) -> dict:
+        """Read-only access to the product flows dictionary."""
+        return self._products
 
     @property
     def elementary_flows(self) -> dict:
         """Read-only access to the elementary flows dictionary."""
         return self._elementary_flows
-
-    @property
-    def products(self) -> set:
-        """Read-only access to the functional flows list."""
-        return self._products
 
     @property
     def system_time(self) -> set:
@@ -310,7 +304,6 @@ class LCADataProcessor:
         ------------
         Updates the following instance attributes:
             - self._demand: dict with keys (flow, year) and values as amounts.
-            - self._products: set of flow codes present in the demand.
             - self._system_time: range of years covering the longest demand interval.
         """
         raw_demand = self.config.demand
@@ -327,16 +320,13 @@ class LCADataProcessor:
             self._demand.update(
                 {(flow["code"], year): amount for year, amount in zip(years, amounts)}
             )
+            self._products.setdefault(flow["code"], flow["name"])
         
-        for node in self.foreground_db:
-            if node["type"] == bd.labels.product_node_default:
-                self._products.add(node["code"])
-
         self._system_time = range(start_year, start_year + longest_demand_interval + 1)
         logger.info(
             "Identified demand in system time range of %s for functional flows %s",
             self._system_time,
-            self._products,
+            {k[0] for k in self._demand},
         )
 
     def _construct_foreground_tensors(self) -> None:
@@ -359,10 +349,8 @@ class LCADataProcessor:
             - self._foreground_biosphere: dict mapping
               (process_code, flow_code, year) to amount for biosphere flows.
             - self._foreground_production: dict mapping
-              (process_code, reference_product, year) to amount for produced
-              functional flows.
-            - self._intermediate_flows: dict mapping intermediate flow codes to
-              their names.
+              (process_code, product_flow, year) to amount for produced flows.
+            - self._products: dict mapping product flow codes to their names.
             - self._elementary_flows: dict mapping elementary flow codes to their
               names.
             - self._processes: dict mapping process codes to their names.
@@ -417,7 +405,7 @@ class LCADataProcessor:
                     )
                     if exc.get("operation"):
                         self._operation_flow.update({(node["code"], input_code): True})
-                    self._intermediate_flows.setdefault(input_code, input_name)
+                    self._products.setdefault(input_code, input_name)
                     
                 elif exc["type"] in bd.labels.biosphere_edge_default:
                     biosphere_tensor.update(
@@ -464,13 +452,13 @@ class LCADataProcessor:
         log_tensor_dimensions(production_tensor, "Production")
 
     def _calculate_inventory_of_db(
-        self, db_name: str, intermediate_flows: dict, methods: list, cutoff: float
+        self, db_name: str, products: dict, methods: list, cutoff: float
     ) -> Tuple[dict, dict]:
         """
         Calculate the life cycle inventory for a specified background database.
 
-        Performs an LCA for each intermediate flow exchanged with the given database
-        using the specified LCIA method. Intermediate flows are mapped to resulting
+        Performs an LCA for each product flow exchanged with the given database
+        using the specified LCIA method. Product flows are mapped to resulting
         elementary flows to construct an inventory tensor. A cutoff threshold is
         applied to filter insignificant results.
 
@@ -478,8 +466,8 @@ class LCADataProcessor:
         ----------
         db_name : str
             Name of the background database to analyze.
-        intermediate_flows : dict
-            Dictionary mapping intermediate flow codes to flow names.
+        products : dict
+            Dictionary mapping product flow codes to flow names.
         methods : List[tuple]
             A List of LCIA methods represented by a tuple (e.g.,
             `("EF v3.1", "climate change", "global warming potential (GWP100)")`).
@@ -490,7 +478,7 @@ class LCADataProcessor:
         Returns
         -------
         inventory_tensor : dict
-            Dictionary with keys as (db_name, intermediate_flow_code,
+            Dictionary with keys as (db_name, product_flow_code,
             elementary_flow_code) and values as flow amounts.
         elementary_flows : dict
             Dictionary mapping elementary flow codes to their names.
@@ -502,8 +490,8 @@ class LCADataProcessor:
         elementary_flows = {}
         activity_cache = {}
 
-        # Cache activity objects by looking up intermediate flows in the database
-        for key in intermediate_flows.keys():
+        # Cache activity objects by looking up product flows in the database
+        for key in products.keys():
             try:
                 activity_cache[key] = db.get(code=key)
             except Exception as e:  # Catch exceptions (e.g., if key is not valid)
@@ -573,7 +561,7 @@ class LCADataProcessor:
         most relevant contributions.
 
         The results are stored in a sparse tensor structure that maps:
-            (database name, intermediate flow code, elementary flow code) → amount
+            (database name, product flow code, elementary flow code) → amount
 
         Errors during database processing are logged, and processing continues for
         remaining databases.
@@ -597,7 +585,7 @@ class LCADataProcessor:
             try:
                 # Directly call the _calculate_inventory_of_db method for each db
                 inventory_tensor, elementary_flows = self._calculate_inventory_of_db(
-                    db_name, self._intermediate_flows, brightway_methods, cutoff
+                    db_name, self._products, brightway_methods, cutoff
                 )
                 # Store the result in the results list
                 results.append((inventory_tensor, elementary_flows))
@@ -623,7 +611,7 @@ class LCADataProcessor:
         based on the specified method (`sequential` or `parallel`). After computation
         or loading, the tensor may be saved to disk if `path_to_save` is provided.
 
-        The background inventory tensor maps (database, intermediate flow, elementary
+        The background inventory tensor maps (database, product flow, elementary
         flow) to amount. It updates internal state:
             - self._background_inventory
             - self._elementary_flows

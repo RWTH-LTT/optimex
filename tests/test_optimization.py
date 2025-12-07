@@ -14,25 +14,21 @@ def test_pyomo_model_generation(abstract_system_model):
 
 
 def test_all_sets_init(abstract_system_model, abstract_system_model_inputs):
-    # List of sets to test
-    sets_to_test = [
-        ("PROCESS", "PROCESS"),
-        ("REFERENCE_PRODUCT", "REFERENCE_PRODUCT"),
-        ("INTERMEDIATE_FLOW", "INTERMEDIATE_FLOW"),
-        ("ELEMENTARY_FLOW", "ELEMENTARY_FLOW"),
-        ("BACKGROUND_ID", "BACKGROUND_ID"),
-        ("PROCESS_TIME", "PROCESS_TIME"),
-        ("SYSTEM_TIME", "SYSTEM_TIME"),
-        ("CATEGORY", "CATEGORY"),
-    ]
+    expected_sets = {
+        "PROCESS": abstract_system_model_inputs["PROCESS"],
+        "PRODUCT": abstract_system_model_inputs["PRODUCT"],
+        "ELEMENTARY_FLOW": abstract_system_model_inputs["ELEMENTARY_FLOW"],
+        "BACKGROUND_ID": abstract_system_model_inputs["BACKGROUND_ID"],
+        "PROCESS_TIME": abstract_system_model_inputs["PROCESS_TIME"],
+        "SYSTEM_TIME": abstract_system_model_inputs["SYSTEM_TIME"],
+        "CATEGORY": abstract_system_model_inputs["CATEGORY"],
+    }
 
-    for model_set_name, input_set_name in sets_to_test:
+    for model_set_name, expected in expected_sets.items():
         model_set = getattr(abstract_system_model, model_set_name)
-        input_set = abstract_system_model_inputs[input_set_name]
-
         assert set(model_set) == set(
-            input_set
-        ), f"Set {model_set_name} does not match expected input {input_set_name}"
+            expected
+        ), f"Set {model_set_name} does not match expected values"
 
 
 def test_all_params_scaled(abstract_system_model_inputs):

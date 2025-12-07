@@ -9,8 +9,7 @@ def abstract_system_model_inputs():
     of an abstract system."""
     return {
         "PROCESS": ["P1", "P2"],
-        "REFERENCE_PRODUCT": ["R1"],
-        "INTERMEDIATE_FLOW": ["I1", "I2"],
+        "PRODUCT": ["R1", "I1", "I2"],
         "ELEMENTARY_FLOW": ["CO2", "CH4"],
         "BACKGROUND_ID": ["db_2020", "db_2030"],
         "PROCESS_TIME": [0, 1, 2, 3],

@@ -70,22 +70,16 @@ def create_model(
         doc="Set of processes (or activities), indexed by p",
         initialize=scaled_inputs.PROCESS,
     )
-    model.PRODUCT_FLOW = pyo.Set(
-        doc="Set of product flows produced in foreground processes",
-        initialize=scaled_inputs.PRODUCT_FLOW,
-    )
-    model.INTERMEDIATE_FLOW = pyo.Set(
-        doc="Set of intermediate flows, indexed by i",
-        initialize=scaled_inputs.INTERMEDIATE_FLOW,
+    model.PRODUCT = pyo.Set(
+        doc="Set of product flows exchanged between processes, indexed by i",
+        initialize=scaled_inputs.PRODUCT,
     )
     model.ELEMENTARY_FLOW = pyo.Set(
         doc="Set of elementary flows, indexed by e",
         initialize=scaled_inputs.ELEMENTARY_FLOW,
     )
     model.FLOW = pyo.Set(
-        initialize=lambda m: m.PRODUCT_FLOW
-        | m.INTERMEDIATE_FLOW
-        | m.ELEMENTARY_FLOW,
+        initialize=lambda m: m.PRODUCT | m.ELEMENTARY_FLOW,
         doc="Set of all flows, indexed by f",
     )
     model.CATEGORY = pyo.Set(
@@ -105,6 +99,10 @@ def create_model(
         initialize=scaled_inputs.SYSTEM_TIME,
     )
 
+    # Precompute helper sets (plain Python) for constraint domains
+    flows_with_production = {flow for (_, flow, _) in scaled_inputs.foreground_production.keys()}
+    flows_with_demand = {flow for (flow, _) in scaled_inputs.demand.keys()}
+
     # Parameters
     logger.info("Creating parameters")
     model.process_names = pyo.Param(
@@ -115,7 +113,7 @@ def create_model(
         initialize=scaled_inputs.process_names,
     )
     model.demand = pyo.Param(
-        model.PRODUCT_FLOW,
+        model.PRODUCT,
         model.SYSTEM_TIME,
         within=pyo.Reals,
         doc="time-explicit demand vector d",
@@ -124,7 +122,7 @@ def create_model(
     )
     model.foreground_technosphere = pyo.Param(
         model.PROCESS,
-        model.INTERMEDIATE_FLOW,
+        model.PRODUCT,
         model.PROCESS_TIME,
         within=pyo.Reals,
         doc="time-explicit foreground technosphere tensor A",
@@ -142,7 +140,7 @@ def create_model(
     )
     model.foreground_production = pyo.Param(
         model.PROCESS,
-        model.PRODUCT_FLOW,
+        model.PRODUCT,
         model.PROCESS_TIME,
         within=pyo.Reals,
         doc="time-explicit foreground production tensor F",
@@ -151,7 +149,7 @@ def create_model(
     )
     model.background_inventory = pyo.Param(
         model.BACKGROUND_ID,
-        model.INTERMEDIATE_FLOW,
+        model.PRODUCT,
         model.ELEMENTARY_FLOW,
         within=pyo.Reals,
         doc="prospective background inventory tensor G",
@@ -356,14 +354,14 @@ def create_model(
 
         model.scaled_technosphere_dependent_on_installation = (
             scale_tensor_by_installation(
-                model.foreground_technosphere, "INTERMEDIATE_FLOW"
+                model.foreground_technosphere, "PRODUCT"
             )
         )
         model.scaled_biosphere_dependent_on_installation = scale_tensor_by_installation(
             model.foreground_biosphere, "ELEMENTARY_FLOW"
         )
         model.scaled_technosphere_dependent_on_operation = scale_tensor_by_operation(
-            model.foreground_technosphere, "INTERMEDIATE_FLOW"
+            model.foreground_technosphere, "PRODUCT"
         )
         model.scaled_biosphere_dependent_on_operation = scale_tensor_by_operation(
             model.foreground_biosphere, "ELEMENTARY_FLOW"
@@ -384,7 +382,7 @@ def create_model(
                     model.background_inventory[bkg, i, e] * model.mapping[bkg, t]
                     for bkg in model.BACKGROUND_ID
                 )
-                for i in model.INTERMEDIATE_FLOW
+                for i in model.PRODUCT
             ) + (
                 model.scaled_biosphere_dependent_on_installation[p, e, t]
                 + model.scaled_biosphere_dependent_on_operation[p, e, t]
@@ -424,9 +422,13 @@ def create_model(
 
         model.OperationLimit = pyo.Constraint(
             model.PROCESS,
-            model.PRODUCT_FLOW,
+            model.PRODUCT,
             model.SYSTEM_TIME,
-            rule=operation_limited_by_installation_rule,
+            rule=lambda m, p, f, t: (
+                operation_limited_by_installation_rule(m, p, f, t)
+                if (p, f, m.process_operation_start[p]) in m.foreground_production
+                else pyo.Constraint.Skip
+            ),
         )
 
         def fulfill_demand_rule(model, f, t):
@@ -442,7 +444,11 @@ def create_model(
             )
 
         model.DemandConstraint = pyo.Constraint(
-            model.PRODUCT_FLOW, model.SYSTEM_TIME, rule=fulfill_demand_rule
+            model.PRODUCT,
+            model.SYSTEM_TIME,
+            rule=lambda m, f, t: (
+                fulfill_demand_rule(m, f, t) if f in flows_with_demand else pyo.Constraint.Skip
+            ),
         )
 
         def material_balance_rule(model, f, t):
@@ -461,7 +467,7 @@ def create_model(
                 if (p, f, model.process_operation_start[p])
                 in model.foreground_production
             )
-            if f in model.INTERMEDIATE_FLOW:
+            if f in model.PRODUCT:
                 consumption = sum(
                     model.scaled_technosphere_dependent_on_installation[p, f, t]
                     + model.scaled_technosphere_dependent_on_operation[p, f, t]
@@ -472,7 +478,13 @@ def create_model(
             return production == consumption + model.demand[f, t]
 
         model.MaterialBalance = pyo.Constraint(
-            model.PRODUCT_FLOW, model.SYSTEM_TIME, rule=material_balance_rule
+            model.PRODUCT,
+            model.SYSTEM_TIME,
+            rule=lambda m, f, t: (
+                material_balance_rule(m, f, t)
+                if (f in flows_with_production or f in flows_with_demand)
+                else pyo.Constraint.Skip
+            ),
         )
 
     else:
@@ -493,9 +505,13 @@ def create_model(
             
         model.OperationLimit = pyo.Constraint( # Always at full capacity
             model.PROCESS,
-            model.PRODUCT_FLOW,
+            model.PRODUCT,
             model.SYSTEM_TIME,
-            rule=operation_at_full_capacity,
+            rule=lambda m, p, f, t: (
+                operation_at_full_capacity(m, p, f, t)
+                if (p, f, m.process_operation_start[p]) in m.foreground_production
+                else pyo.Constraint.Skip
+            ),
         )
 
         def scale_tensor_by_installation(tensor: pyo.Param, flow_set: str):
@@ -511,7 +527,7 @@ def create_model(
             )
 
         model.scaled_technosphere = scale_tensor_by_installation(
-            model.foreground_technosphere, "INTERMEDIATE_FLOW"
+            model.foreground_technosphere, "PRODUCT"
         )
         model.scaled_biosphere = scale_tensor_by_installation(
             model.foreground_biosphere, "ELEMENTARY_FLOW"
@@ -530,7 +546,7 @@ def create_model(
                         model.background_inventory[bkg, i, e] * model.mapping[bkg, t]
                         for bkg in model.BACKGROUND_ID
                     )
-                    for i in model.INTERMEDIATE_FLOW
+                    for i in model.PRODUCT
                 )
                 + model.scaled_biosphere[p, e, t]
             )
@@ -555,7 +571,7 @@ def create_model(
             )
 
         model.DemandConstraint = pyo.Constraint(
-            model.PRODUCT_FLOW, model.SYSTEM_TIME, rule=fulfill_demand_rule
+            model.PRODUCT, model.SYSTEM_TIME, rule=fulfill_demand_rule
         )
 
     def category_process_time_specific_impact(model, c, p, t):
