@@ -431,34 +431,15 @@ def create_model(
             ),
         )
 
-        def fulfill_demand_rule(model, f, t):
+        def product_balance_rule(model, f, t):
             """
-            Require production to at least cover external demand; the material
-            balance ensures total production also covers internal consumption.
-            """
-            return model.demand[f, t] <= sum(
-                model.foreground_production[p, f, model.process_operation_start[p]]
-                * model.var_operation[p, t]
-                for p in model.PROCESS
-                if (p, f, model.process_operation_start[p]) in model.foreground_production
-            )
+            Single balance covering product flows and external demand.
 
-        model.DemandConstraint = pyo.Constraint(
-            model.PRODUCT,
-            model.SYSTEM_TIME,
-            rule=lambda m, f, t: (
-                fulfill_demand_rule(m, f, t) if f in flows_with_demand else pyo.Constraint.Skip
-            ),
-        )
-
-        def material_balance_rule(model, f, t):
-            """
-            For each foreground product (reference product) and time step, require
-            that production covers both internal consumption and external demand.
-
-            Production is tied to the process operation level (var_operation),
-            while consumption can occur in installation or operation phases, hence
-            the sum of both scaled technosphere expressions.
+            Net production (operation-linked) minus total consumption
+            (installation- and operation-linked technosphere) must match the
+            external demand. When a product has no explicit demand entry,
+            ``model.demand`` defaults to 0 so the constraint reduces to
+            production == consumption.
             """
             production = sum(
                 model.foreground_production[p, f, model.process_operation_start[p]]
@@ -477,11 +458,11 @@ def create_model(
                 consumption = 0
             return production == consumption + model.demand[f, t]
 
-        model.MaterialBalance = pyo.Constraint(
+        model.ProductBalance = pyo.Constraint(
             model.PRODUCT,
             model.SYSTEM_TIME,
             rule=lambda m, f, t: (
-                material_balance_rule(m, f, t)
+                product_balance_rule(m, f, t)
                 if (f in flows_with_production or f in flows_with_demand)
                 else pyo.Constraint.Skip
             ),
@@ -556,22 +537,6 @@ def create_model(
             model.ELEMENTARY_FLOW,
             model.SYSTEM_TIME,
             rule=scaled_inventory_tensor,
-        )
-
-        def fulfill_demand_rule(model, f, t):
-            return (
-                sum(
-                    model.foreground_production[p, f, tau]
-                    * model.var_operation[p, t - tau]
-                    for p in model.PROCESS
-                    for tau in model.PROCESS_TIME
-                    if (t - tau in model.SYSTEM_TIME)
-                )
-                >= model.demand[f, t]
-            )
-
-        model.DemandConstraint = pyo.Constraint(
-            model.PRODUCT, model.SYSTEM_TIME, rule=fulfill_demand_rule
         )
 
     def category_process_time_specific_impact(model, c, p, t):
