@@ -395,8 +395,6 @@ def create_model(
             rule=scaled_inventory_tensor,
         )
 
-        fg_scale = getattr(model, "scales", {}).get("foreground", 1.0)
-
         def operation_limited_by_installation_rule(model, p, f, t):
             """
             Link operational output to the installed capacity.
@@ -412,7 +410,6 @@ def create_model(
             return (
                 model.var_operation[p, t]
                 * model.foreground_production[p, f, model.process_operation_start[p]]
-                * fg_scale
             ) <= sum(
                 (1 if model.foreground_production[p, f, tau] != 0 else 0)
                 * model.var_installation[p, t - tau]
