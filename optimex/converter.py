@@ -406,6 +406,45 @@ class ModelInputManager:
     def __init__(self):
         self.model_inputs = None
 
+    # --- Serialization helpers -------------------------------------------------
+    _TUPLE_PREFIX = "__tuple__"
+    _SEP = "|~|"
+
+    def _encode_key(self, key: Any) -> Any:
+        if isinstance(key, tuple):
+            return self._TUPLE_PREFIX + self._SEP.join(map(str, key))
+        return key
+
+    def _encode_for_json(self, obj: Any) -> Any:
+        """Recursively convert non-JSON-serializable keys to strings."""
+        if isinstance(obj, dict):
+            return {self._encode_key(k): self._encode_for_json(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [self._encode_for_json(v) for v in obj]
+        return obj
+
+    def _decode_key(self, key: Any) -> Any:
+        if isinstance(key, str) and key.startswith(self._TUPLE_PREFIX):
+            parts = key[len(self._TUPLE_PREFIX) :].split(self._SEP)
+            return tuple(self._maybe_number(p) for p in parts)
+        return key
+
+    def _maybe_number(self, val: str) -> Any:
+        try:
+            if val.isdigit() or (val.startswith("-") and val[1:].isdigit()):
+                return int(val)
+            return float(val)
+        except ValueError:
+            return val
+
+    def _decode_from_json(self, obj: Any) -> Any:
+        """Inverse of _encode_for_json for dict keys; leaves values untouched otherwise."""
+        if isinstance(obj, dict):
+            return {self._decode_key(k): self._decode_from_json(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [self._decode_from_json(v) for v in obj]
+        return obj
+
     def parse_from_lca_processor(
         self, lca_processor: LCADataProcessor
     ) -> OptimizationModelInputs:
@@ -462,7 +501,8 @@ class ModelInputManager:
             raise ValueError("No OptimizationModelInputs to save.")
         if path.endswith(".json"):
             with open(path, "w") as f:
-                json.dump(self.model_inputs.model_dump(), f, indent=2)
+                serializable = self._encode_for_json(self.model_inputs.model_dump())
+                json.dump(serializable, f, indent=2)
         elif path.endswith(".pkl"):
             with open(path, "wb") as f:
                 pickle.dump(self.model_inputs, f)
@@ -476,6 +516,7 @@ class ModelInputManager:
         if path.endswith(".json"):
             with open(path, "r") as f:
                 data = json.load(f)
+            data = self._decode_from_json(data)
             self.model_inputs = OptimizationModelInputs(**data)
         elif path.endswith(".pkl"):
             with open(path, "rb") as f:
