@@ -195,6 +195,7 @@ class LCADataProcessor:
         self._demand = {}
         self._processes = {}
         self._products = {}
+        self._background_products = {}
         self._elementary_flows = {}
 
         self._system_time = set()
@@ -225,6 +226,11 @@ class LCADataProcessor:
     def products(self) -> dict:
         """Read-only access to the product flows dictionary."""
         return self._products
+    
+    @property
+    def background_products(self) -> dict:
+        """Read-only access to the background products dictionary."""
+        return self._background_products
 
     @property
     def elementary_flows(self) -> dict:
@@ -321,7 +327,7 @@ class LCADataProcessor:
                 {(flow["code"], year): amount for year, amount in zip(years, amounts)}
             )
             self._products.setdefault(flow["code"], flow["name"])
-        
+
         self._system_time = range(start_year, start_year + longest_demand_interval + 1)
         logger.info(
             "Identified demand in system time range of %s for functional flows %s",
@@ -351,6 +357,7 @@ class LCADataProcessor:
             - self._foreground_production: dict mapping
               (process_code, product_flow, year) to amount for produced flows.
             - self._products: dict mapping product flow codes to their names.
+            - self._background_products: dict mapping background product codes to their names.
             - self._elementary_flows: dict mapping elementary flow codes to their
               names.
             - self._processes: dict mapping process codes to their names.
@@ -369,15 +376,21 @@ class LCADataProcessor:
         biosphere_tensor = {}
 
         for node in self.foreground_db:
+            logger.debug(f"Processing node: {node['code']} - {node['name']}")
             if node["type"] not in bd.labels.process_node_types:
+                logger.debug(
+                    f"Skipping node {node['code']} of type {node['type']}."
+                )
                 continue  # Skip product & biosphere nodes
-            
+
             # Store process information
             self._processes.setdefault(node["code"], node["name"])
             if (limits := node.get("operation_time_limits")) is not None:
                 self._operation_time_limits[node["code"]] = limits
 
             for exc in node.exchanges():
+                logger.debug(f"Processing exchange: {exc.input}")
+                
                 # Extract temporal distribution
                 temporal_dist = exc.get(
                     "temporal_distribution",
@@ -386,11 +399,13 @@ class LCADataProcessor:
                     ),
                 )
                 years = temporal_dist.date.astype("timedelta64[Y]").astype(int)
+                logger.debug(f"Extracted years: {years}")
                 # Ensure all years are included in process time
                 self._process_time.update(
                     year for year in years if year not in self._process_time
                 )
                 temporal_factor = temporal_dist.amount
+                logger.debug(f"Extracted temporal factors: {temporal_factor}")
 
                 # Skip if temporal distribution is missing or invalid (empty arrays)
                 if years.size == 0 or temporal_factor.size == 0:
@@ -403,7 +418,7 @@ class LCADataProcessor:
                 input_name = exc.input["name"]
 
                 # Update tensors and flow dictionaries
-                if exc["type"] in bd.labels.consumption_edge_default:
+                if exc["type"] == bd.labels.consumption_edge_default:
                     technosphere_tensor.update(
                         {
                             (node["code"], input_code, year): exc["amount"] * factor
@@ -413,8 +428,15 @@ class LCADataProcessor:
                     if exc.get("operation"):
                         self._operation_flow.update({(node["code"], input_code): True})
                     self._products.setdefault(input_code, input_name)
-                    
-                elif exc["type"] in bd.labels.biosphere_edge_default:
+                    logger.debug(f"Added technosphere flow: {input_code} - {input_name}")
+                    if exc.input["database"] != self.foreground_db.name:
+                        logger.debug(f"Identified background product flow: {input_code} - {input_name}")
+                        self._background_products.setdefault(
+                            input_code, input_name
+                        )
+
+                elif exc["type"] == bd.labels.biosphere_edge_default:
+                    logger.debug(f"Adding biosphere flow: {input_code} - {input_name}")
                     biosphere_tensor.update(
                         {
                             (node["code"], input_code, year): exc["amount"] * factor
@@ -424,7 +446,7 @@ class LCADataProcessor:
                     if exc.get("operation"):
                         self._operation_flow.update({(node["code"], input_code): True})
                     self._elementary_flows.setdefault(input_code, input_name)
-                    
+
                 elif exc["type"] == bd.labels.production_edge_default:
                     production_tensor.update(
                         {
@@ -437,6 +459,8 @@ class LCADataProcessor:
                         self._operation_flow.update(
                             {(node["code"], input_code): True}
                         )
+                else:
+                    logger.debug(f"Encountered unknown exchange type: {exc['type']}")
 
         # Store the tensors as protected variables
         self._foreground_technosphere = technosphere_tensor
@@ -457,6 +481,9 @@ class LCADataProcessor:
         log_tensor_dimensions(technosphere_tensor, "Technosphere")
         log_tensor_dimensions(biosphere_tensor, "Biosphere")
         log_tensor_dimensions(production_tensor, "Production")
+        logger.info("Foreground processes: %s", list(self._processes.keys()))
+        logger.info("Foreground products: %s", list(self._products.keys()))
+        logger.info("Background products: %s", list(self._background_products.keys()))
 
     def _calculate_inventory_of_db(
         self, db_name: str, products: dict, methods: list, cutoff: float
@@ -592,7 +619,7 @@ class LCADataProcessor:
             try:
                 # Directly call the _calculate_inventory_of_db method for each db
                 inventory_tensor, elementary_flows = self._calculate_inventory_of_db(
-                    db_name, self._products, brightway_methods, cutoff
+                    db_name, self._background_products, brightway_methods, cutoff
                 )
                 # Store the result in the results list
                 results.append((inventory_tensor, elementary_flows))
