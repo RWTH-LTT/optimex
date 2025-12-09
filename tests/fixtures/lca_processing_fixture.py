@@ -115,39 +115,44 @@ def setup_brightway_databases():
     foreground = bd.Database("foreground")
     foreground.write(
         {
+            ("foreground", "Product 1"): {
+                "name": "Product 1",
+                "unit": "kg",
+                "type": bd.labels.product_node_default,
+            },
             ("foreground", "P1"): {
                 "name": "process P1",
                 "location": "somewhere",
-                "reference product": "R1",
+                "type": bd.labels.process_node_default,
                 "operation_time_limits": (
                     1,
                     2,
-                ),  # start and end year of operation phase
+                ),  # Optimex-specific: start and end year of operation phase
                 "exchanges": [
                     {
                         "amount": 1,
-                        "type": "production",
-                        "input": ("foreground", "P1"),
-                        "temporal_distribution": TemporalDistribution(
+                        "type": bd.labels.production_edge_default,
+                        "input": ("foreground", "Product 1"),
+                        "temporal_distribution": TemporalDistribution(  # Optimex-specific: temporal distribution of the exchange)
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([0, 0.5, 0.5, 0]),
                         ),
-                        "operation": True,
+                        "operation": True,  # Optimex-specific: indicates that this exchange is part of the operation phase
                     },
                     {
                         "amount": 27.5,
-                        "type": "technosphere",
+                        "type": bd.labels.consumption_edge_default,
                         "input": ("db_2020", "I1"),
-                        "temporal_distribution": TemporalDistribution(
+                        "temporal_distribution": TemporalDistribution(  # Optimex-specific: temporal distribution of the exchange)
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([1, 0, 0, 0]),
                         ),
                     },
                     {
                         "amount": 20,
-                        "type": "biosphere",
+                        "type": bd.labels.biosphere_edge_default,
                         "input": ("biosphere3", "CO2"),
-                        "temporal_distribution": TemporalDistribution(
+                        "temporal_distribution": TemporalDistribution(  # Optimex-specific: temporal distribution of the exchange)
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([0, 0.5, 0.5, 0]),
                         ),
@@ -158,16 +163,13 @@ def setup_brightway_databases():
             ("foreground", "P2"): {
                 "name": "process P2",
                 "location": "somewhere",
-                "reference product": "R1",
-                "operation_time_limits": (
-                    1,
-                    2,
-                ),  # start and end year of operation phase
+                "type": bd.labels.process_node_default,
+                "operation_time_limits": (1, 2),
                 "exchanges": [
                     {
                         "amount": 1,
-                        "type": "production",
-                        "input": ("foreground", "P2"),
+                        "type": bd.labels.production_edge_default,
+                        "input": ("foreground", "Product 1"),
                         "temporal_distribution": TemporalDistribution(
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([0, 0.5, 0.5, 0]),
@@ -176,7 +178,7 @@ def setup_brightway_databases():
                     },
                     {
                         "amount": 1,
-                        "type": "technosphere",
+                        "type": bd.labels.consumption_edge_default,
                         "input": ("db_2020", "I2"),
                         "temporal_distribution": TemporalDistribution(
                             date=np.array(range(4), dtype="timedelta64[Y]"),
@@ -185,7 +187,7 @@ def setup_brightway_databases():
                     },
                     {
                         "amount": 20,
-                        "type": "biosphere",
+                        "type": bd.labels.biosphere_edge_default,
                         "input": ("biosphere3", "CO2"),
                         "temporal_distribution": TemporalDistribution(
                             date=np.array(range(4), dtype="timedelta64[Y]"),
@@ -224,7 +226,7 @@ def mock_lca_data_processor(setup_brightway_databases):
         amount=np.asarray([0, 0, 10, 5, 10, 5, 10, 5, 10, 5]),
     )
     lca_config = lca_processor.LCAConfig(
-        demand={"R1": td_demand},
+        demand={bd.get_node(database="foreground", code="Product 1"): td_demand},
         temporal={
             "start_date": datetime(2020, 1, 1),
             "temporal_resolution": "year",
