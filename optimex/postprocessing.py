@@ -1,6 +1,8 @@
 import math
 
+import bw2data as bd
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
@@ -67,6 +69,59 @@ class PostProcessor:
 
         self._plot_config = default_config
 
+        # Lazily-populated cache for mapping foreground process codes to names
+        self._process_name_map = None
+        self._process_color_map = {}
+
+    def _build_process_name_map(self):
+        """Create a mapping from process code to human-readable name."""
+        mapping = {}
+
+        try:
+            databases = bd.databases
+        except Exception:
+            return mapping
+
+        if "foreground" not in databases:
+            return mapping
+
+        for process_code in getattr(self.m, "PROCESS", []):
+            name = None
+            try:
+                node = bd.get_node(database="foreground", code=process_code)
+                if hasattr(node, "get"):
+                    name = node.get("name")
+                if name is None:
+                    name = node["name"]
+            except Exception:
+                name = None
+
+            mapping[process_code] = name or process_code
+
+        return mapping
+
+    def _get_process_name_map(self):
+        if self._process_name_map is None:
+            self._process_name_map = self._build_process_name_map()
+        return self._process_name_map
+
+    def _get_process_color_map(self, resolve_names: bool = True):
+        """Assign deterministic colors per process for consistent plotting."""
+        cache_key = bool(resolve_names)
+        if cache_key in self._process_color_map:
+            return self._process_color_map[cache_key]
+
+        name_map = self._get_process_name_map() if resolve_names else {}
+        processes = list(getattr(self.m, "PROCESS", []))
+        colors = self._plot_config["colormap"]
+        color_map = {}
+        for idx, process in enumerate(processes):
+            display = name_map.get(process, process) if resolve_names else process
+            color_map[display] = colors[idx % len(colors)]
+
+        self._process_color_map[cache_key] = color_map
+        return color_map
+
     def _create_clean_axes(self, nrows=1, ncols=1):
         """
         Create a grid of clean axes with consistent formatting.
@@ -93,16 +148,35 @@ class PostProcessor:
             ax.set_ylabel("Value", fontsize=self._plot_config["fontsize"])
         return fig, axes
 
-    def _apply_bar_styles(self, df, ax, title=None, legend_title=None):
+    def _column_process_label(self, column):
+        """Extract process label from single or MultiIndex column."""
+        if isinstance(column, tuple):
+            return column[0]
+        return column
+
+    def _apply_bar_styles(
+        self,
+        df,
+        ax,
+        title=None,
+        legend_title=None,
+        resolve_names: bool = True,
+    ):
         """
         Apply standard bar plot styling.
         """
+        color_map = self._get_process_color_map(resolve_names=resolve_names)
+        colors = [
+            color_map.get(self._column_process_label(col), self._plot_config["line_color"])
+            for col in df.columns
+        ]
+
         df.plot(
             kind="bar",
             stacked=True,
             ax=ax,
             width=self._plot_config["bar_width"],
-            color=self._plot_config["colormap"][: len(df.columns)],
+            color=colors,
             edgecolor="black",
             legend=False,
         )
@@ -112,15 +186,31 @@ class PostProcessor:
             rotation=self._plot_config["rotation"],
             ha="right",
         )
-        ax.legend(
-            title=legend_title or "",
-            fontsize=self._plot_config["fontsize"] - 2,
-            loc="upper right",
-            frameon=False,
-            bbox_to_anchor=(1.15, 1),
-        )
 
-    def get_impacts(self) -> pd.DataFrame:
+        # Build legend without zero-only series
+        handles = []
+        labels = []
+        for col, color in zip(df.columns, colors):
+            if df[col].abs().sum() == 0:
+                continue
+            proc_label = self._column_process_label(col)
+            if proc_label in labels:
+                continue  # avoid duplicates (e.g., multiple flows for same process)
+            labels.append(proc_label)
+            handles.append(Patch(facecolor=color, edgecolor="black", label=proc_label))
+
+        if handles:
+            ax.legend(
+                handles=handles,
+                title=legend_title or "",
+                fontsize=self._plot_config["fontsize"] - 2,
+                loc="upper left",
+                frameon=False,
+                bbox_to_anchor=(1.02, 1),
+                title_fontsize=self._plot_config["fontsize"] - 1,
+            )
+
+    def get_impacts(self, resolve_names: bool = True) -> pd.DataFrame:
         """
         Extracts the specific impacts from the model and returns them as a DataFrame.
         The DataFrame will have a MultiIndex with 'Category', 'Process', and 'Time'.
@@ -143,6 +233,16 @@ class PostProcessor:
         df_pivot = df.pivot(
             index="Time", columns=["Category", "Process"], values="Value"
         )
+
+        if resolve_names:
+            mapping = self._get_process_name_map()
+            df_pivot.columns = pd.MultiIndex.from_tuples(
+                [
+                    (category, mapping.get(process, process))
+                    for category, process in df_pivot.columns
+                ],
+                names=df_pivot.columns.names,
+            )
         self.df_impacts = df_pivot
         return self.df_impacts
 
@@ -159,7 +259,7 @@ class PostProcessor:
             "Radiative forcing extraction is not implemented yet."
         )
 
-    def get_installation(self) -> pd.DataFrame:
+    def get_installation(self, resolve_names: bool = True) -> pd.DataFrame:
         """
         Extracts the installation data from the model and returns it as a DataFrame.
         The DataFrame will have a MultiIndex with 'Time' and 'Process'.
@@ -177,10 +277,13 @@ class PostProcessor:
         df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process"])
         df = df.reset_index()
         df_pivot = df.pivot(index="Time", columns="Process", values="Value")
+
+        if resolve_names:
+            df_pivot = df_pivot.rename(columns=self._get_process_name_map())
         self.df_installation = df_pivot
         return self.df_installation
 
-    def get_operation(self) -> pd.DataFrame:
+    def get_operation(self, resolve_names: bool = True) -> pd.DataFrame:
         """
         Extracts the operation data from the model and returns it as a DataFrame.
         The DataFrame will have a MultiIndex with 'Time' and 'Process'.
@@ -196,10 +299,13 @@ class PostProcessor:
         df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process"])
         df = df.reset_index()
         df_pivot = df.pivot(index="Time", columns="Process", values="Value")
+
+        if resolve_names:
+            df_pivot = df_pivot.rename(columns=self._get_process_name_map())
         self.df_operation = df_pivot
         return self.df_operation
 
-    def get_production(self) -> pd.DataFrame:
+    def get_production(self, resolve_names: bool = True) -> pd.DataFrame:
         """
         Extracts the production data from the model and returns it as a DataFrame.
         The DataFrame will have a MultiIndex with 'Process', 'Flow', and
@@ -237,6 +343,16 @@ class PostProcessor:
         df_pivot = df.pivot(
             index="Time", columns=["Process", "Flow"], values="Value"
         )
+
+        if resolve_names:
+            mapping = self._get_process_name_map()
+            df_pivot.columns = pd.MultiIndex.from_tuples(
+                [
+                    (mapping.get(process, process), flow)
+                    for process, flow in df_pivot.columns
+                ],
+                names=df_pivot.columns.names,
+            )
         self.df_production = df_pivot
         return self.df_production
 
@@ -262,14 +378,14 @@ class PostProcessor:
         self.df_demand = df_pivot
         return self.df_demand
 
-    def plot_impacts(self, df_impacts=None):
+    def plot_impacts(self, df_impacts=None, resolve_names: bool = True):
         """
         Plot a stacked bar chart for impacts.
         df_impacts: DataFrame with Time as index, Categories and Processes as columns.
         Columns must be a MultiIndex: (Category, Process)
         """
         if df_impacts is None:
-            df_impacts = self.get_impacts()
+            df_impacts = self.get_impacts(resolve_names=resolve_names)
 
         categories = df_impacts.columns.get_level_values(0).unique()
         ncols = 2
@@ -280,7 +396,13 @@ class PostProcessor:
         for i, category in enumerate(categories):
             ax = axes[i]
             sub_df = df_impacts[category]
-            self._apply_bar_styles(sub_df, ax, title=category, legend_title="Process")
+            self._apply_bar_styles(
+                sub_df,
+                ax,
+                title=category,
+                legend_title="Process",
+                resolve_names=resolve_names,
+            )
 
         # Hide unused axes
         for j in range(i + 1, len(axes)):
@@ -290,7 +412,9 @@ class PostProcessor:
         plt.show()
         return fig, axes
 
-    def plot_production_and_demand(self, prod_df=None, demand_df=None):
+    def plot_production_and_demand(
+        self, prod_df=None, demand_df=None, resolve_names: bool = True
+    ):
         """
         Plot a stacked bar chart for production and line(s) for demand.
 
@@ -300,7 +424,7 @@ class PostProcessor:
         """
 
         if prod_df is None:
-            prod_df = self.get_production()
+            prod_df = self.get_production(resolve_names=resolve_names)
         if demand_df is None:
             demand_df = self.get_demand()
 
@@ -323,18 +447,25 @@ class PostProcessor:
             fontsize=self._plot_config["fontsize"],
         )
 
-        # Plot production (stacked bars)
+        # Plot production (stacked bars) with consistent colors per process
+        color_map = self._get_process_color_map(resolve_names=resolve_names)
+        colors = [
+            color_map.get(self._column_process_label(col), self._plot_config["line_color"])
+            for col in prod_df.columns
+        ]
         prod_df.plot(
             kind="bar",
             stacked=True,
             ax=ax,
             edgecolor="black",
             width=self._plot_config["bar_width"],
-            color=self._plot_config["colormap"][: len(prod_df.columns)],
+            color=colors,
             legend=False,  # We'll handle legend separately
         )
 
         # Plot demand (lines)
+        demand_handles = []
+        demand_labels = []
         for col in demand_df.columns:
             ax.plot(
                 x_positions,
@@ -344,17 +475,35 @@ class PostProcessor:
                 label=f"Demand: {col}",
                 color=self._plot_config["line_color"],
             )
+            demand_labels.append(f"Demand: {col}")
+            demand_handles.append(ax.lines[-1])
 
         # Create combined legend
-        handles, labels = ax.get_legend_handles_labels()
-        ax.legend(
-            handles=handles,
-            loc="upper left",
-            fontsize=self._plot_config["fontsize"] - 2,
-            title="Processes / Demand",
-            title_fontsize=self._plot_config["fontsize"],
-            frameon=False,
-        )
+        # Custom legend without zero-only series and no duplicates by process
+        handles = []
+        labels = []
+        for col, color in zip(prod_df.columns, colors):
+            if prod_df[col].abs().sum() == 0:
+                continue
+            proc_label = self._column_process_label(col)
+            if proc_label in labels:
+                continue
+            labels.append(proc_label)
+            handles.append(Patch(facecolor=color, edgecolor="black", label=proc_label))
+
+        handles.extend(demand_handles)
+        labels.extend(demand_labels)
+
+        if handles:
+            ax.legend(
+                handles=handles,
+                loc="upper left",
+                fontsize=self._plot_config["fontsize"] - 2,
+                title="Processes / Demand",
+                title_fontsize=self._plot_config["fontsize"],
+                frameon=False,
+                bbox_to_anchor=(1.02, 1),
+            )
 
         ax.set_title(
             "Production and Demand", fontsize=self._plot_config["fontsize"] + 2
@@ -365,38 +514,46 @@ class PostProcessor:
         plt.show()
         return fig, ax
 
-    def plot_installation(self, df_installation=None):
+    def plot_installation(self, df_installation=None, resolve_names: bool = True):
         """
         Plot a stacked bar chart for installation data.
         df_installation: DataFrame with Time as index, Processes as columns.
         """
         if df_installation is None:
-            df_installation = self.get_installation()
+            df_installation = self.get_installation(resolve_names=resolve_names)
 
         fig, axes = self._create_clean_axes()
         ax = axes[0]
         self._apply_bar_styles(
-            df_installation, ax, title="Installed Capacity", legend_title="Processes"
+            df_installation,
+            ax,
+            title="Installed Capacity",
+            legend_title="Processes",
+            resolve_names=resolve_names,
         )
         ax.set_ylabel("Installation", fontsize=self._plot_config["fontsize"])
         fig.tight_layout()
         plt.show()
         return fig, ax
 
-    def plot_operation(self, df_operation=None):
+    def plot_operation(self, df_operation=None, resolve_names: bool = True):
         """
         Plot a stacked bar chart for operation data.
         df_operation: DataFrame with Time as index, Processes as columns.
         """
         if df_operation is None:
-            df_operation = self.get_operation()
+            df_operation = self.get_operation(resolve_names=resolve_names)
 
         fig, axes = self._create_clean_axes()
         ax = axes[0]
         self._apply_bar_styles(
-            df_operation, ax, title="Installed Capacity", legend_title="Processes"
+            df_operation,
+            ax,
+            title="Operational Levels",
+            legend_title="Processes",
+            resolve_names=resolve_names,
         )
-        ax.set_ylabel("Installation", fontsize=self._plot_config["fontsize"])
+        ax.set_ylabel("Operational Levels", fontsize=self._plot_config["fontsize"])
         fig.tight_layout()
         plt.show()
         return fig, ax
