@@ -74,6 +74,10 @@ def create_model(
         doc="Set of product flows exchanged between processes, indexed by i",
         initialize=scaled_inputs.PRODUCT,
     )
+    model.BACKGROUND_PRODUCT = pyo.Set(
+        doc="Set of product flows between foreground and background processes, indexed by j",
+        initialize=scaled_inputs.BACKGROUND_PRODUCT,
+    )
     model.ELEMENTARY_FLOW = pyo.Set(
         doc="Set of elementary flows, indexed by e",
         initialize=scaled_inputs.ELEMENTARY_FLOW,

@@ -23,6 +23,9 @@ class OptimizationModelInputs(BaseModel):
     PRODUCT: List[str] = Field(
         ..., description="Identifiers for flows exchanged between processes."
     )
+    BACKGROUND_PRODUCT: List[str] = Field(
+        ..., description="Identifiers for flows between foreground and background processes."
+    )
     ELEMENTARY_FLOW: List[str] = Field(
         ...,
         description=(
