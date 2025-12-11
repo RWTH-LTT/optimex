@@ -70,12 +70,12 @@ def create_model(
         doc="Set of processes (or activities), indexed by p",
         initialize=scaled_inputs.PROCESS,
     )
-    model.REFERENCE_PRODUCT = pyo.Set(
-        doc="Set of reference products, indexed by r",
-        initialize=scaled_inputs.REFERENCE_PRODUCT,
+    model.PRODUCT = pyo.Set(
+        doc="Set of foreground products, indexed by r",
+        initialize=scaled_inputs.PRODUCT,
     )
     model.INTERMEDIATE_FLOW = pyo.Set(
-        doc="Set of intermediate flows, indexed by i",
+        doc="Set of background products (intermediate flows), indexed by i",
         initialize=scaled_inputs.INTERMEDIATE_FLOW,
     )
     model.ELEMENTARY_FLOW = pyo.Set(
@@ -83,7 +83,7 @@ def create_model(
         initialize=scaled_inputs.ELEMENTARY_FLOW,
     )
     model.FLOW = pyo.Set(
-        initialize=lambda m: m.REFERENCE_PRODUCT
+        initialize=lambda m: m.PRODUCT
         | m.INTERMEDIATE_FLOW
         | m.ELEMENTARY_FLOW,
         doc="Set of all flows, indexed by f",
@@ -115,10 +115,10 @@ def create_model(
         initialize=scaled_inputs.process_names,
     )
     model.demand = pyo.Param(
-        model.REFERENCE_PRODUCT,
+        model.PRODUCT,
         model.SYSTEM_TIME,
         within=pyo.Reals,
-        doc="time-explicit demand vector d",
+        doc="time-explicit external demand vector d",
         default=0,
         initialize=scaled_inputs.demand,
     )
@@ -127,9 +127,18 @@ def create_model(
         model.INTERMEDIATE_FLOW,
         model.PROCESS_TIME,
         within=pyo.Reals,
-        doc="time-explicit foreground technosphere tensor A",
+        doc="time-explicit foreground technosphere tensor A (background flows)",
         default=0,
         initialize=scaled_inputs.foreground_technosphere,
+    )
+    model.internal_demand_technosphere = pyo.Param(
+        model.PROCESS,
+        model.PRODUCT,
+        model.PROCESS_TIME,
+        within=pyo.Reals,
+        doc="time-explicit internal demand tensor A^{internal}",
+        default=0,
+        initialize=scaled_inputs.internal_demand_technosphere,
     )
     model.foreground_biosphere = pyo.Param(
         model.PROCESS,
@@ -142,7 +151,7 @@ def create_model(
     )
     model.foreground_production = pyo.Param(
         model.PROCESS,
-        model.REFERENCE_PRODUCT,
+        model.PRODUCT,
         model.PROCESS_TIME,
         within=pyo.Reals,
         doc="time-explicit foreground production tensor F",
@@ -368,6 +377,16 @@ def create_model(
         model.scaled_biosphere_dependent_on_operation = scale_tensor_by_operation(
             model.foreground_biosphere, "ELEMENTARY_FLOW"
         )
+        model.scaled_internal_demand_dependent_on_installation = (
+            scale_tensor_by_installation(
+                model.internal_demand_technosphere, "PRODUCT"
+            )
+        )
+        model.scaled_internal_demand_dependent_on_operation = (
+            scale_tensor_by_operation(
+                model.internal_demand_technosphere, "PRODUCT"
+            )
+        )
 
         def scaled_inventory_tensor(model, p, e, t):
             """
@@ -409,20 +428,39 @@ def create_model(
 
         model.OperationLimit = pyo.Constraint(
             model.PROCESS,
-            model.REFERENCE_PRODUCT,
+            model.PRODUCT,
             model.SYSTEM_TIME,
             rule=operation_limited_by_installation_rule,
         )
 
-        def fulfill_demand_rule(model, f, t):
-            return model.demand[f, t] == sum(
-                model.foreground_production[p, f, model.process_operation_start[p]]
+        def product_demand_fulfillment_rule(model, r, t):
+            """
+            All products must be produced exactly to meet total demand:
+            - External demand (from demand parameter)
+            - Internal consumption by other foreground processes
+            """
+            # Total production of product r at time t
+            total_production = sum(
+                model.foreground_production[p, r, model.process_operation_start[p]]
                 * model.var_operation[p, t]
                 for p in model.PROCESS
             )
 
-        model.DemandConstraint = pyo.Constraint(
-            model.REFERENCE_PRODUCT, model.SYSTEM_TIME, rule=fulfill_demand_rule
+            # External demand (from demand parameter)
+            external_demand = model.demand[r, t]
+
+            # Internal consumption (sum over all processes consuming product r)
+            internal_consumption = sum(
+                model.scaled_internal_demand_dependent_on_installation[p, r, t]
+                + model.scaled_internal_demand_dependent_on_operation[p, r, t]
+                for p in model.PROCESS
+            )
+
+            # Exact fulfillment (= constraint)
+            return total_production == external_demand + internal_consumption
+
+        model.ProductDemandFulfillment = pyo.Constraint(
+            model.PRODUCT, model.SYSTEM_TIME, rule=product_demand_fulfillment_rule
         )
 
     else:
@@ -443,7 +481,7 @@ def create_model(
             
         model.OperationLimit = pyo.Constraint( # Always at full capacity
             model.PROCESS,
-            model.REFERENCE_PRODUCT,
+            model.PRODUCT,
             model.SYSTEM_TIME,
             rule=operation_at_full_capacity,
         )
@@ -505,7 +543,7 @@ def create_model(
             )
 
         model.DemandConstraint = pyo.Constraint(
-            model.REFERENCE_PRODUCT, model.SYSTEM_TIME, rule=fulfill_demand_rule
+            model.PRODUCT, model.SYSTEM_TIME, rule=fulfill_demand_rule
         )
 
     def category_process_time_specific_impact(model, c, p, t):

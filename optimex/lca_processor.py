@@ -134,13 +134,14 @@ class LCAConfig(BaseModel):
     Configuration class for Life Cycle Assessment (LCA) data processing.
 
     Attributes:
-        demand: Dictionary {(reference_product_name, temporal_distribution)} containing time-explicit demands for each flow.
+        demand: Dictionary {product_node: temporal_distribution} containing time-explicit demands for each product.
+            Keys must be Brightway product node objects (bd.get_node(...)).
         temporal: Temporal configuration for model time behavior.
         characterization_methods: List of characterization method configurations.
         background_inventory: Configuration for background inventory data calculation.
     """
 
-    demand: Dict[str, TemporalDistribution]
+    demand: Dict[bd.backends.proxies.Activity, TemporalDistribution]
     temporal: TemporalConfig
     characterization_methods: List[CharacterizationMethodConfig]
     background_inventory: Optional[BackgroundInventoryConfig] = Field(
@@ -193,6 +194,7 @@ class LCADataProcessor:
 
         self._demand = {}
         self._processes = {}
+        self._products = {}  # Maps product codes to product names
         self._intermediate_flows = {}
         self._elementary_flows = {}
 
@@ -202,6 +204,7 @@ class LCADataProcessor:
         self._category = set()
 
         self._foreground_technosphere = {}
+        self._internal_demand_technosphere = {}  # (process, product, year) -> amount
         self._foreground_biosphere = {}
         self._foreground_production = {}
         self._background_inventory = {}
@@ -296,89 +299,107 @@ class LCADataProcessor:
         """Read-only access to the operation time limits dictionary."""
         return self._operation_time_limits
 
+    @property
+    def products(self) -> dict:
+        """Read-only access to the products dictionary."""
+        return self._products
+
+    @property
+    def internal_demand_technosphere(self) -> dict:
+        """Read-only access to the internal demand technosphere tensor."""
+        return self._internal_demand_technosphere
+
     def _parse_demand(self) -> None:
         """
         Parse and process the demand dictionary from the configuration.
 
-        This method transforms the demand data into a dictionary mapping (flow, year)
-        tuples to their corresponding amounts, and identifies the set of functional
-        flows. It also determines the system time range based on the longest demand
-        interval found.
+        This method transforms the demand data into a dictionary mapping (product_code, year)
+        tuples to their corresponding amounts. It validates that demand is specified on
+        foreground product nodes.
 
         Side Effects
         ------------
         Updates the following instance attributes:
-            - self._demand: dict with keys (flow, year) and values as amounts.
-            - self._reference_products: set of flow codes present in the demand.
+            - self._demand: dict with keys (product_code, year) and values as amounts.
+            - self._products: dict mapping product codes to product names.
             - self._system_time: range of years covering the longest demand interval.
         """
         raw_demand = self.config.demand
         start_year = self.config.temporal.start_date.year
-        # find longest defined demand for initialization of system time
         longest_demand_interval = 0
-        for flow, td in raw_demand.items():
+
+        for product_node, td in raw_demand.items():
+            # Validate demand is on product nodes
+            if not hasattr(product_node, 'key'):
+                raise ValueError(
+                    f"Demand must be on Brightway Node objects, got {type(product_node)}"
+                )
+
+            if product_node.get('type') != bd.labels.product_node_default:
+                raise ValueError(
+                    f"Demand must be on product nodes. "
+                    f"Node {product_node['name']} has type {product_node.get('type')}"
+                )
+
+            product_code = product_node['code']
             years = td.date.astype("datetime64[Y]").astype(int) + 1970
             if years[-1] - start_year > longest_demand_interval:
                 longest_demand_interval = years[-1] - start_year
             amounts = td.amount
 
-            # Create a dictionary of (flow, year) -> amount
             self._demand.update(
-                {(flow, year): amount for year, amount in zip(years, amounts)}
+                {(product_code, year): amount for year, amount in zip(years, amounts)}
             )
-            self._reference_products.add(flow)
+
+            # Store product information
+            self._products[product_code] = product_node['name']
 
         self._system_time = range(start_year, start_year + longest_demand_interval + 1)
         logger.info(
-            "Identified demand in system time range of %s for functional flows %s",
+            "Identified demand in system time range of %s for products %s",
             self._system_time,
-            self._reference_products,
+            set(product_code for product_code, _ in self._demand.keys()),
         )
 
     def _construct_foreground_tensors(self) -> None:
         """
         Construct foreground technosphere, biosphere, and production tensors with
-        time-explicit structure.
+        time-explicit structure, supporting explicit product nodes.
 
-        This method constructs tensors based on the brightway databases. For tensor
-        construction it expands the standard technosphere and biosphere matrices by
-        adding a process time dimension. For each process in the foreground
-        database, it iterates through exchanges and collects temporal distribution
-        data (date and amounts). The resulting tensors represent the amounts of
-        flows associated with each process, distributed over time.
+        This method constructs tensors based on explicit process and product nodes.
+        It processes only process nodes (type=process_node_default) and handles
+        three types of edges: production edges (to product nodes), consumption edges
+        (from background or foreground products), and biosphere edges (emissions).
 
         Side Effects
         -----------
         Updates the following instance attributes:
-            - self._foreground_technosphere: dict mapping
-              (process_code, flow_code, year) to amount for technosphere flows.
-            - self._foreground_biosphere: dict mapping
-              (process_code, flow_code, year) to amount for biosphere flows.
-            - self._foreground_production: dict mapping
-              (process_code, reference_product, year) to amount for produced
-              functional flows.
-            - self._intermediate_flows: dict mapping intermediate flow codes to
-              their names.
-            - self._elementary_flows: dict mapping elementary flow codes to their
-              names.
+            - self._foreground_technosphere: dict mapping (process_code, flow_code, year)
+              to amount for external intermediate flows (background consumption).
+            - self._internal_demand_technosphere: dict mapping (process_code, product_code, year)
+              to amount for internal product consumption (foreground products).
+            - self._foreground_biosphere: dict mapping (process_code, flow_code, year)
+              to amount for biosphere flows (emissions).
+            - self._foreground_production: dict mapping (process_code, product_code, year)
+              to amount for product production.
+            - self._products: dict mapping product codes to their names.
+            - self._intermediate_flows: dict mapping background intermediate flow codes
+              to their names.
+            - self._elementary_flows: dict mapping elementary flow codes to their names.
             - self._processes: dict mapping process codes to their names.
-            - self._operation_flow: dict mapping process codes to flow codes, that
-              are occurring in the operation phase.
+            - self._operation_flow: dict mapping (process_code, flow_code) to boolean
+              indicating if the flow occurs during the operation phase.
             - self._operation_time_limits: dict mapping process codes to their
               operation time limits, if defined.
-        Notes
-        -----
-        Functional flows are a subset of intermediate flows and are included within
-        the technosphere matrix, but are also extracted into a separate production
-        tensor for clarity and downstream processing.
         """
         technosphere_tensor = {}
+        internal_demand_technosphere = {}
         production_tensor = {}
         biosphere_tensor = {}
 
         for act in self.foreground_db:
-            # Only process activities present in the demand
-            if act["reference product"] not in self._reference_products:
+            # Only process nodes (not product nodes)
+            if act.get('type') != bd.labels.process_node_default:
                 continue
 
             # Store process information
@@ -400,47 +421,56 @@ class LCADataProcessor:
                 if not years.any() or not temporal_factor.any():
                     continue
 
-                # Determine the tensor type (technosphere or biosphere)
-                type = exc["type"]
+                edge_type = exc["type"]
                 input_code = exc.input["code"]
                 input_name = exc.input["name"]
+                input_db = exc.input["database"]
 
-                # Update tensors and flow dictionaries
-                if type == "technosphere":
-                    technosphere_tensor.update(
-                        {
-                            (act["code"], input_code, year): exc["amount"] * factor
-                            for year, factor in zip(years, temporal_factor)
-                        }
-                    )
+                # Handle production edges
+                if edge_type == bd.labels.production_edge_default:
+                    product_code = input_code
+                    production_tensor.update({
+                        (act["code"], product_code, year): exc["amount"] * factor
+                        for year, factor in zip(years, temporal_factor)
+                    })
                     if exc.get("operation"):
-                        self._operation_flow.update({(act["code"], input_code): True})
-                    self._intermediate_flows.setdefault(input_code, input_name)
-                elif type == "biosphere":
-                    biosphere_tensor.update(
-                        {
+                        self._operation_flow.update({(act["code"], product_code): True})
+                    self._products.setdefault(product_code, input_name)
+
+                # Handle consumption edges
+                elif edge_type == bd.labels.consumption_edge_default:
+                    if input_db == self.foreground_db.name:
+                        # Internal demand: foreground product consumed
+                        internal_demand_technosphere.update({
                             (act["code"], input_code, year): exc["amount"] * factor
                             for year, factor in zip(years, temporal_factor)
-                        }
-                    )
+                        })
+                        if exc.get("operation"):
+                            self._operation_flow.update({(act["code"], input_code): True})
+                        self._products.setdefault(input_code, input_name)
+                    else:
+                        # External intermediate: background consumption
+                        technosphere_tensor.update({
+                            (act["code"], input_code, year): exc["amount"] * factor
+                            for year, factor in zip(years, temporal_factor)
+                        })
+                        if exc.get("operation"):
+                            self._operation_flow.update({(act["code"], input_code): True})
+                        self._intermediate_flows.setdefault(input_code, input_name)
+
+                # Handle biosphere edges
+                elif edge_type == bd.labels.biosphere_edge_default:
+                    biosphere_tensor.update({
+                        (act["code"], input_code, year): exc["amount"] * factor
+                        for year, factor in zip(years, temporal_factor)
+                    })
                     if exc.get("operation"):
                         self._operation_flow.update({(act["code"], input_code): True})
                     self._elementary_flows.setdefault(input_code, input_name)
-                elif type == "production":
-                    production_tensor.update(
-                        {
-                            (act["code"], act["reference product"], year): exc["amount"]
-                            * factor
-                            for year, factor in zip(years, temporal_factor)
-                        }
-                    )
-                    if exc.get("operation"):
-                        self._operation_flow.update(
-                            {(act["code"], act["reference product"]): True}
-                        )
 
         # Store the tensors as protected variables
         self._foreground_technosphere = technosphere_tensor
+        self._internal_demand_technosphere = internal_demand_technosphere
         self._foreground_biosphere = biosphere_tensor
         self._foreground_production = production_tensor
 
@@ -455,7 +485,8 @@ class LCADataProcessor:
             )
 
         logger.info("Constructed foreground tensors.")
-        log_tensor_dimensions(technosphere_tensor, "Technosphere")
+        log_tensor_dimensions(technosphere_tensor, "Technosphere (external)")
+        log_tensor_dimensions(internal_demand_technosphere, "Internal demand")
         log_tensor_dimensions(biosphere_tensor, "Biosphere")
         log_tensor_dimensions(production_tensor, "Production")
 

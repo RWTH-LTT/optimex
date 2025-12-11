@@ -17,7 +17,7 @@ def test_all_sets_init(abstract_system_model, abstract_system_model_inputs):
     # List of sets to test
     sets_to_test = [
         ("PROCESS", "PROCESS"),
-        ("REFERENCE_PRODUCT", "REFERENCE_PRODUCT"),
+        ("PRODUCT", "PRODUCT"),
         ("INTERMEDIATE_FLOW", "INTERMEDIATE_FLOW"),
         ("ELEMENTARY_FLOW", "ELEMENTARY_FLOW"),
         ("BACKGROUND_ID", "BACKGROUND_ID"),

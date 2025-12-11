@@ -9,7 +9,7 @@ def abstract_system_model_inputs():
     of an abstract system."""
     return {
         "PROCESS": ["P1", "P2"],
-        "REFERENCE_PRODUCT": ["R1"],
+        "PRODUCT": ["R1"],
         "INTERMEDIATE_FLOW": ["I1", "I2"],
         "ELEMENTARY_FLOW": ["CO2", "CH4"],
         "BACKGROUND_ID": ["db_2020", "db_2030"],
@@ -34,6 +34,7 @@ def abstract_system_model_inputs():
             ("P1", "I1", 0): 27.5,
             ("P2", "I2", 0): 1,
         },
+        "internal_demand_technosphere": {},
         "foreground_biosphere": {
             ("P1", "CO2", 1): 10,
             ("P1", "CO2", 2): 10,
