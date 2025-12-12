@@ -356,8 +356,14 @@ def create_model(
 
         def scale_tensor_by_operation(tensor: pyo.Param, flow_set):
             def expr(m, p, x, t):
-                tau0 = m.process_operation_start[p]
-                return tensor[p, x, tau0] * m.var_operation[p, t]
+                # Sum across all process times in the operation phase
+                tau_start = m.process_operation_start[p]
+                tau_end = m.process_operation_end[p]
+                return sum(
+                    tensor[p, x, tau]
+                    for tau in m.PROCESS_TIME
+                    if tau_start <= tau <= tau_end
+                ) * m.var_operation[p, t]
 
             return pyo.Expression(
                 model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
@@ -417,9 +423,18 @@ def create_model(
         )
 
         def operation_limited_by_installation_rule(model, p, f, t):
-            return model.var_operation[p, t] * model.foreground_production[
-                p, f, model.process_operation_start[p]
-            ] <= sum(
+            # Sum production across all process times in the operation phase
+            operation_production = sum(
+                model.foreground_production[p, f, tau]
+                for tau in model.PROCESS_TIME
+                if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+            )
+            # Unscale production to get real units
+            # production is scaled, var_operation is real, so LHS is in scaled units
+            # We need to multiply by fg_scale to get real units for dimensional consistency
+            fg_scale = model.scales['foreground']
+            # Installation capacity: sum over all process times (in real units)
+            return model.var_operation[p, t] * operation_production * fg_scale <= sum(
                 (1 if model.foreground_production[p, f, tau] != 0 else 0)
                 * model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
@@ -440,8 +455,13 @@ def create_model(
             - Internal consumption by other foreground processes
             """
             # Total production of product r at time t
+            # Sum across all process times in the operation phase
             total_production = sum(
-                model.foreground_production[p, r, model.process_operation_start[p]]
+                sum(
+                    model.foreground_production[p, r, tau]
+                    for tau in model.PROCESS_TIME
+                    if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+                )
                 * model.var_operation[p, t]
                 for p in model.PROCESS
             )

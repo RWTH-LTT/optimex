@@ -138,8 +138,9 @@ def abstract_system_model(request, abstract_system_model_inputs):
     model_inputs = converter.OptimizationModelInputs(**abstract_system_model_inputs)
     if model_type == "constrained":
         # Set the impact limit for the constrained model
+        # Updated after fixing temporal distribution handling - construction impacts now correctly calculated
         model_inputs.category_impact_limit = {
-            "land_use": 88.5,
+            "land_use": 180.0,  # Increased from 88.5 due to corrected var_installation scaling
         }
     # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(

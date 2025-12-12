@@ -1,5 +1,6 @@
 import math
 
+import bw2data as bd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -67,6 +68,89 @@ class PostProcessor:
 
         self._plot_config = default_config
 
+        # Create consistent color mapping for all processes and products
+        self._color_map = self._create_color_map()
+
+        # Cache for code -> name lookups
+        self._name_cache = {}
+
+    def _create_color_map(self):
+        """
+        Create a consistent color mapping for all processes and products.
+        Returns a dict mapping item names to colors.
+        """
+        # Collect all unique processes and products
+        all_items = set()
+        all_items.update(self.m.PROCESS)
+        all_items.update(self.m.PRODUCT)
+
+        # Sort for consistency
+        all_items = sorted(all_items)
+
+        # Map to colors
+        colors = self._plot_config["colormap"]
+        color_map = {item: colors[i % len(colors)] for i, item in enumerate(all_items)}
+        return color_map
+
+    def _get_name(self, code: str) -> str:
+        """
+        Get the human-readable name for a code with caching.
+        Tries foreground database first, then falls back to code if not found.
+        """
+        if code in self._name_cache:
+            return self._name_cache[code]
+
+        try:
+            # Try to get from foreground database
+            node = bd.get_node(database="foreground", code=code)
+            name = node.get("name", code)
+        except Exception:
+            # If not found or error, use code as name
+            name = code
+
+        self._name_cache[code] = name
+        return name
+
+    def _annotate_dataframe(self, df, annotated: bool):
+        """
+        Annotate DataFrame columns with human-readable names if requested.
+        Handles both single-level and multi-level column indices.
+        """
+        if not annotated:
+            return df
+
+        if isinstance(df.columns, pd.MultiIndex):
+            # Multi-level columns (e.g., (Process, Product))
+            new_columns = pd.MultiIndex.from_tuples(
+                [tuple(self._get_name(col) for col in cols) for cols in df.columns],
+                names=df.columns.names,
+            )
+            df.columns = new_columns
+        else:
+            # Single-level columns
+            df.columns = [self._get_name(col) for col in df.columns]
+
+        return df
+
+    def _get_colors_for_dataframe(self, df):
+        """
+        Get consistent colors for DataFrame columns.
+        Handles both single-level and multi-level column indices.
+        """
+        colors = []
+        if isinstance(df.columns, pd.MultiIndex):
+            # For multi-level, use the first level (Process) for color
+            for col in df.columns:
+                # Use the first element of the tuple for color lookup
+                key = col[0] if isinstance(col, tuple) else col
+                colors.append(self._color_map.get(key, self._plot_config["colormap"][0]))
+        else:
+            # Single-level columns
+            for col in df.columns:
+                colors.append(self._color_map.get(col, self._plot_config["colormap"][0]))
+
+        return colors
+
     def _create_clean_axes(self, nrows=1, ncols=1):
         """
         Create a grid of clean axes with consistent formatting.
@@ -93,16 +177,29 @@ class PostProcessor:
             ax.set_ylabel("Value", fontsize=self._plot_config["fontsize"])
         return fig, axes
 
-    def _apply_bar_styles(self, df, ax, title=None, legend_title=None):
+    def _apply_bar_styles(self, df, ax, colors, title=None, legend_title=None):
         """
-        Apply standard bar plot styling.
+        Apply standard bar plot styling with consistent colors.
+
+        Parameters
+        ----------
+        df : DataFrame
+            Data to plot
+        ax : matplotlib axis
+            Axis to plot on
+        colors : list
+            List of colors for each column
+        title : str, optional
+            Plot title
+        legend_title : str, optional
+            Legend title
         """
         df.plot(
             kind="bar",
             stacked=True,
             ax=ax,
             width=self._plot_config["bar_width"],
-            color=self._plot_config["colormap"][: len(df.columns)],
+            color=colors,
             edgecolor="black",
             legend=False,
         )
@@ -115,9 +212,9 @@ class PostProcessor:
         ax.legend(
             title=legend_title or "",
             fontsize=self._plot_config["fontsize"] - 2,
-            loc="upper right",
+            loc="center left",
             frameon=False,
-            bbox_to_anchor=(1.15, 1),
+            bbox_to_anchor=(1.02, 0.5),
         )
 
     def get_impacts(self) -> pd.DataFrame:
@@ -131,6 +228,7 @@ class PostProcessor:
         impacts = {
             (c, p, t): pyo.value(self.m.specific_impact[c, p, t])
             * cat_scales[c]
+            * fg_scale  # Unscale foreground impacts
             for c in self.m.CATEGORY
             for p in self.m.PROCESS
             for t in self.m.SYSTEM_TIME
@@ -263,11 +361,17 @@ class PostProcessor:
         self.df_demand = df_pivot
         return self.df_demand
 
-    def plot_impacts(self, df_impacts=None):
+    def plot_impacts(self, df_impacts=None, annotated=True):
         """
         Plot a stacked bar chart for impacts.
-        df_impacts: DataFrame with Time as index, Categories and Processes as columns.
-        Columns must be a MultiIndex: (Category, Process)
+
+        Parameters
+        ----------
+        df_impacts : DataFrame, optional
+            DataFrame with Time as index, Categories and Processes as columns.
+            Columns must be a MultiIndex: (Category, Process)
+        annotated : bool, default=True
+            If True, show human-readable names instead of codes
         """
         if df_impacts is None:
             df_impacts = self.get_impacts()
@@ -283,7 +387,11 @@ class PostProcessor:
             sub_df = df_impacts[category]
             # Filter out processes with all zero values in this category
             sub_df = sub_df.loc[:, (sub_df != 0).any(axis=0)]
-            self._apply_bar_styles(sub_df, ax, title=category, legend_title="Process")
+            # Get colors BEFORE annotation (using codes)
+            colors = self._get_colors_for_dataframe(sub_df)
+            # Annotate if requested
+            sub_df = self._annotate_dataframe(sub_df, annotated)
+            self._apply_bar_styles(sub_df, ax, colors, title=category, legend_title="Process")
 
         # Hide unused axes
         for j in range(i + 1, len(axes)):
@@ -293,13 +401,18 @@ class PostProcessor:
         plt.show()
         return fig, axes
 
-    def plot_production_and_demand(self, prod_df=None, demand_df=None):
+    def plot_production_and_demand(self, prod_df=None, demand_df=None, annotated=True):
         """
         Plot a stacked bar chart for production and line(s) for demand.
 
-        Parameters:
-            prod_df: DataFrame with Time as index, Processes as columns.
-            demand_df: DataFrame with Time as index, Reference Products as columns.
+        Parameters
+        ----------
+        prod_df : DataFrame, optional
+            DataFrame with Time as index, (Process, Product) as columns
+        demand_df : DataFrame, optional
+            DataFrame with Time as index, Products as columns
+        annotated : bool, default=True
+            If True, show human-readable names instead of codes
         """
 
         if prod_df is None:
@@ -316,6 +429,13 @@ class PostProcessor:
         # Filter out columns with all zero values
         prod_df = prod_df.loc[:, (prod_df != 0).any(axis=0)]
         demand_df = demand_df.loc[:, (demand_df != 0).any(axis=0)]
+
+        # Get colors BEFORE annotation (using codes)
+        prod_colors = self._get_colors_for_dataframe(prod_df)
+
+        # Annotate if requested
+        prod_df = self._annotate_dataframe(prod_df, annotated)
+        demand_df = self._annotate_dataframe(demand_df, annotated)
 
         fig, axes = self._create_clean_axes()
         ax = axes[0]
@@ -338,7 +458,7 @@ class PostProcessor:
                 ax=ax,
                 edgecolor="black",
                 width=self._plot_config["bar_width"],
-                color=self._plot_config["colormap"][: len(prod_df.columns)],
+                color=prod_colors,
                 legend=False,  # We'll handle legend separately
             )
 
@@ -357,11 +477,12 @@ class PostProcessor:
         handles, labels = ax.get_legend_handles_labels()
         ax.legend(
             handles=handles,
-            loc="upper left",
+            loc="center left",
             fontsize=self._plot_config["fontsize"] - 2,
             title="Processes / Demand",
             title_fontsize=self._plot_config["fontsize"],
             frameon=False,
+            bbox_to_anchor=(1.02, 0.5),
         )
 
         ax.set_title(
@@ -373,10 +494,16 @@ class PostProcessor:
         plt.show()
         return fig, ax
 
-    def plot_installation(self, df_installation=None):
+    def plot_installation(self, df_installation=None, annotated=True):
         """
         Plot a stacked bar chart for installation data.
-        df_installation: DataFrame with Time as index, Processes as columns.
+
+        Parameters
+        ----------
+        df_installation : DataFrame, optional
+            DataFrame with Time as index, Processes as columns
+        annotated : bool, default=True
+            If True, show human-readable names instead of codes
         """
         if df_installation is None:
             df_installation = self.get_installation()
@@ -384,20 +511,32 @@ class PostProcessor:
         # Filter out columns with all zero values
         df_installation = df_installation.loc[:, (df_installation != 0).any(axis=0)]
 
+        # Get colors BEFORE annotation (using codes)
+        colors = self._get_colors_for_dataframe(df_installation)
+
+        # Annotate if requested
+        df_installation = self._annotate_dataframe(df_installation, annotated)
+
         fig, axes = self._create_clean_axes()
         ax = axes[0]
         self._apply_bar_styles(
-            df_installation, ax, title="Installed Capacity", legend_title="Processes"
+            df_installation, ax, colors, title="Installed Capacity", legend_title="Processes"
         )
         ax.set_ylabel("Installation", fontsize=self._plot_config["fontsize"])
         fig.tight_layout()
         plt.show()
         return fig, ax
 
-    def plot_operation(self, df_operation=None):
+    def plot_operation(self, df_operation=None, annotated=True):
         """
         Plot a stacked bar chart for operation data.
-        df_operation: DataFrame with Time as index, Processes as columns.
+
+        Parameters
+        ----------
+        df_operation : DataFrame, optional
+            DataFrame with Time as index, Processes as columns
+        annotated : bool, default=True
+            If True, show human-readable names instead of codes
         """
         if df_operation is None:
             df_operation = self.get_operation()
@@ -405,10 +544,16 @@ class PostProcessor:
         # Filter out columns with all zero values
         df_operation = df_operation.loc[:, (df_operation != 0).any(axis=0)]
 
+        # Get colors BEFORE annotation (using codes)
+        colors = self._get_colors_for_dataframe(df_operation)
+
+        # Annotate if requested
+        df_operation = self._annotate_dataframe(df_operation, annotated)
+
         fig, axes = self._create_clean_axes()
         ax = axes[0]
         self._apply_bar_styles(
-            df_operation, ax, title="Operational Level", legend_title="Processes"
+            df_operation, ax, colors, title="Operational Level", legend_title="Processes"
         )
         ax.set_ylabel("Operation", fontsize=self._plot_config["fontsize"])
         fig.tight_layout()
