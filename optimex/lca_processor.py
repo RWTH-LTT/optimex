@@ -7,7 +7,7 @@ import bw2calc as bc
 import bw2data as bd
 import numpy as np
 import pandas as pd
-from bw_temporalis import TemporalDistribution
+from bw_temporalis import TemporalDistribution, easy_timedelta_distribution
 from dynamic_characterization import characterize
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -409,7 +409,12 @@ class LCADataProcessor:
 
             for exc in act.exchanges():
                 # Extract temporal distribution
-                temporal_dist = exc.get("temporal_distribution", {})
+                temporal_dist = exc.get(
+                    "temporal_distribution",
+                    TemporalDistribution(
+                        date=np.array([0], dtype="timedelta64[Y]"), amount=np.array([1])
+                    ),
+                )                
                 years = temporal_dist.date.astype("timedelta64[Y]").astype(int)
                 # Ensure all years are included in process time
                 self._process_time.update(
@@ -417,8 +422,10 @@ class LCADataProcessor:
                 )
                 temporal_factor = temporal_dist.amount
 
-                # Skip if temporal distribution is missing or invalid
-                if not years.any() or not temporal_factor.any():
+                # Skip if temporal distribution is missing or invalid (empty arrays)
+                if years.size == 0 or temporal_factor.size == 0:
+                    logger.debug(
+                        f"Skipping exchange {exc.input} due to missing or invalid temporal distribution.")
                     continue
 
                 edge_type = exc["type"]
