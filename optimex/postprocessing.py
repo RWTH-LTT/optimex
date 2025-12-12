@@ -185,10 +185,13 @@ class PostProcessor:
         Extracts the operation data from the model and returns it as a DataFrame.
         The DataFrame will have a MultiIndex with 'Time' and 'Process'.
         The values are the operational levels for each process at each time step.
+
+        Note: var_operation is not scaled because when both demand and
+        foreground_production are scaled by the same factor, the scaling
+        cancels out in the constraint: demand = production * operation.
         """
-        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
         operation_matrix = {
-            (t, p): pyo.value(self.m.var_operation[p, t]) * fg_scale
+            (t, p): pyo.value(self.m.var_operation[p, t])
             for p in self.m.PROCESS
             for t in self.m.SYSTEM_TIME
         }
@@ -278,6 +281,8 @@ class PostProcessor:
         for i, category in enumerate(categories):
             ax = axes[i]
             sub_df = df_impacts[category]
+            # Filter out processes with all zero values in this category
+            sub_df = sub_df.loc[:, (sub_df != 0).any(axis=0)]
             self._apply_bar_styles(sub_df, ax, title=category, legend_title="Process")
 
         # Hide unused axes
@@ -308,6 +313,10 @@ class PostProcessor:
         prod_df.index = prod_df.index.astype(str)
         demand_df.index = demand_df.index.astype(str)
 
+        # Filter out columns with all zero values
+        prod_df = prod_df.loc[:, (prod_df != 0).any(axis=0)]
+        demand_df = demand_df.loc[:, (demand_df != 0).any(axis=0)]
+
         fig, axes = self._create_clean_axes()
         ax = axes[0]
 
@@ -322,15 +331,16 @@ class PostProcessor:
         )
 
         # Plot production (stacked bars)
-        prod_df.plot(
-            kind="bar",
-            stacked=True,
-            ax=ax,
-            edgecolor="black",
-            width=self._plot_config["bar_width"],
-            color=self._plot_config["colormap"][: len(prod_df.columns)],
-            legend=False,  # We'll handle legend separately
-        )
+        if not prod_df.empty:
+            prod_df.plot(
+                kind="bar",
+                stacked=True,
+                ax=ax,
+                edgecolor="black",
+                width=self._plot_config["bar_width"],
+                color=self._plot_config["colormap"][: len(prod_df.columns)],
+                legend=False,  # We'll handle legend separately
+            )
 
         # Plot demand (lines)
         for col in demand_df.columns:
@@ -371,6 +381,9 @@ class PostProcessor:
         if df_installation is None:
             df_installation = self.get_installation()
 
+        # Filter out columns with all zero values
+        df_installation = df_installation.loc[:, (df_installation != 0).any(axis=0)]
+
         fig, axes = self._create_clean_axes()
         ax = axes[0]
         self._apply_bar_styles(
@@ -388,6 +401,9 @@ class PostProcessor:
         """
         if df_operation is None:
             df_operation = self.get_operation()
+
+        # Filter out columns with all zero values
+        df_operation = df_operation.loc[:, (df_operation != 0).any(axis=0)]
 
         fig, axes = self._create_clean_axes()
         ax = axes[0]
