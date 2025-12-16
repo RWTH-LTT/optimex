@@ -1,6 +1,62 @@
 """
-This module contains the optimizer for the Optimex project.
-It provides functionality to perform optimization using Pyomo.
+Optimization model construction and solving for temporal LCA-based pathway optimization.
+
+This module creates and solves Pyomo optimization models that minimize environmental
+impacts over time while meeting demand constraints and respecting process limits.
+
+## Scaling Convention
+
+The optimization uses a two-tier scaling system for numerical stability:
+
+### Decision Variables (REAL UNITS)
+- `var_installation[p, t]`: Number of process units installed (dimensionless)
+- `var_operation[p, t]`: Operation level (dimensionless, 0 to capacity)
+
+Both decision variables remain in REAL (unscaled) units to:
+1. Maintain physical interpretability
+2. Allow direct comparison with process limits
+3. Ensure correct background inventory calculations
+
+### Parameters (SCALED UNITS)
+
+**Foreground parameters** (scaled by `fg_scale`):
+- `foreground_production[p, r, tau]`: kg product per process unit [SCALED]
+- `foreground_biosphere[p, e, tau]`: kg emission per process unit [SCALED]
+- `foreground_technosphere[p, i, tau]`: kg intermediate per process unit [SCALED]
+- `internal_demand_technosphere[p, r, tau]`: kg product per process unit [SCALED]
+- `demand[r, t]`: kg product demanded [SCALED]
+
+**Characterization parameters** (scaled by `cat_scales[category]`):
+- `characterization[c, e, t]`: impact per kg emission [SCALED]
+- `category_impact_limit[c]`: maximum impact allowed [SCALED]
+
+**Unscaled parameters**:
+- `background_inventory[bkg, i, e]`: kg emission / kg intermediate [UNSCALED]
+- `mapping[bkg, t]`: interpolation weights [UNSCALED, dimensionless]
+- `process_limits_*`: capacity limits [UNSCALED, matches var_installation]
+
+### Dimensional Consistency
+
+When SCALED parameters are multiplied by REAL decision variables:
+```
+scaled_param [kg SCALED/process] × var_real [# processes] = result [kg SCALED]
+```
+
+To convert back to REAL units:
+```
+result [kg SCALED] × fg_scale [REAL/SCALED] = result [kg REAL]
+```
+
+Example constraint dimensional analysis:
+```
+ProductDemandFulfillment:
+    production [kg SCALED/operation] × var_operation [#] = demand [kg SCALED] ✓
+
+OperationLimit (LHS):
+    var_operation [#] × production [kg SCALED/operation] × fg_scale = [kg REAL]
+OperationLimit (RHS):
+    production [kg SCALED/process] × fg_scale × var_installation [#] = [kg REAL]
+```
 """
 
 from typing import Any, Dict, Tuple
@@ -331,8 +387,8 @@ def create_model(
     model.var_operation = pyo.Var(
         model.PROCESS,
         model.SYSTEM_TIME,
-        within=pyo.NonNegativeReals,
-        doc="Operational level",
+        within=pyo.NonNegativeReals,  # Non-negative activity level
+        doc="Operational activity level (production amounts at each time)",
     )
     
     if flexible_operation:
@@ -356,14 +412,23 @@ def create_model(
 
         def scale_tensor_by_operation(tensor: pyo.Param, flow_set):
             def expr(m, p, x, t):
-                # Sum across all process times in the operation phase
-                tau_start = m.process_operation_start[p]
-                tau_end = m.process_operation_end[p]
-                return sum(
+                # Only apply operational scaling to flows marked as operational
+                # Check the value explicitly since operation_flow is a Param
+                if pyo.value(m.operation_flow[p, x]) == 0:
+                    return 0
+
+                # For operational flows: use TOTAL across operation phase
+                # (same treatment as production flows)
+                # o_t represents production amount, so operational flows scale proportionally
+                # This is LINEAR: parameter × variable
+                total_flow_per_installation = sum(
                     tensor[p, x, tau]
                     for tau in m.PROCESS_TIME
-                    if tau_start <= tau <= tau_end
-                ) * m.var_operation[p, t]
+                    if m.process_operation_start[p] <= tau <= m.process_operation_end[p]
+                )
+
+                # Total flow = sum(flow[tau]) × o_t
+                return total_flow_per_installation * m.var_operation[p, t]
 
             return pyo.Expression(
                 model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
@@ -422,40 +487,48 @@ def create_model(
             rule=scaled_inventory_tensor,
         )
 
-        def operation_limited_by_installation_rule(model, p, f, t):
-            # Sum production across all process times in the operation phase
-            operation_production = sum(
-                model.foreground_production[p, f, tau]
+        def operation_capacity_constraint_rule(model, p, r, t):
+            """
+            Capacity constraint: o_t ≤ (total production per installation) × (installations in operation)
+            """
+            # Total SCALED production per installation during operation phase
+            total_production_scaled = sum(
+                model.foreground_production[p, r, tau]
                 for tau in model.PROCESS_TIME
                 if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
             )
-            # Unscale production to get real units
-            # production is scaled, var_operation is real, so LHS is in scaled units
-            # We need to multiply by fg_scale to get real units for dimensional consistency
-            fg_scale = model.scales['foreground']
-            # Installation capacity: sum over all process times (in real units)
-            return model.var_operation[p, t] * operation_production * fg_scale <= sum(
-                (1 if model.foreground_production[p, f, tau] != 0 else 0)
-                * model.var_installation[p, t - tau]
+
+            # Count installations currently in their operation phase (REAL units)
+            installations_in_operation = sum(
+                model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
                 if (t - tau in model.SYSTEM_TIME)
+                and model.process_operation_start[p] <= tau <= model.process_operation_end[p]
             )
+            return model.var_operation[p, t] <= installations_in_operation
 
-        model.OperationLimit = pyo.Constraint(
+        model.OperationCapacity = pyo.Constraint(
             model.PROCESS,
             model.PRODUCT,
             model.SYSTEM_TIME,
-            rule=operation_limited_by_installation_rule,
+            rule=operation_capacity_constraint_rule,
         )
 
         def product_demand_fulfillment_rule(model, r, t):
             """
-            All products must be produced exactly to meet total demand:
+            Demand constraint: total_production × o_t ≥ f_t
+
+            For production flows: use total production per installation (sum across operation phase).
+            o_t represents production amount, bounded by installed capacity.
+
+            Total production must meet:
             - External demand (from demand parameter)
             - Internal consumption by other foreground processes
+
+            This is LINEAR: parameter × variable
             """
             # Total production of product r at time t
-            # Sum across all process times in the operation phase
+            # Sum of production across operation phase × operation level
             total_production = sum(
                 sum(
                     model.foreground_production[p, r, tau]
@@ -484,86 +557,21 @@ def create_model(
         )
 
     else:
-        # broken for now, but shouldnt be used anyway
+        # Fixed operation mode is not currently implemented
+        # The previous implementation had dimensional consistency issues and
+        # did not properly handle the temporal structure of processes.
+        #
+        # To implement fixed operation mode properly, the following would be needed:
+        # 1. Force var_operation to equal installed capacity (no partial operation)
+        # 2. Adjust demand fulfillment to account for forced full-capacity operation
+        # 3. Update inventory calculations to remove operation-dependent flows
+        # 4. Ensure all installations operate at full capacity throughout their lifecycle
+        #
+        # For now, flexible operation mode is recommended and fully supported.
         raise NotImplementedError(
-            "Fixed operation doesn't work right now, but why would you use it anyway? Please set flexible_operation=True for now."
-        )
-        
-        def operation_at_full_capacity(model, p, f, t):
-            return model.var_operation[p, t] * model.foreground_production[
-                p, f, model.process_operation_start[p]
-            ] == sum(
-                (1 if model.foreground_production[p, f, tau] != 0 else 0)
-                * model.var_installation[p, t - tau]
-                for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME)
-            )
-            
-        model.OperationLimit = pyo.Constraint( # Always at full capacity
-            model.PROCESS,
-            model.PRODUCT,
-            model.SYSTEM_TIME,
-            rule=operation_at_full_capacity,
-        )
-
-        def scale_tensor_by_installation(tensor: pyo.Param, flow_set: str):
-            def expr(m, p, x, t):
-                return sum(
-                    tensor[p, x, tau] * m.var_installation[p, t - tau]
-                    for tau in m.PROCESS_TIME
-                    if (t - tau in m.SYSTEM_TIME)
-                )
-
-            return pyo.Expression(
-                model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
-            )
-
-        model.scaled_technosphere = scale_tensor_by_installation(
-            model.foreground_technosphere, "INTERMEDIATE_FLOW"
-        )
-        model.scaled_biosphere = scale_tensor_by_installation(
-            model.foreground_biosphere, "ELEMENTARY_FLOW"
-        )
-
-        def scaled_inventory_tensor(model, p, e, t):
-            """
-            Returns a Pyomo expression for the total inventory impact for a given
-            process p, elementary flow e, and time step t.
-            """
-
-            return (
-                sum(
-                    model.scaled_technosphere[p, i, t]
-                    * sum(
-                        model.background_inventory[bkg, i, e] * model.mapping[bkg, t]
-                        for bkg in model.BACKGROUND_ID
-                    )
-                    for i in model.INTERMEDIATE_FLOW
-                )
-                + model.scaled_biosphere[p, e, t]
-            )
-
-        model.scaled_inventory = pyo.Expression(
-            model.PROCESS,
-            model.ELEMENTARY_FLOW,
-            model.SYSTEM_TIME,
-            rule=scaled_inventory_tensor,
-        )
-
-        def fulfill_demand_rule(model, f, t):
-            return (
-                sum(
-                    model.foreground_production[p, f, tau]
-                    * model.var_operation[p, t - tau]
-                    for p in model.PROCESS
-                    for tau in model.PROCESS_TIME
-                    if (t - tau in model.SYSTEM_TIME)
-                )
-                >= model.demand[f, t]
-            )
-
-        model.DemandConstraint = pyo.Constraint(
-            model.PRODUCT, model.SYSTEM_TIME, rule=fulfill_demand_rule
+            "Fixed operation mode is not currently implemented. "
+            "Please use flexible_operation=True. "
+            "See optimizer.py documentation for details on implementing fixed mode."
         )
 
     def category_process_time_specific_impact(model, c, p, t):
@@ -707,3 +715,81 @@ def solve_model(
         logger.info(f"Denormalized duals: {denorm_duals}")
 
     return model, true_obj, results
+
+
+def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6) -> Dict[str, Any]:
+    """
+    Validate that operation levels respect capacity constraints.
+
+    This function performs post-solve validation to ensure that var_operation
+    (number of installations operating) does not exceed the number of installations
+    currently in their operation phase.
+
+    Parameters
+    ----------
+    model : pyo.ConcreteModel
+        A solved Pyomo model with flexible operation mode.
+    tolerance : float, optional
+        Relative tolerance for validation (default: 1e-6).
+
+    Returns
+    -------
+    dict
+        Validation results with keys:
+        - "valid": bool, True if all operation levels respect capacity
+        - "violations": list of tuples (process, time, operation, capacity, violation_type)
+        - "max_violation": float, maximum violation found
+        - "summary": str, human-readable summary
+
+    Raises
+    ------
+    ValueError
+        If model is not in flexible operation mode or not solved.
+    """
+    if not model.flexible_operation:
+        raise ValueError("Validation only applies to flexible operation mode")
+
+    if not hasattr(model, "var_operation"):
+        raise ValueError("Model must have var_operation")
+
+    violations = []
+    max_violation = 0.0
+
+    for p in model.PROCESS:
+        for t in model.SYSTEM_TIME:
+            operation_value = pyo.value(model.var_operation[p, t])
+
+            # Calculate capacity: number of installations in operation phase
+            installations_in_operation = sum(
+                pyo.value(model.var_installation[p, t - tau])
+                for tau in model.PROCESS_TIME
+                if (t - tau in model.SYSTEM_TIME)
+                and pyo.value(model.process_operation_start[p]) <= tau <= pyo.value(model.process_operation_end[p])
+            )
+
+            # Check if operation exceeds capacity
+            if operation_value < -tolerance:
+                violation = abs(operation_value)
+                violations.append((p, t, operation_value, installations_in_operation, "negative"))
+                max_violation = max(max_violation, violation)
+            elif operation_value > installations_in_operation * (1.0 + tolerance):
+                violation = operation_value - installations_in_operation
+                violations.append((p, t, operation_value, installations_in_operation, "exceeds_capacity"))
+                max_violation = max(max_violation, violation)
+
+    # Generate summary
+    is_valid = len(violations) == 0
+    if is_valid:
+        summary = "✓ All operation levels respect capacity constraints"
+    else:
+        summary = (
+            f"✗ Found {len(violations)} operation bound violations. "
+            f"Max violation: {max_violation:.2e}"
+        )
+
+    return {
+        "valid": is_valid,
+        "violations": violations,
+        "max_violation": max_violation,
+        "summary": summary,
+    }

@@ -1,3 +1,14 @@
+"""
+Model input conversion and validation for optimization.
+
+This module bridges LCA data processing and optimization by converting outputs from
+LCADataProcessor into structured OptimizationModelInputs. It provides validation,
+scaling, serialization, and constraint management for optimization model inputs.
+
+Key classes:
+    - OptimizationModelInputs: Validated data structure for optimization inputs
+    - ModelInputManager: Handles conversion, serialization, and constraint overrides
+"""
 import copy
 import json
 import pickle
@@ -168,6 +179,29 @@ class OptimizationModelInputs(BaseModel):
 
     @model_validator(mode="before")
     def check_all_keys(cls, data):
+        """
+        Validate that all dictionary keys reference valid set elements.
+
+        This validator ensures that all keys in the input dictionaries (e.g., demand,
+        foreground_technosphere) reference elements that exist in the corresponding
+        sets (e.g., PROCESS, PRODUCT, SYSTEM_TIME). This prevents runtime errors
+        from invalid references.
+
+        Parameters
+        ----------
+        data : dict
+            The raw data dictionary before model instantiation.
+
+        Returns
+        -------
+        dict
+            The validated data dictionary.
+
+        Raises
+        ------
+        ValueError
+            If any dictionary key references an element not in the corresponding set.
+        """
         # Convert lists to sets for fast lookup
         processes = set(data.get("PROCESS", []))
         products = set(data.get("PRODUCT", []))
@@ -291,6 +325,24 @@ class OptimizationModelInputs(BaseModel):
     # for scaling.
     @model_validator(mode="after")
     def validate_constant_operation_flows(self) -> "OptimizationModelInputs":
+        """
+        Validate that flows marked as operational are constant over process time.
+
+        For flexible operation mode, flows that occur during the operation phase must
+        have constant values across process time steps. This is because the optimization
+        scales these flows linearly with the operation variable. Time-varying operational
+        flows would require fixed operation mode instead.
+
+        Returns
+        -------
+        OptimizationModelInputs
+            Self, after validation.
+
+        Raises
+        ------
+        ValueError
+            If any operational flow has varying values across process time.
+        """
         def check_constancy(
             flow_data: Dict[Tuple[str, str, int], float], flow_type: str
         ):
@@ -321,8 +373,20 @@ class OptimizationModelInputs(BaseModel):
 
     def get_scaled_copy(self) -> Tuple["OptimizationModelInputs", Dict[str, Any]]:
         """
-        Returns a deep-copied, scaled version of OptimizationModelInputs for numerical stability,
-        along with the scaling factors used.
+        Create a scaled copy of inputs for numerical stability in optimization.
+
+        Scaling improves solver performance by normalizing values to similar magnitudes.
+        The method scales foreground tensors, characterization factors, demand, and
+        limits while preserving the original data structure. Scaling factors are returned
+        for denormalizing results.
+
+        Returns
+        -------
+        tuple[OptimizationModelInputs, dict]
+            - Scaled copy of the model inputs
+            - Dictionary of scaling factors used:
+                - "foreground": Scale factor for all foreground tensors and demand
+                - "characterization": Dict mapping each category to its scale factor
         """
         # Deep copy to preserve raw data
         scaled = copy.deepcopy(self)
@@ -379,6 +443,9 @@ class OptimizationModelInputs(BaseModel):
                 for cat, lim in self.category_impact_limit.items()
             }
 
+        # NOTE: Process limits are NOT scaled because var_installation is in real units
+        # (it must be in real units for background inventory calculations to work correctly)
+
         return scaled, scaling_factors
 
     class Config:
@@ -431,6 +498,13 @@ class ModelInputManager:
     """
 
     def __init__(self):
+        """
+        Initialize a new ModelInputManager with empty model inputs.
+
+        The manager starts with no model inputs. Use `parse_from_lca_processor()`
+        to populate inputs from an LCADataProcessor, or use `load()` to load
+        previously saved inputs from disk.
+        """
         self.model_inputs = None
 
     def parse_from_lca_processor(
@@ -483,6 +557,30 @@ class ModelInputManager:
         self.model_inputs = OptimizationModelInputs(**data)
         return self.model_inputs
 
+    @staticmethod
+    def _tuple_key_to_str(key: Tuple) -> str:
+        """Convert tuple key to JSON-serializable string."""
+        return json.dumps(key)
+
+    @staticmethod
+    def _str_to_tuple_key(key_str: str) -> Tuple:
+        """Convert JSON string back to tuple key."""
+        return tuple(json.loads(key_str))
+
+    @staticmethod
+    def _serialize_dict_with_tuple_keys(d: Optional[Dict]) -> Optional[Dict]:
+        """Convert dictionary with tuple keys to dictionary with string keys."""
+        if d is None:
+            return None
+        return {ModelInputManager._tuple_key_to_str(k): v for k, v in d.items()}
+
+    @staticmethod
+    def _deserialize_dict_with_tuple_keys(d: Optional[Dict]) -> Optional[Dict]:
+        """Convert dictionary with string keys back to dictionary with tuple keys."""
+        if d is None:
+            return None
+        return {ModelInputManager._str_to_tuple_key(k): v for k, v in d.items()}
+
     def save(self, path: str) -> None:
         """
         Save the current OptimizationModelInputs to a JSON or pickle file based on extension.
@@ -491,8 +589,37 @@ class ModelInputManager:
         if self.model_inputs is None:
             raise ValueError("No OptimizationModelInputs to save.")
         if path.endswith(".json"):
+            # Get model data
+            data = self.model_inputs.model_dump()
+
+            # Convert tuple keys to string keys for JSON serialization
+            tuple_key_fields = [
+                "demand",
+                "operation_flow",
+                "foreground_technosphere",
+                "internal_demand_technosphere",
+                "foreground_biosphere",
+                "foreground_production",
+                "background_inventory",
+                "mapping",
+                "characterization",
+                "process_limits_max",
+                "process_limits_min",
+                "process_coupling",
+            ]
+
+            for field in tuple_key_fields:
+                if field in data:
+                    data[field] = self._serialize_dict_with_tuple_keys(data[field])
+
+            # Special handling for operation_time_limits (values are tuples, not keys)
+            if "operation_time_limits" in data and data["operation_time_limits"] is not None:
+                data["operation_time_limits"] = {
+                    k: list(v) for k, v in data["operation_time_limits"].items()
+                }
+
             with open(path, "w") as f:
-                json.dump(self.model_inputs.model_dump(), f, indent=2)
+                json.dump(data, f, indent=2)
         elif path.endswith(".pkl"):
             with open(path, "wb") as f:
                 pickle.dump(self.model_inputs, f)
@@ -506,6 +633,33 @@ class ModelInputManager:
         if path.endswith(".json"):
             with open(path, "r") as f:
                 data = json.load(f)
+
+            # Convert string keys back to tuple keys
+            tuple_key_fields = [
+                "demand",
+                "operation_flow",
+                "foreground_technosphere",
+                "internal_demand_technosphere",
+                "foreground_biosphere",
+                "foreground_production",
+                "background_inventory",
+                "mapping",
+                "characterization",
+                "process_limits_max",
+                "process_limits_min",
+                "process_coupling",
+            ]
+
+            for field in tuple_key_fields:
+                if field in data:
+                    data[field] = self._deserialize_dict_with_tuple_keys(data[field])
+
+            # Special handling for operation_time_limits (convert lists back to tuples)
+            if "operation_time_limits" in data and data["operation_time_limits"] is not None:
+                data["operation_time_limits"] = {
+                    k: tuple(v) for k, v in data["operation_time_limits"].items()
+                }
+
             self.model_inputs = OptimizationModelInputs(**data)
         elif path.endswith(".pkl"):
             with open(path, "rb") as f:

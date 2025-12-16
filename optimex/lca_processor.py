@@ -1,3 +1,15 @@
+"""
+Time-explicit LCA data processing for optimization.
+
+This module provides classes and utilities for performing time-explicit Life Cycle
+Assessment (LCA) computations using Brightway. It processes
+temporal distributions of product demands, constructs foreground and background
+inventory tensors, and prepares characterization factors for optimization.
+
+Key classes:
+    - LCAConfig: Configuration for LCA computations
+    - LCADataProcessor: Main class for time-explicit LCA processing
+"""
 import pickle
 from datetime import datetime
 from enum import Enum
@@ -15,11 +27,26 @@ from tqdm import tqdm
 
 
 class MetricEnum(str, Enum):
+    """
+    Supported metrics for dynamic impact characterization.
+
+    Attributes:
+        GWP: Global Warming Potential - time-dependent radiative forcing metric
+        CRF: Cumulative Radiative Forcing - integrated radiative forcing over time horizon
+    """
+
     GWP = "GWP"
     CRF = "CRF"
 
 
 class TemporalResolutionEnum(str, Enum):
+    """
+    Supported temporal resolutions for the optimization model.
+
+    Attributes:
+        year: Annual time steps (currently the only supported resolution)
+    """
+
     year = "year"
 
 
@@ -28,8 +55,8 @@ class CharacterizationMethodConfig(BaseModel):
     Configuration for a single LCIA characterization method.
 
     Attributes:
-        name: User-defined identifier for the impact category
-        (e.g., 'climate_change_dynamic_gwp').
+        category_name: User-defined identifier for the impact category
+            (e.g., 'climate_change_dynamic_gwp').
         brightway_method: Brightway method identifier tuple, either 2 or 3 elements
             (e.g., ('GWP', 'example') or ('IPCC', 'climate change', 'GWP 100a')).
         metric: Impact metric used for dynamic characterization.

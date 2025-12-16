@@ -1,3 +1,14 @@
+"""
+Post-processing and visualization of optimization results.
+
+This module provides tools to extract, process, and visualize results from solved
+optimization models. The PostProcessor class handles denormalization of scaled
+results, data extraction into DataFrames, and creation of publication-quality plots
+for impacts, installation schedules, production, and operation profiles.
+
+Key classes:
+    - PostProcessor: Extract and visualize optimization results
+"""
 import math
 
 import bw2data as bd
@@ -31,6 +42,7 @@ class PostProcessor:
             - "line_color" : str, color of lines in line plots
             - "line_marker" : str, marker style for line plots
             - "line_width" : float, width of lines in line plots
+            - "max_xticks" : int, maximum number of x-axis ticks to display
 
         Unrecognized keys are ignored.
 
@@ -58,6 +70,7 @@ class PostProcessor:
             "line_color": "black",
             "line_marker": "o",
             "line_width": 2,
+            "max_xticks": 10,
         }
 
         # If user provided config, update defaults with it
@@ -151,13 +164,50 @@ class PostProcessor:
 
         return colors
 
-    def _create_clean_axes(self, nrows=1, ncols=1):
+    def _format_label(self, label):
+        """Convert column labels (including MultiIndex tuples) to readable strings."""
+        if isinstance(label, tuple):
+            return " / ".join(str(part) for part in label)
+        return str(label)
+
+    def _set_smart_xticks(self, ax, labels):
+        """
+        Downsample x-axis tick labels to avoid clutter.
+
+        Parameters
+        ----------
+        ax : matplotlib axis
+            Axis on which ticks will be set.
+        labels : iterable
+            Original labels corresponding to each position along the x-axis.
+        """
+        labels = [str(lbl) for lbl in labels]
+        if not labels:
+            return
+
+        max_ticks = self._plot_config.get("max_xticks", 10)
+        total = len(labels)
+        step = max(1, math.ceil(total / max_ticks))
+        tick_positions = list(range(0, total, step))
+        if tick_positions[-1] != total - 1:
+            tick_positions.append(total - 1)
+
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(
+            [labels[i] for i in tick_positions],
+            rotation=self._plot_config["rotation"],
+            ha="right",
+            fontsize=self._plot_config["fontsize"],
+        )
+
+    def _create_clean_axes(self, nrows=1, ncols=1, figsize=None):
         """
         Create a grid of clean axes with consistent formatting.
         Returns fig, flattened list of axes.
         """
+        fig_size = figsize or self._plot_config["figsize"]
         fig, axes = plt.subplots(
-            nrows=nrows, ncols=ncols, figsize=self._plot_config["figsize"], sharex=True
+            nrows=nrows, ncols=ncols, figsize=fig_size, sharex=True
         )
         axes = axes.flatten() if isinstance(axes, (np.ndarray, list)) else [axes]
 
@@ -201,26 +251,40 @@ class PostProcessor:
             width=self._plot_config["bar_width"],
             color=colors,
             edgecolor="black",
-            legend=False,
+            legend=True,
         )
         ax.set_title(title or "", fontsize=self._plot_config["fontsize"] + 2)
-        ax.set_xticklabels(
-            df.index.astype(str),
-            rotation=self._plot_config["rotation"],
-            ha="right",
-        )
-        ax.legend(
-            title=legend_title or "",
-            fontsize=self._plot_config["fontsize"] - 2,
-            loc="center left",
-            frameon=False,
-            bbox_to_anchor=(1.02, 0.5),
-        )
+        self._set_smart_xticks(ax, df.index)
+
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            labels = [self._format_label(col) for col in df.columns]
+            ax.legend(
+                handles,
+                labels,
+                title=legend_title or "",
+                fontsize=self._plot_config["fontsize"] - 2,
+                loc="upper center",
+                ncol=max(1, min(len(labels), 4)),
+                frameon=False,
+                bbox_to_anchor=(0.5, -0.25),
+                title_fontsize=self._plot_config["fontsize"],
+            )
 
     def get_impacts(self) -> pd.DataFrame:
         """
-        Extracts the specific impacts from the model and returns them as a DataFrame.
-        The DataFrame will have a MultiIndex with 'Category', 'Process', and 'Time'.
+        Extract environmental impacts by category, process, and time.
+
+        Returns denormalized impact values from the solved optimization model,
+        organized as a pivoted DataFrame with time as rows and (category, process)
+        as column MultiIndex.
+
+        Returns
+        -------
+        pd.DataFrame
+            Pivoted DataFrame with 'Time' as index and MultiIndex columns for
+            (Category, Process) combinations. Values represent environmental
+            impacts in the units of the characterization method.
         """
         impacts = {}
         cat_scales = getattr(self.m, "scales", {}).get("characterization", 1.0)
@@ -245,6 +309,22 @@ class PostProcessor:
         return self.df_impacts
 
     def get_radiative_forcing(self) -> pd.DataFrame:
+        """
+        Extract radiative forcing time series from model results.
+
+        This method is currently not implemented. It will extract the scaled inventory
+        and compute radiative forcing profiles over time for climate impact assessment.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with radiative forcing values over time.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
         inventory = {
             (p, e, t): pyo.value(self.m.scaled_inventory[p, e, t]) * fg_scale
@@ -263,9 +343,9 @@ class PostProcessor:
         The DataFrame will have a MultiIndex with 'Time' and 'Process'.
         The values are the installed capacities for each process at each time step.
         """
-        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
+        # var_installation is already in real units, no scaling needed
         installation_matrix = {
-            (t, p): pyo.value(self.m.var_installation[p, t]) * fg_scale
+            (t, p): pyo.value(self.m.var_installation[p, t])
             for p in self.m.PROCESS
             for t in self.m.SYSTEM_TIME
         }
@@ -321,10 +401,19 @@ class PostProcessor:
                             if (t - tau in self.m.SYSTEM_TIME)
                         )
                     else:
-                        tau0 = self.m.process_operation_start[p]
-                        total_production = self.m.foreground_production[
-                            p, f, tau0
-                        ] * pyo.value(self.m.var_operation[p, t])
+                        # Flexible operation: total_production_per_installation × o_t
+                        # Sum of production across operation phase × operation level
+                        total_production_per_installation = sum(
+                            self.m.foreground_production[p, f, tau]
+                            for tau in self.m.PROCESS_TIME
+                            if self.m.process_operation_start[p] <= tau <= self.m.process_operation_end[p]
+                        )
+
+                        # Production = total_production × o_t
+                        total_production = (
+                            total_production_per_installation
+                            * pyo.value(self.m.var_operation[p, t])
+                        )
                     production_tensor[(p, f, t)] = total_production * fg_scale
 
         df = pd.DataFrame.from_dict(
@@ -363,15 +452,21 @@ class PostProcessor:
 
     def plot_impacts(self, df_impacts=None, annotated=True):
         """
-        Plot a stacked bar chart for impacts.
+        Plot a stacked bar chart for impacts by category and process over time.
+
+        Creates a figure with one subplot per impact category, showing process
+        contributions as stacked bars. Automatically denormalizes scaled values
+        and optionally displays human-readable process names.
 
         Parameters
         ----------
         df_impacts : DataFrame, optional
             DataFrame with Time as index, Categories and Processes as columns.
-            Columns must be a MultiIndex: (Category, Process)
+            Columns must be a MultiIndex: (Category, Process). If not provided,
+            automatically extracted via get_impacts().
         annotated : bool, default=True
-            If True, show human-readable names instead of codes
+            If True, show human-readable names from Brightway database instead
+            of process codes.
         """
         if df_impacts is None:
             df_impacts = self.get_impacts()
@@ -380,7 +475,12 @@ class PostProcessor:
         ncols = 2
         nrows = math.ceil(len(categories) / ncols)
 
-        fig, axes = self._create_clean_axes(nrows=nrows, ncols=ncols)
+        # Widen figure for multiple columns to avoid cramped subplots
+        base_w, base_h = self._plot_config["figsize"]
+        fig_w = base_w * ncols
+        fig_h = base_h * max(1, nrows * 0.9)
+
+        fig, axes = self._create_clean_axes(nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h))
 
         for i, category in enumerate(categories):
             ax = axes[i]
@@ -398,8 +498,8 @@ class PostProcessor:
             fig.delaxes(axes[j])
 
         fig.tight_layout()
+        fig.subplots_adjust(bottom=0.25)
         plt.show()
-        return fig, axes
 
     def plot_production_and_demand(self, prod_df=None, demand_df=None, annotated=True):
         """
@@ -442,13 +542,6 @@ class PostProcessor:
 
         # Define x positions for line plotting
         x_positions = np.arange(len(prod_df.index))
-        ax.set_xticks(x_positions)
-        ax.set_xticklabels(
-            prod_df.index,
-            rotation=self._plot_config["rotation"],
-            ha="right",
-            fontsize=self._plot_config["fontsize"],
-        )
 
         # Plot production (stacked bars)
         if not prod_df.empty:
@@ -459,7 +552,7 @@ class PostProcessor:
                 edgecolor="black",
                 width=self._plot_config["bar_width"],
                 color=prod_colors,
-                legend=False,  # We'll handle legend separately
+                legend=True,  # We'll handle legend separately
             )
 
         # Plot demand (lines)
@@ -473,16 +566,23 @@ class PostProcessor:
                 color=self._plot_config["line_color"],
             )
 
+        self._set_smart_xticks(ax, prod_df.index)
+
         # Create combined legend
         handles, labels = ax.get_legend_handles_labels()
+        bar_count = prod_df.shape[1] if not prod_df.empty else 0
+        if bar_count:
+            bar_labels = [self._format_label(col) for col in prod_df.columns]
+            labels = bar_labels + labels[bar_count:]
         ax.legend(
             handles=handles,
-            loc="center left",
+            loc="upper center",
             fontsize=self._plot_config["fontsize"] - 2,
             title="Processes / Demand",
             title_fontsize=self._plot_config["fontsize"],
             frameon=False,
-            bbox_to_anchor=(1.02, 0.5),
+            bbox_to_anchor=(0.5, -0.25),
+            ncol=max(1, min(len(labels), 4)) if labels else 1,
         )
 
         ax.set_title(
@@ -491,8 +591,8 @@ class PostProcessor:
         ax.set_ylabel("Quantity", fontsize=self._plot_config["fontsize"])
 
         fig.tight_layout()
+        fig.subplots_adjust(bottom=0.25)
         plt.show()
-        return fig, ax
 
     def plot_installation(self, df_installation=None, annotated=True):
         """
@@ -524,8 +624,8 @@ class PostProcessor:
         )
         ax.set_ylabel("Installation", fontsize=self._plot_config["fontsize"])
         fig.tight_layout()
+        fig.subplots_adjust(bottom=0.25)
         plt.show()
-        return fig, ax
 
     def plot_operation(self, df_operation=None, annotated=True):
         """
@@ -557,5 +657,302 @@ class PostProcessor:
         )
         ax.set_ylabel("Operation", fontsize=self._plot_config["fontsize"])
         fig.tight_layout()
+        fig.subplots_adjust(bottom=0.25)
         plt.show()
-        return fig, ax
+
+    def get_production_capacity(self) -> pd.DataFrame:
+        """
+        Calculate maximum available production capacity for each product at each time step.
+
+        Capacity is determined by counting installations in their operation phase and
+        multiplying by their production coefficients.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with Time as index and Products as columns.
+            Values represent maximum production capacity (not actual production).
+        """
+        capacity_tensor = {}
+        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
+
+        for f in self.m.PRODUCT:
+            for t in self.m.SYSTEM_TIME:
+                # Calculate total capacity across all processes
+                total_capacity = 0
+
+                for p in self.m.PROCESS:
+                    # Count installations in operation phase at time t
+                    installations_operating = sum(
+                        pyo.value(self.m.var_installation[p, t - tau])
+                        for tau in self.m.PROCESS_TIME
+                        if (t - tau in self.m.SYSTEM_TIME)
+                        and pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+                    )
+
+                    # Production capacity per installation (sum over operation phase)
+                    production_per_installation = sum(
+                        self.m.foreground_production[p, f, tau]
+                        for tau in self.m.PROCESS_TIME
+                        if pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+                    )
+
+                    # Total capacity for this process
+                    total_capacity += installations_operating * production_per_installation
+
+                # Store denormalized capacity
+                capacity_tensor[(f, t)] = total_capacity * fg_scale
+
+        # Convert to DataFrame
+        df = pd.DataFrame.from_dict(capacity_tensor, orient="index", columns=["Value"])
+        df.index = pd.MultiIndex.from_tuples(df.index, names=["Product", "Time"])
+        df = df.reset_index()
+        df_pivot = df.pivot(index="Time", columns="Product", values="Value")
+
+        return df_pivot
+
+    def plot_production_vs_capacity(self, product=None, prod_df=None, capacity_df=None, demand_df=None, annotated=True, show_capacity_changes=False):
+        """
+        Plot actual production vs maximum available capacity for a specific product.
+
+        Shows three lines:
+        - Actual production (solid line)
+        - Maximum available capacity (dashed line)
+        - Demand (dotted line)
+
+        Optionally shows capacity dynamics as bars:
+        - Capacity additions (positive bars, green)
+        - Capacity removals (negative bars, red)
+
+        Parameters
+        ----------
+        product : str, optional
+            Product to plot. If None, uses the first product with non-zero demand.
+        prod_df : pd.DataFrame, optional
+            Production DataFrame from get_production()
+        capacity_df : pd.DataFrame, optional
+            Capacity DataFrame from get_production_capacity()
+        demand_df : pd.DataFrame, optional
+            Demand DataFrame from get_demand()
+        annotated : bool, default=True
+            If True, show human-readable names instead of codes
+        show_capacity_changes : bool, default=False
+            If True, show capacity additions and removals as background bars
+        """
+        # Get data if not provided
+        if prod_df is None:
+            prod_df = self.get_production()
+        if capacity_df is None:
+            capacity_df = self.get_production_capacity()
+        if demand_df is None:
+            demand_df = self.get_demand()
+
+        # Determine which product to plot
+        if product is None:
+            # Find first product with non-zero demand
+            products_with_demand = demand_df.columns[(demand_df != 0).any(axis=0)]
+            if len(products_with_demand) == 0:
+                raise ValueError("No products with non-zero demand found")
+            product = products_with_demand[0]
+
+        # Extract data for the selected product
+        # Production: sum across all processes for this product
+        if isinstance(prod_df.columns, pd.MultiIndex):
+            # Production has MultiIndex (Process, Product)
+            production_cols = [col for col in prod_df.columns if col[1] == product]
+            actual_production = prod_df[production_cols].sum(axis=1)
+        else:
+            # Single product case
+            actual_production = prod_df[product] if product in prod_df.columns else pd.Series(0, index=prod_df.index)
+
+        # Capacity for this product
+        max_capacity = capacity_df[product] if product in capacity_df.columns else pd.Series(0, index=capacity_df.index)
+
+        # Demand for this product
+        demand = demand_df[product] if product in demand_df.columns else pd.Series(0, index=demand_df.index)
+
+        # Convert indices to strings for consistent plotting
+        actual_production.index = actual_production.index.astype(str)
+        max_capacity.index = max_capacity.index.astype(str)
+        demand.index = demand.index.astype(str)
+
+        # Calculate capacity changes if requested
+        capacity_additions_by_process = None
+        capacity_removals_by_process = None
+        if show_capacity_changes:
+            # Calculate gross capacity additions and removals by process for this product
+            fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
+
+            additions = {p: {} for p in self.m.PROCESS}
+            removals = {p: {} for p in self.m.PROCESS}
+
+            for t in self.m.SYSTEM_TIME:
+                for p in self.m.PROCESS:
+                    # Production capacity per installation for this product
+                    prod_per_inst = sum(
+                        self.m.foreground_production[p, product, tau]
+                        for tau in self.m.PROCESS_TIME
+                        if pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+                    )
+
+                    # Additions: new installations at time t
+                    installation = pyo.value(self.m.var_installation[p, t])
+                    additions[p][t] = installation * prod_per_inst * fg_scale
+
+                    # Removals: capacity that aged out
+                    op_end = pyo.value(self.m.process_operation_end[p])
+                    t_aged_out = t - op_end - 1
+
+                    if t_aged_out in self.m.SYSTEM_TIME:
+                        installation_aged = pyo.value(self.m.var_installation[p, t_aged_out])
+                        removals[p][t] = installation_aged * prod_per_inst * fg_scale
+                    else:
+                        removals[p][t] = 0
+
+            # Convert to DataFrames with string index
+            capacity_additions_by_process = pd.DataFrame(additions)
+            capacity_additions_by_process.index = capacity_additions_by_process.index.astype(str)
+
+            capacity_removals_by_process = pd.DataFrame(removals)
+            capacity_removals_by_process.index = capacity_removals_by_process.index.astype(str)
+
+            # Filter out processes with no contributions
+            capacity_additions_by_process = capacity_additions_by_process.loc[:, (capacity_additions_by_process != 0).any(axis=0)]
+            capacity_removals_by_process = capacity_removals_by_process.loc[:, (capacity_removals_by_process != 0).any(axis=0)]
+
+            # Get colors BEFORE annotation (using codes)
+            addition_colors = self._get_colors_for_dataframe(capacity_additions_by_process)
+            removal_colors = self._get_colors_for_dataframe(capacity_removals_by_process)
+
+            # Annotate if requested
+            capacity_additions_by_process = self._annotate_dataframe(capacity_additions_by_process, annotated)
+            capacity_removals_by_process = self._annotate_dataframe(capacity_removals_by_process, annotated)
+
+        # Get product name for annotation
+        product_name = self._get_name(product) if annotated else product
+
+        # Create figure
+        fig, axes = self._create_clean_axes()
+        ax = axes[0]
+
+        # Define x positions
+        x_positions = np.arange(len(actual_production.index))
+
+        # Plot capacity changes as stacked bars if requested
+        if show_capacity_changes and capacity_additions_by_process is not None:
+            bar_width = 0.6
+
+            # Plot additions as positive stacked bars (by process)
+            if not capacity_additions_by_process.empty:
+                bottom_additions = np.zeros(len(x_positions))
+                for i, col in enumerate(capacity_additions_by_process.columns):
+                    values = capacity_additions_by_process[col].values
+                    ax.bar(
+                        x_positions,
+                        values,
+                        width=bar_width,
+                        bottom=bottom_additions,
+                        alpha=0.5,
+                        color=addition_colors[i] if i < len(addition_colors) else '#06A77D',
+                        label=f'+ {col}',
+                        edgecolor='white',
+                        linewidth=0.5,
+                        zorder=1
+                    )
+                    bottom_additions += values
+
+            # Plot removals as negative stacked bars (by process)
+            if not capacity_removals_by_process.empty:
+                bottom_removals = np.zeros(len(x_positions))
+                for i, col in enumerate(capacity_removals_by_process.columns):
+                    values = capacity_removals_by_process[col].values
+                    ax.bar(
+                        x_positions,
+                        -values,  # Negative for removals
+                        width=bar_width,
+                        bottom=bottom_removals,
+                        alpha=0.5,
+                        color=removal_colors[i] if i < len(removal_colors) else '#D62828',
+                        label=f'− {col}',
+                        edgecolor='white',
+                        linewidth=0.5,
+                        zorder=1
+                    )
+                    bottom_removals -= values
+
+        # Plot actual production
+        ax.plot(
+            x_positions,
+            actual_production.values,
+            marker='o',
+            linewidth=self._plot_config["line_width"],
+            label='Actual Production',
+            color='#2E86AB',
+            linestyle='-',
+            zorder=3
+        )
+
+        # Plot maximum capacity
+        ax.plot(
+            x_positions,
+            max_capacity.values,
+            marker='s',
+            linewidth=self._plot_config["line_width"],
+            label='Max Capacity',
+            color='#A23B72',
+            linestyle='--',
+            zorder=3
+        )
+
+        # Plot demand
+        ax.plot(
+            x_positions,
+            demand.values,
+            marker='^',
+            linewidth=self._plot_config["line_width"],
+            label='Demand',
+            color='#F18F01',
+            linestyle=':',
+            zorder=3
+        )
+
+        # Fill area between production and capacity (only if not showing bars)
+        if not show_capacity_changes:
+            ax.fill_between(
+                x_positions,
+                actual_production.values,
+                max_capacity.values,
+                alpha=0.2,
+                color='#A23B72',
+                label='Unused Capacity',
+                zorder=2
+            )
+
+        # Set labels and title
+        self._set_smart_xticks(ax, actual_production.index)
+        ax.set_ylabel(f"Quantity of {product_name}", fontsize=self._plot_config["fontsize"])
+        ax.set_title(
+            f"Production vs Capacity: {product_name}",
+            fontsize=self._plot_config["fontsize"] + 2,
+            pad=20
+        )
+
+        # Add grid
+        ax.grid(
+            True,
+            alpha=self._plot_config["grid_alpha"],
+            linestyle=self._plot_config["grid_linestyle"]
+        )
+
+        # Add legend below the plot
+        ax.legend(
+            loc='upper center',
+            bbox_to_anchor=(0.5, -0.15),
+            ncol=3,
+            fontsize=self._plot_config["fontsize"] - 2,
+            frameon=False
+        )
+
+        fig.tight_layout()
+        fig.subplots_adjust(bottom=0.25)
+        plt.show()

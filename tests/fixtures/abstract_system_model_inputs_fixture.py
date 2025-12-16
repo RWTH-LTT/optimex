@@ -131,16 +131,16 @@ def abstract_system_model_inputs():
 @pytest.fixture(
     scope="module",
     params=["flex", "constrained"], # "fixed",
-    ids=["flexible_operation", "constrained_land_use"], # "fixed_operation", 
+    ids=["flexible_operation", "constrained_process_limit"], # "fixed_operation", 
 )
 def abstract_system_model(request, abstract_system_model_inputs):
     model_type = request.param  # This will be 'fixed' or 'flex'
     model_inputs = converter.OptimizationModelInputs(**abstract_system_model_inputs)
     if model_type == "constrained":
-        # Set the impact limit for the constrained model
-        # Updated after fixing temporal distribution handling - construction impacts now correctly calculated
-        model_inputs.category_impact_limit = {
-            "land_use": 180.0,  # Increased from 88.5 due to corrected var_installation scaling
+        # Limit P1 process to force use of less optimal P2
+        # This creates a meaningful constraint that increases climate change impact
+        model_inputs.cumulative_process_limits_max = {
+            "P1": 10.0,  # Limit P1 to 10 installations (optimal uses 20 of each)
         }
     # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(
