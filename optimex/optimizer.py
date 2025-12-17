@@ -490,13 +490,30 @@ def create_model(
         def operation_capacity_constraint_rule(model, p, r, t):
             """
             Capacity constraint: o_t ≤ (total production per installation) × (installations in operation)
+
+            This constraint ensures operation level cannot exceed the total production
+            capacity provided by active installations. The formulation matches the
+            demand constraint which also sums production over the operation phase.
+
+            Note: foreground_production is SCALED, so we multiply by fg_scale to get
+            real capacity. var_operation is in REAL units (dimensionless activity level).
+
+            Only applied when process p produces product r (total_production > 0).
             """
-            # Total SCALED production per installation during operation phase
+            fg_scale = model.scales["foreground"]
+
+            # Total production per installation during operation phase (SCALED)
+            # This matches the demand constraint which also sums over operation phase
             total_production_scaled = sum(
                 model.foreground_production[p, r, tau]
                 for tau in model.PROCESS_TIME
                 if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
             )
+
+            # Skip constraint if process doesn't produce this product
+            # (otherwise constraint becomes var_operation <= 0, which is overly restrictive)
+            if total_production_scaled == 0:
+                return pyo.Constraint.Skip
 
             # Count installations currently in their operation phase (REAL units)
             installations_in_operation = sum(
@@ -505,7 +522,10 @@ def create_model(
                 if (t - tau in model.SYSTEM_TIME)
                 and model.process_operation_start[p] <= tau <= model.process_operation_end[p]
             )
-            return model.var_operation[p, t] <= installations_in_operation
+
+            # Capacity = total_production (SCALED) × fg_scale × installations (REAL) = (REAL)
+            capacity = total_production_scaled * fg_scale * installations_in_operation
+            return model.var_operation[p, t] <= capacity
 
         model.OperationCapacity = pyo.Constraint(
             model.PROCESS,
@@ -722,8 +742,9 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
     Validate that operation levels respect capacity constraints.
 
     This function performs post-solve validation to ensure that var_operation
-    (number of installations operating) does not exceed the number of installations
-    currently in their operation phase.
+    does not exceed the production capacity from installations in operation phase.
+
+    The capacity constraint is: var_operation <= total_production * fg_scale * installations
 
     Parameters
     ----------
@@ -754,27 +775,47 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
 
     violations = []
     max_violation = 0.0
+    fg_scale = model.scales["foreground"]
 
     for p in model.PROCESS:
         for t in model.SYSTEM_TIME:
             operation_value = pyo.value(model.var_operation[p, t])
 
-            # Calculate capacity: number of installations in operation phase
-            installations_in_operation = sum(
-                pyo.value(model.var_installation[p, t - tau])
-                for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME)
-                and pyo.value(model.process_operation_start[p]) <= tau <= pyo.value(model.process_operation_end[p])
-            )
+            # Calculate capacity for each product this process produces
+            # The binding capacity constraint uses the product with maximum capacity
+            max_capacity = 0.0
+            for r in model.PRODUCT:
+                # Total production per installation during operation phase (SCALED)
+                total_production_scaled = sum(
+                    pyo.value(model.foreground_production[p, r, tau])
+                    for tau in model.PROCESS_TIME
+                    if pyo.value(model.process_operation_start[p]) <= tau <= pyo.value(model.process_operation_end[p])
+                )
+
+                # Skip if process doesn't produce this product
+                if total_production_scaled == 0:
+                    continue
+
+                # Calculate installations in operation phase
+                installations_in_operation = sum(
+                    pyo.value(model.var_installation[p, t - tau])
+                    for tau in model.PROCESS_TIME
+                    if (t - tau in model.SYSTEM_TIME)
+                    and pyo.value(model.process_operation_start[p]) <= tau <= pyo.value(model.process_operation_end[p])
+                )
+
+                # Capacity = total_production (SCALED) × fg_scale × installations (REAL)
+                capacity = total_production_scaled * fg_scale * installations_in_operation
+                max_capacity = max(max_capacity, capacity)
 
             # Check if operation exceeds capacity
             if operation_value < -tolerance:
                 violation = abs(operation_value)
-                violations.append((p, t, operation_value, installations_in_operation, "negative"))
+                violations.append((p, t, operation_value, max_capacity, "negative"))
                 max_violation = max(max_violation, violation)
-            elif operation_value > installations_in_operation * (1.0 + tolerance):
-                violation = operation_value - installations_in_operation
-                violations.append((p, t, operation_value, installations_in_operation, "exceeds_capacity"))
+            elif max_capacity > 0 and operation_value > max_capacity * (1.0 + tolerance):
+                violation = operation_value - max_capacity
+                violations.append((p, t, operation_value, max_capacity, "exceeds_capacity"))
                 max_violation = max(max_violation, violation)
 
     # Generate summary

@@ -371,6 +371,102 @@ class OptimizationModelInputs(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def validate_process_limits_consistency(self) -> "OptimizationModelInputs":
+        """
+        Validate that min limits are not greater than max limits for process bounds.
+
+        This ensures logical consistency of the bounds - having min > max would
+        create an infeasible constraint.
+        """
+        # Check per-period process limits
+        if self.process_limits_min and self.process_limits_max:
+            for key in self.process_limits_min:
+                if key in self.process_limits_max:
+                    min_val = self.process_limits_min[key]
+                    max_val = self.process_limits_max[key]
+                    if min_val > max_val:
+                        raise ValueError(
+                            f"Process limit min ({min_val}) > max ({max_val}) for {key}. "
+                            "Constraints would be infeasible."
+                        )
+
+        # Check cumulative process limits
+        if self.cumulative_process_limits_min and self.cumulative_process_limits_max:
+            for proc in self.cumulative_process_limits_min:
+                if proc in self.cumulative_process_limits_max:
+                    min_val = self.cumulative_process_limits_min[proc]
+                    max_val = self.cumulative_process_limits_max[proc]
+                    if min_val > max_val:
+                        raise ValueError(
+                            f"Cumulative process limit min ({min_val}) > max ({max_val}) "
+                            f"for {proc}. Constraints would be infeasible."
+                        )
+
+        # Check defaults consistency
+        if self.process_limits_min_default > self.process_limits_max_default:
+            raise ValueError(
+                f"process_limits_min_default ({self.process_limits_min_default}) > "
+                f"process_limits_max_default ({self.process_limits_max_default}). "
+                "Constraints would be infeasible."
+            )
+
+        if self.cumulative_process_limits_min_default > self.cumulative_process_limits_max_default:
+            raise ValueError(
+                f"cumulative_process_limits_min_default ({self.cumulative_process_limits_min_default}) > "
+                f"cumulative_process_limits_max_default ({self.cumulative_process_limits_max_default}). "
+                "Constraints would be infeasible."
+            )
+
+        return self
+
+    @model_validator(mode="after")
+    def warn_negative_tau_boundary(self) -> "OptimizationModelInputs":
+        """
+        Warn about negative process times that may fall outside SYSTEM_TIME.
+
+        When tau < 0 (e.g., construction before deployment), the contribution
+        appears at system time (t - tau). If min(SYSTEM_TIME) - tau < min(SYSTEM_TIME),
+        those contributions are lost for early installations.
+
+        Example: With SYSTEM_TIME starting at 2020 and tau=-1:
+        - Installation at 2020 has construction at t=2019 (NOT in SYSTEM_TIME)
+        - These emissions are silently ignored
+
+        This validator warns users about this boundary condition.
+        """
+        from loguru import logger
+
+        if not self.PROCESS_TIME or not self.SYSTEM_TIME:
+            return self
+
+        min_tau = min(self.PROCESS_TIME)
+        min_system_time = min(self.SYSTEM_TIME)
+
+        if min_tau < 0:
+            # Check which tensors have non-zero values at negative tau
+            affected_flows = []
+
+            for (proc, flow, tau), val in self.foreground_biosphere.items():
+                if tau < 0 and val != 0:
+                    affected_flows.append(f"biosphere ({proc}, {flow}, tau={tau})")
+
+            for (proc, flow, tau), val in self.foreground_technosphere.items():
+                if tau < 0 and val != 0:
+                    affected_flows.append(f"technosphere ({proc}, {flow}, tau={tau})")
+
+            if affected_flows:
+                affected_years = abs(min_tau)
+                logger.warning(
+                    f"Process time includes negative values (min tau = {min_tau}). "
+                    f"Flows at negative tau for installations in the first {affected_years} "
+                    f"year(s) of SYSTEM_TIME ({min_system_time}) will NOT be counted "
+                    f"because they fall before SYSTEM_TIME starts. "
+                    f"Affected flows: {affected_flows[:5]}{'...' if len(affected_flows) > 5 else ''}"
+                )
+
+        return self
+
     def get_scaled_copy(self) -> Tuple["OptimizationModelInputs", Dict[str, Any]]:
         """
         Create a scaled copy of inputs for numerical stability in optimization.

@@ -188,6 +188,12 @@ def test_operation_capacity_with_varying_demand():
     Expected:
     - Operation should match demand when demand < capacity
     - Operation should be bounded by capacity when demand > capacity
+
+    With the capacity constraint:
+    - capacity = total_production × fg_scale × installations_in_operation
+    - Production = 2.0 (1.0 at tau=1 + 1.0 at tau=2)
+    - At t=2021: capacity from install_2020 (at tau=1)
+    - At t=2022: capacity from install_2020 (at tau=2) + install_2021 (at tau=1)
     """
     model_inputs_dict = {
         "PROCESS": ["P1"],
@@ -237,7 +243,7 @@ def test_operation_capacity_with_varying_demand():
 
     # Check that operations match demands
     # With production of 1.0 at tau=1 and 1.0 at tau=2:
-    # - operation_production = 2.0 (sum over operation phase)
+    # - total_production = 2.0 (sum over operation phase)
     # - To produce 3.0, need var_operation = 3.0 / 2.0 = 1.5
     # - To produce 8.0, need var_operation = 8.0 / 2.0 = 4.0
     operation_2021 = pyo.value(solved_model.var_operation["P1", 2021])
@@ -248,10 +254,16 @@ def test_operation_capacity_with_varying_demand():
 
     # Verify capacity constraint was respected
     install_2020 = pyo.value(solved_model.var_installation["P1", 2020])
+    install_2021 = pyo.value(solved_model.var_installation["P1", 2021])
 
-    # At 2022: operation requires 4.0, so need capacity of at least 4.0
-    # Capacity from install_2020 at tau=2 is install_2020 * 1.0
-    assert install_2020 >= 3.9  # At least 4 units needed
+    # Capacity constraint: var_operation <= total_production × installations
+    # At 2021: capacity = 2.0 * install_2020, need >= 1.5 -> install_2020 >= 0.75
+    # At 2022: capacity = 2.0 * (install_2020 + install_2021), need >= 4.0
+    #          -> install_2020 + install_2021 >= 2.0
+
+    total_installations = install_2020 + install_2021
+    assert total_installations >= 1.9  # At least 2 units total needed for capacity
+    assert install_2020 >= 0.7  # At least ~0.75 for 2021 demand
 
 
 def test_operation_capacity_constraint_violation_prevented():
@@ -260,11 +272,19 @@ def test_operation_capacity_constraint_violation_prevented():
 
     Setup:
     - Install capacity at 2020 and 2021
-    - Demand at 2022 that would exceed single-year capacity
+    - Demand at 2022 that requires multiple installations
 
     Expected:
     - Model should be feasible by installing at both years
     - Operation should be bounded by total capacity from both installations
+
+    With the capacity constraint:
+    - capacity = total_production × fg_scale × installations_in_operation
+    - Production = 2.0 (1.0 at tau=1 + 1.0 at tau=2)
+    - At t=2022: capacity from install_2020 (at tau=2) + install_2021 (at tau=1)
+    - To meet demand of 8: var_operation = 8 / 2.0 = 4.0
+    - Need capacity >= 4.0 -> 2.0 * (install_2020 + install_2021) >= 4.0
+    - So install_2020 + install_2021 >= 2.0
     """
     model_inputs_dict = {
         "PROCESS": ["P1"],
@@ -295,10 +315,10 @@ def test_operation_capacity_constraint_violation_prevented():
         "characterization": {
             ("climate_change", "CO2", t): 1.0 for t in [2020, 2021, 2022]
         },
-        # Limit each year's installation
+        # Limit each year's installation to force distribution
         "process_limits_max": {
-            ("P1", 2020): 4,  # Can install max 4 at 2020
-            ("P1", 2021): 4,  # Can install max 4 at 2021
+            ("P1", 2020): 1,  # Can install max 1 at 2020
+            ("P1", 2021): 1,  # Can install max 1 at 2021
         },
     }
 
@@ -321,20 +341,21 @@ def test_operation_capacity_constraint_violation_prevented():
     install_2021 = pyo.value(solved_model.var_installation["P1", 2021])
 
     # At 2022:
-    # - Installations from 2021 are at tau=1, capacity = install_2021 * 1.0
-    # - Installations from 2020 are at tau=2, capacity = install_2020 * 1.0
-    # - Total capacity = (install_2020 + install_2021) * 1.0
+    # - Installations from 2021 are at tau=1
+    # - Installations from 2020 are at tau=2
+    # - Total capacity = 2.0 × (install_2020 + install_2021)
     # - To produce 8 with production=2.0 per operation: need var_operation = 4.0
-    # - So need capacity of at least 4.0
+    # - So need capacity of at least 4.0 -> need 2 total installations
 
     operation_2022 = pyo.value(solved_model.var_operation["P1", 2022])
 
     # Operation should equal demand requirement (8 / 2.0 = 4.0)
     assert pytest.approx(4.0, rel=0.01) == operation_2022
 
-    # Total capacity should be at least 4.0
-    total_capacity = install_2020 + install_2021
-    assert total_capacity >= 3.9
+    # Total installations should be at least 2.0
+    # (since capacity = 2.0 × installations, need capacity >= 4.0)
+    total_installations = install_2020 + install_2021
+    assert total_installations >= 1.9  # At least 2 units needed
 
 
 def test_operation_capacity_with_non_constant_production():

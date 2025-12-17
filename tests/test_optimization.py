@@ -283,3 +283,76 @@ def test_cumulative_process_limits_respected():
         f"Total capacity ({total_capacity:.2f}) should equal "
         f"demand ({total_demand})"
     )
+
+
+def test_capacity_constraint_with_high_production():
+    """
+    Test that capacity constraint correctly accounts for production coefficients > 1.
+
+    When production per installation > 1, the optimizer should be able to use
+    fewer installations than the demand, since each installation produces more
+    than 1 unit per operation.
+
+    This test verifies the fix for the bug where production coefficients were
+    not being multiplied in the capacity constraint, leading to suboptimal
+    solutions with more installations than necessary.
+    """
+    model_inputs_dict = {
+        "PROCESS": ["P1"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": [],
+        "ELEMENTARY_FLOW": ["CO2"],
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020],
+        "CATEGORY": ["climate_change"],
+        "operation_time_limits": {"P1": (0, 0)},
+        "demand": {("product", 2020): 10},
+        "foreground_technosphere": {},
+        "internal_demand_technosphere": {},
+        # Each installation emits 10 kg CO2 (capacity-dependent)
+        "foreground_biosphere": {("P1", "CO2", 0): 10},
+        # Each installation produces 5 units of product (high production)
+        "foreground_production": {("P1", "product", 0): 5.0},
+        # Only production is operation-dependent, emissions are capacity-dependent
+        "operation_flow": {("P1", "product"): True},
+        "background_inventory": {},
+        "mapping": {("db_2020", 2020): 1.0},
+        "characterization": {("climate_change", "CO2", 2020): 1.0},
+    }
+
+    model_inputs = converter.OptimizationModelInputs(**model_inputs_dict)
+    model = optimizer.create_model(
+        inputs=model_inputs,
+        objective_category="climate_change",
+        name="test_high_production",
+        flexible_operation=True,
+    )
+
+    solved_model, objective, results = optimizer.solve_model(
+        model, solver_name="glpk", tee=False
+    )
+
+    # Verify solution is optimal
+    assert results.solver.status == pyo.SolverStatus.ok
+    assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+    # Get solution values
+    inst = pyo.value(solved_model.var_installation["P1", 2020])
+    oper = pyo.value(solved_model.var_operation["P1", 2020])
+
+    # With production = 5.0 and demand = 10:
+    # - Need var_operation = 10/5 = 2 to produce 10 units
+    # - Capacity = 5.0 * installations, so need 5.0 * inst >= 2
+    # - Minimum installations = 2/5 = 0.4
+    assert pytest.approx(0.4, rel=0.01) == inst, (
+        f"With production=5.0, only 0.4 installations needed, got {inst}"
+    )
+    assert pytest.approx(2.0, rel=0.01) == oper, (
+        f"Operation should be 2.0 to produce 10 units, got {oper}"
+    )
+
+    # Verify emissions (capacity-dependent) = 0.4 * 10 = 4 kg CO2
+    assert pytest.approx(4.0, rel=0.01) == objective, (
+        f"Emissions should be 4.0 kg CO2, got {objective}"
+    )
