@@ -711,7 +711,7 @@ class PostProcessor:
 
         return df_pivot
 
-    def plot_production_vs_capacity(self, product=None, prod_df=None, capacity_df=None, demand_df=None, annotated=True, show_capacity_changes=False):
+    def plot_production_vs_capacity(self, product=None, prod_df=None, capacity_df=None, demand_df=None, annotated=True, show_capacity_changes=False, show_process_utilization=False):
         """
         Plot actual production vs maximum available capacity for a specific product.
 
@@ -723,6 +723,11 @@ class PostProcessor:
         Optionally shows capacity dynamics as bars:
         - Capacity additions (positive bars, green)
         - Capacity removals (negative bars, red)
+
+        Optionally shows per-process utilization breakdown:
+        - Stacked bars showing capacity by process
+        - Hatched overlay showing actual operation by process
+        - Visual distinction between utilized and idle capacity
 
         Parameters
         ----------
@@ -738,6 +743,8 @@ class PostProcessor:
             If True, show human-readable names instead of codes
         show_capacity_changes : bool, default=False
             If True, show capacity additions and removals as background bars
+        show_process_utilization : bool, default=False
+            If True, show per-process capacity and operation breakdown
         """
         # Get data if not provided
         if prod_df is None:
@@ -828,6 +835,66 @@ class PostProcessor:
             capacity_additions_by_process = self._annotate_dataframe(capacity_additions_by_process, annotated)
             capacity_removals_by_process = self._annotate_dataframe(capacity_removals_by_process, annotated)
 
+        # Calculate per-process capacity and operation if requested
+        process_capacity_df = None
+        process_operation_df = None
+        process_utilization_colors = None
+        if show_process_utilization:
+            fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
+
+            # Calculate capacity and operation for each process
+            capacity_by_process = {p: {} for p in self.m.PROCESS}
+            operation_by_process = {p: {} for p in self.m.PROCESS}
+
+            for t in self.m.SYSTEM_TIME:
+                for p in self.m.PROCESS:
+                    # Production capacity per installation for this product
+                    prod_per_inst = sum(
+                        self.m.foreground_production[p, product, tau]
+                        for tau in self.m.PROCESS_TIME
+                        if pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+                    )
+
+                    # Skip processes that don't produce this product
+                    if prod_per_inst == 0:
+                        capacity_by_process[p][t] = 0
+                        operation_by_process[p][t] = 0
+                        continue
+
+                    # Count installations in operation phase at time t
+                    installations_operating = sum(
+                        pyo.value(self.m.var_installation[p, t - tau])
+                        for tau in self.m.PROCESS_TIME
+                        if (t - tau in self.m.SYSTEM_TIME)
+                        and pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+                    )
+
+                    # Capacity = production per installation × installations
+                    capacity_by_process[p][t] = installations_operating * prod_per_inst * fg_scale
+
+                    # Operation = var_operation × production per installation
+                    var_op = pyo.value(self.m.var_operation[p, t])
+                    operation_by_process[p][t] = var_op * prod_per_inst * fg_scale
+
+            # Convert to DataFrames
+            process_capacity_df = pd.DataFrame(capacity_by_process)
+            process_capacity_df.index = process_capacity_df.index.astype(str)
+
+            process_operation_df = pd.DataFrame(operation_by_process)
+            process_operation_df.index = process_operation_df.index.astype(str)
+
+            # Filter to only processes with non-zero capacity at some point
+            has_capacity = (process_capacity_df != 0).any(axis=0)
+            process_capacity_df = process_capacity_df.loc[:, has_capacity]
+            process_operation_df = process_operation_df.loc[:, has_capacity]
+
+            # Get colors BEFORE annotation
+            process_utilization_colors = self._get_colors_for_dataframe(process_capacity_df)
+
+            # Annotate if requested
+            process_capacity_df = self._annotate_dataframe(process_capacity_df, annotated)
+            process_operation_df = self._annotate_dataframe(process_operation_df, annotated)
+
         # Get product name for annotation
         product_name = self._get_name(product) if annotated else product
 
@@ -880,6 +947,68 @@ class PostProcessor:
                     )
                     bottom_removals -= values
 
+        # Plot process utilization breakdown if requested
+        if show_process_utilization and process_capacity_df is not None and not process_capacity_df.empty:
+            bar_width = 0.7
+
+            # Plot capacity as stacked bars (light colors, shows installed capacity)
+            bottom_capacity = np.zeros(len(x_positions))
+            for i, col in enumerate(process_capacity_df.columns):
+                capacity_values = process_capacity_df[col].values
+                color = process_utilization_colors[i] if i < len(process_utilization_colors) else f'C{i}'
+
+                # Capacity bar (light, represents installed capacity)
+                ax.bar(
+                    x_positions,
+                    capacity_values,
+                    width=bar_width,
+                    bottom=bottom_capacity,
+                    alpha=0.3,
+                    color=color,
+                    edgecolor=color,
+                    linewidth=1,
+                    label=f'{col} (capacity)',
+                    zorder=1
+                )
+                bottom_capacity += capacity_values
+
+            # Plot operation as overlaid stacked bars (solid colors with hatch, shows actual use)
+            bottom_operation = np.zeros(len(x_positions))
+            for i, col in enumerate(process_operation_df.columns):
+                operation_values = process_operation_df[col].values
+                color = process_utilization_colors[i] if i < len(process_utilization_colors) else f'C{i}'
+
+                # Only plot if there's any operation
+                if (operation_values > 0.001).any():
+                    ax.bar(
+                        x_positions,
+                        operation_values,
+                        width=bar_width,
+                        bottom=bottom_operation,
+                        alpha=0.8,
+                        color=color,
+                        edgecolor='white',
+                        linewidth=0.5,
+                        hatch='///',
+                        label=f'{col} (operated)',
+                        zorder=2
+                    )
+                bottom_operation += operation_values
+
+            # Calculate and display utilization summary
+            total_capacity = process_capacity_df.sum().sum()
+            total_operation = process_operation_df.sum().sum()
+            if total_capacity > 0:
+                utilization_pct = (total_operation / total_capacity) * 100
+                ax.text(
+                    0.02, 0.98,
+                    f'Overall utilization: {utilization_pct:.1f}%',
+                    transform=ax.transAxes,
+                    fontsize=self._plot_config["fontsize"] - 2,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8)
+                )
+
         # Plot actual production
         ax.plot(
             x_positions,
@@ -916,8 +1045,8 @@ class PostProcessor:
             zorder=3
         )
 
-        # Fill area between production and capacity (only if not showing bars)
-        if not show_capacity_changes:
+        # Fill area between production and capacity (only if not showing bars or utilization)
+        if not show_capacity_changes and not show_process_utilization:
             ax.fill_between(
                 x_positions,
                 actual_production.values,
@@ -931,11 +1060,20 @@ class PostProcessor:
         # Set labels and title
         self._set_smart_xticks(ax, actual_production.index)
         ax.set_ylabel(f"Quantity of {product_name}", fontsize=self._plot_config["fontsize"])
-        ax.set_title(
-            f"Production vs Capacity: {product_name}",
-            fontsize=self._plot_config["fontsize"] + 2,
-            pad=20
-        )
+
+        # Update title based on mode
+        if show_process_utilization:
+            ax.set_title(
+                f"Production vs Capacity: {product_name}\n(solid = capacity, hatched = operated)",
+                fontsize=self._plot_config["fontsize"] + 2,
+                pad=20
+            )
+        else:
+            ax.set_title(
+                f"Production vs Capacity: {product_name}",
+                fontsize=self._plot_config["fontsize"] + 2,
+                pad=20
+            )
 
         # Add grid
         ax.grid(
@@ -945,14 +1083,169 @@ class PostProcessor:
         )
 
         # Add legend below the plot
+        # Adjust ncol based on number of legend entries
+        handles, labels = ax.get_legend_handles_labels()
+        ncol = min(4, max(2, len(handles) // 3 + 1)) if show_process_utilization else 3
         ax.legend(
             loc='upper center',
             bbox_to_anchor=(0.5, -0.15),
-            ncol=3,
+            ncol=ncol,
             fontsize=self._plot_config["fontsize"] - 2,
             frameon=False
         )
 
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.25)
+        # Adjust bottom margin based on legend size
+        bottom_margin = 0.30 if show_process_utilization and len(handles) > 6 else 0.25
+        fig.subplots_adjust(bottom=bottom_margin)
+        plt.show()
+
+    def plot_utilization_heatmap(self, product=None, annotated=True, show_values=True):
+        """
+        Plot a heatmap showing capacity utilization by process over time.
+
+        This provides a clean, dedicated view of which processes are being
+        operated vs sitting idle at each time step.
+
+        Parameters
+        ----------
+        product : str, optional
+            Product to analyze. If None, uses the first product with non-zero demand.
+        annotated : bool, default=True
+            If True, show human-readable process names instead of codes.
+        show_values : bool, default=True
+            If True, show utilization percentages in cells.
+        """
+        # Get demand to determine product
+        demand_df = self.get_demand()
+
+        if product is None:
+            products_with_demand = demand_df.columns[(demand_df != 0).any(axis=0)]
+            if len(products_with_demand) == 0:
+                raise ValueError("No products with non-zero demand found")
+            product = products_with_demand[0]
+
+        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
+
+        # Calculate utilization for each process at each time
+        utilization_data = {}
+        capacity_data = {}
+        operation_data = {}
+
+        for p in self.m.PROCESS:
+            # Check if process produces this product
+            prod_per_inst = sum(
+                self.m.foreground_production[p, product, tau]
+                for tau in self.m.PROCESS_TIME
+                if pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+            )
+
+            if prod_per_inst == 0:
+                continue  # Skip processes that don't produce this product
+
+            utilization_data[p] = {}
+            capacity_data[p] = {}
+            operation_data[p] = {}
+
+            for t in self.m.SYSTEM_TIME:
+                # Calculate capacity
+                installations_operating = sum(
+                    pyo.value(self.m.var_installation[p, t - tau])
+                    for tau in self.m.PROCESS_TIME
+                    if (t - tau in self.m.SYSTEM_TIME)
+                    and pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+                )
+                capacity = installations_operating * prod_per_inst * fg_scale
+
+                # Calculate operation
+                var_op = pyo.value(self.m.var_operation[p, t])
+                operation = var_op * prod_per_inst * fg_scale
+
+                capacity_data[p][t] = capacity
+                operation_data[p][t] = operation
+
+                # Calculate utilization %
+                if capacity > 0.001:
+                    utilization_data[p][t] = (operation / capacity) * 100
+                else:
+                    utilization_data[p][t] = np.nan  # No capacity = no utilization possible
+
+        if not utilization_data:
+            raise ValueError(f"No processes produce {product}")
+
+        # Convert to DataFrame
+        util_df = pd.DataFrame(utilization_data).T
+        cap_df = pd.DataFrame(capacity_data).T
+        op_df = pd.DataFrame(operation_data).T
+
+        # Filter to only times with some capacity
+        has_capacity = (cap_df.sum(axis=0) > 0.001)
+        util_df = util_df.loc[:, has_capacity]
+        cap_df = cap_df.loc[:, has_capacity]
+        op_df = op_df.loc[:, has_capacity]
+
+        if util_df.empty:
+            raise ValueError(f"No capacity found for {product}")
+
+        # Annotate process names
+        if annotated:
+            util_df.index = [self._get_name(p) for p in util_df.index]
+            cap_df.index = [self._get_name(p) for p in cap_df.index]
+            op_df.index = [self._get_name(p) for p in op_df.index]
+
+        product_name = self._get_name(product) if annotated else product
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(max(10, len(util_df.columns) * 0.4), max(4, len(util_df) * 0.8)))
+
+        # Create heatmap
+        # Use a diverging colormap: red (0%) -> yellow (50%) -> green (100%)
+        cmap = plt.cm.RdYlGn
+        im = ax.imshow(util_df.values, aspect='auto', cmap=cmap, vmin=0, vmax=100)
+
+        # Set ticks
+        ax.set_xticks(np.arange(len(util_df.columns)))
+        ax.set_yticks(np.arange(len(util_df.index)))
+        ax.set_xticklabels(util_df.columns, fontsize=self._plot_config["fontsize"] - 2)
+        ax.set_yticklabels(util_df.index, fontsize=self._plot_config["fontsize"] - 1)
+
+        # Rotate x labels if many years
+        if len(util_df.columns) > 15:
+            plt.setp(ax.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
+
+        # Add value annotations
+        if show_values:
+            for i in range(len(util_df.index)):
+                for j in range(len(util_df.columns)):
+                    val = util_df.iloc[i, j]
+                    if not np.isnan(val):
+                        # Choose text color based on background
+                        text_color = 'white' if val < 30 or val > 70 else 'black'
+                        ax.text(j, i, f'{val:.0f}%', ha='center', va='center',
+                               fontsize=self._plot_config["fontsize"] - 3, color=text_color)
+                    else:
+                        ax.text(j, i, '-', ha='center', va='center',
+                               fontsize=self._plot_config["fontsize"] - 3, color='gray')
+
+        # Add colorbar
+        cbar = fig.colorbar(im, ax=ax, shrink=0.8)
+        cbar.set_label('Utilization %', fontsize=self._plot_config["fontsize"])
+
+        # Labels and title
+        ax.set_xlabel('Year', fontsize=self._plot_config["fontsize"])
+        ax.set_ylabel('Process', fontsize=self._plot_config["fontsize"])
+        ax.set_title(f'Capacity Utilization: {product_name}', fontsize=self._plot_config["fontsize"] + 2)
+
+        # Add summary statistics
+        mean_util = np.nanmean(util_df.values)
+        total_cap = cap_df.sum().sum()
+        total_op = op_df.sum().sum()
+        overall_util = (total_op / total_cap * 100) if total_cap > 0 else 0
+
+        ax.text(1.02, 0.98, f'Overall: {overall_util:.0f}%\nMean: {mean_util:.0f}%',
+               transform=ax.transAxes, fontsize=self._plot_config["fontsize"] - 2,
+               verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
+
+        fig.tight_layout()
         plt.show()
