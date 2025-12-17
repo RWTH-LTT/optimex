@@ -887,7 +887,7 @@ class PostProcessor:
             bottom_additions = np.zeros(len(x_positions))
             for i, col in enumerate(capacity_additions_df.columns):
                 add_values = capacity_additions_df[col].values
-                border_color = bar_colors[i] if i < len(bar_colors) else 'black'
+                clr = bar_colors[i] if i < len(bar_colors) else 'black'
 
                 ax.bar(
                     cap_positions,
@@ -895,8 +895,9 @@ class PostProcessor:
                     width=bar_width,
                     bottom=bottom_additions,
                     # alpha=0.7,
-                    color="#30A8349A",  # Green fill for additions
-                    edgecolor=border_color,  # Process color as border
+                    color=clr,  # Green fill for additions
+                    hatch="///",
+                    edgecolor="#30A834FF",  # Process color as border
                     linewidth=1.5,
                     zorder=1
                 )
@@ -906,7 +907,7 @@ class PostProcessor:
             bottom_removals = np.zeros(len(x_positions))
             for i, col in enumerate(capacity_removals_df.columns):
                 rem_values = capacity_removals_df[col].values
-                border_color = bar_colors[i] if i < len(bar_colors) else 'black'
+                clr = bar_colors[i] if i < len(bar_colors) else 'black'
 
                 ax.bar(
                     cap_positions,
@@ -914,8 +915,9 @@ class PostProcessor:
                     width=bar_width,
                     bottom=bottom_removals,
                     # alpha=0.7,
-                    color="#CD221F9A",  # Red fill for removals
-                    edgecolor=border_color,  # Process color as border
+                    color=clr,  # Red fill for removals
+                    hatch="///",
+                    edgecolor="#CD221FFF",  # Process color as border
                     linewidth=1.5,
                     zorder=1
                 )
@@ -952,13 +954,12 @@ class PostProcessor:
             # Create custom legend: process colors (as borders) + bar type distinction
             from matplotlib.patches import Patch
             # Process legend shows border color to identify process
-            process_legend = [Patch(facecolor='white', edgecolor=bar_colors[i], linewidth=2.5, label=col)
+            process_legend = [Patch(facecolor=bar_colors[i], edgecolor='black', linewidth=0.5, label=col)
                             for i, col in enumerate(capacity_additions_df.columns)]
             # Type legend shows fill color meaning
             type_legend = [
-                Patch(facecolor='#4CAF50', edgecolor='black', alpha=0.7, label='+ Capacity'),
-                Patch(facecolor='#E53935', edgecolor='black', alpha=0.7, label='− Capacity'),
-                Patch(facecolor='gray', edgecolor='black', alpha=0.9, label='Operation')
+                Patch(facecolor="white", edgecolor='#4CAF50', linewidth=2, label='+ Capacity'),
+                Patch(facecolor="white", edgecolor='#E53935', linewidth=2, label='− Capacity'),
             ]
 
         # Plot production (demand assumed equal)
