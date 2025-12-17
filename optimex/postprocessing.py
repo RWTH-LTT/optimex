@@ -711,23 +711,17 @@ class PostProcessor:
 
         return df_pivot
 
-    def plot_production_vs_capacity(self, product=None, prod_df=None, capacity_df=None, demand_df=None, annotated=True, show_capacity_changes=False, show_process_utilization=False):
+    def plot_production_vs_capacity(self, product=None, prod_df=None, capacity_df=None, demand_df=None, annotated=True, show_grouped_bars=False):
         """
         Plot actual production vs maximum available capacity for a specific product.
 
-        Shows three lines:
-        - Actual production (solid line)
+        Shows two lines:
+        - Production (demand is assumed equal and overlaid)
         - Maximum available capacity (dashed line)
-        - Demand (dotted line)
 
-        Optionally shows capacity dynamics as bars:
-        - Capacity additions (positive bars, green)
-        - Capacity removals (negative bars, red)
-
-        Optionally shows per-process utilization breakdown:
-        - Stacked bars showing capacity by process
-        - Hatched overlay showing actual operation by process
-        - Visual distinction between utilized and idle capacity
+        Optionally shows grouped bars per time step:
+        - Left bar: New capacity installations (stacked by process)
+        - Right bar: Operation level (stacked by process)
 
         Parameters
         ----------
@@ -741,10 +735,8 @@ class PostProcessor:
             Demand DataFrame from get_demand()
         annotated : bool, default=True
             If True, show human-readable names instead of codes
-        show_capacity_changes : bool, default=False
-            If True, show capacity additions and removals as background bars
-        show_process_utilization : bool, default=False
-            If True, show per-process capacity and operation breakdown
+        show_grouped_bars : bool, default=False
+            If True, show grouped bars for capacity installations and operation
         """
         # Get data if not provided
         if prod_df is None:
@@ -775,76 +767,36 @@ class PostProcessor:
         # Capacity for this product
         max_capacity = capacity_df[product] if product in capacity_df.columns else pd.Series(0, index=capacity_df.index)
 
-        # Demand for this product
-        demand = demand_df[product] if product in demand_df.columns else pd.Series(0, index=demand_df.index)
-
         # Convert indices to strings for consistent plotting
         actual_production.index = actual_production.index.astype(str)
         max_capacity.index = max_capacity.index.astype(str)
-        demand.index = demand.index.astype(str)
 
-        # Calculate capacity changes if requested
-        capacity_additions_by_process = None
-        capacity_removals_by_process = None
-        if show_capacity_changes:
-            # Calculate gross capacity additions and removals by process for this product
+        # Build distinct color palette - use widely spaced colors for better distinction
+        distinct_colors = [
+            '#1f77b4',  # blue
+            '#ff7f0e',  # orange
+            '#2ca02c',  # green
+            '#d62728',  # red
+            '#9467bd',  # purple
+            '#8c564b',  # brown
+            '#e377c2',  # pink
+            '#7f7f7f',  # gray
+            '#bcbd22',  # olive
+            '#17becf',  # cyan
+        ]
+
+        # Calculate grouped bar data if requested
+        capacity_additions_df = None
+        capacity_removals_df = None
+        operation_df = None
+        bar_colors = None
+        if show_grouped_bars:
             fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
 
-            additions = {p: {} for p in self.m.PROCESS}
-            removals = {p: {} for p in self.m.PROCESS}
-
-            for t in self.m.SYSTEM_TIME:
-                for p in self.m.PROCESS:
-                    # Production capacity per installation for this product
-                    prod_per_inst = sum(
-                        self.m.foreground_production[p, product, tau]
-                        for tau in self.m.PROCESS_TIME
-                        if pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
-                    )
-
-                    # Additions: new installations at time t
-                    installation = pyo.value(self.m.var_installation[p, t])
-                    additions[p][t] = installation * prod_per_inst * fg_scale
-
-                    # Removals: capacity that aged out
-                    op_end = pyo.value(self.m.process_operation_end[p])
-                    t_aged_out = t - op_end - 1
-
-                    if t_aged_out in self.m.SYSTEM_TIME:
-                        installation_aged = pyo.value(self.m.var_installation[p, t_aged_out])
-                        removals[p][t] = installation_aged * prod_per_inst * fg_scale
-                    else:
-                        removals[p][t] = 0
-
-            # Convert to DataFrames with string index
-            capacity_additions_by_process = pd.DataFrame(additions)
-            capacity_additions_by_process.index = capacity_additions_by_process.index.astype(str)
-
-            capacity_removals_by_process = pd.DataFrame(removals)
-            capacity_removals_by_process.index = capacity_removals_by_process.index.astype(str)
-
-            # Filter out processes with no contributions
-            capacity_additions_by_process = capacity_additions_by_process.loc[:, (capacity_additions_by_process != 0).any(axis=0)]
-            capacity_removals_by_process = capacity_removals_by_process.loc[:, (capacity_removals_by_process != 0).any(axis=0)]
-
-            # Get colors BEFORE annotation (using codes)
-            addition_colors = self._get_colors_for_dataframe(capacity_additions_by_process)
-            removal_colors = self._get_colors_for_dataframe(capacity_removals_by_process)
-
-            # Annotate if requested
-            capacity_additions_by_process = self._annotate_dataframe(capacity_additions_by_process, annotated)
-            capacity_removals_by_process = self._annotate_dataframe(capacity_removals_by_process, annotated)
-
-        # Calculate per-process capacity and operation if requested
-        process_capacity_df = None
-        process_operation_df = None
-        process_utilization_colors = None
-        if show_process_utilization:
-            fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
-
-            # Calculate capacity and operation for each process
-            capacity_by_process = {p: {} for p in self.m.PROCESS}
-            operation_by_process = {p: {} for p in self.m.PROCESS}
+            # Calculate capacity additions, removals, and operation for each process
+            capacity_additions = {p: {} for p in self.m.PROCESS}
+            capacity_removals = {p: {} for p in self.m.PROCESS}
+            operation = {p: {} for p in self.m.PROCESS}
 
             for t in self.m.SYSTEM_TIME:
                 for p in self.m.PROCESS:
@@ -857,165 +809,165 @@ class PostProcessor:
 
                     # Skip processes that don't produce this product
                     if prod_per_inst == 0:
-                        capacity_by_process[p][t] = 0
-                        operation_by_process[p][t] = 0
+                        capacity_additions[p][t] = 0
+                        capacity_removals[p][t] = 0
+                        operation[p][t] = 0
                         continue
 
-                    # Count installations in operation phase at time t
-                    installations_operating = sum(
-                        pyo.value(self.m.var_installation[p, t - tau])
-                        for tau in self.m.PROCESS_TIME
-                        if (t - tau in self.m.SYSTEM_TIME)
-                        and pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
-                    )
+                    # New capacity added at time t (new installations entering operation)
+                    # This happens when installation from (t - operation_start) enters operation phase
+                    op_start = pyo.value(self.m.process_operation_start[p])
+                    t_entering = t - op_start
+                    if t_entering in self.m.SYSTEM_TIME:
+                        installation_entering = pyo.value(self.m.var_installation[p, t_entering])
+                        capacity_additions[p][t] = installation_entering * prod_per_inst * fg_scale
+                    else:
+                        capacity_additions[p][t] = 0
 
-                    # Capacity = production per installation × installations
-                    capacity_by_process[p][t] = installations_operating * prod_per_inst * fg_scale
+                    # Capacity removed at time t (installations leaving operation phase)
+                    # This happens when installation from (t - operation_end - 1) exits operation
+                    op_end = pyo.value(self.m.process_operation_end[p])
+                    t_exiting = t - op_end - 1
+                    if t_exiting in self.m.SYSTEM_TIME:
+                        installation_exiting = pyo.value(self.m.var_installation[p, t_exiting])
+                        capacity_removals[p][t] = installation_exiting * prod_per_inst * fg_scale
+                    else:
+                        capacity_removals[p][t] = 0
 
                     # Operation = var_operation × production per installation
                     var_op = pyo.value(self.m.var_operation[p, t])
-                    operation_by_process[p][t] = var_op * prod_per_inst * fg_scale
+                    operation[p][t] = var_op * prod_per_inst * fg_scale
 
             # Convert to DataFrames
-            process_capacity_df = pd.DataFrame(capacity_by_process)
-            process_capacity_df.index = process_capacity_df.index.astype(str)
+            capacity_additions_df = pd.DataFrame(capacity_additions)
+            capacity_additions_df.index = capacity_additions_df.index.astype(str)
 
-            process_operation_df = pd.DataFrame(operation_by_process)
-            process_operation_df.index = process_operation_df.index.astype(str)
+            capacity_removals_df = pd.DataFrame(capacity_removals)
+            capacity_removals_df.index = capacity_removals_df.index.astype(str)
 
-            # Filter to only processes with non-zero capacity at some point
-            has_capacity = (process_capacity_df != 0).any(axis=0)
-            process_capacity_df = process_capacity_df.loc[:, has_capacity]
-            process_operation_df = process_operation_df.loc[:, has_capacity]
+            operation_df = pd.DataFrame(operation)
+            operation_df.index = operation_df.index.astype(str)
 
-            # Get colors BEFORE annotation
-            process_utilization_colors = self._get_colors_for_dataframe(process_capacity_df)
+            # Filter to only processes with non-zero values at some point
+            has_values = ((capacity_additions_df != 0).any(axis=0) |
+                         (capacity_removals_df != 0).any(axis=0) |
+                         (operation_df != 0).any(axis=0))
+            capacity_additions_df = capacity_additions_df.loc[:, has_values]
+            capacity_removals_df = capacity_removals_df.loc[:, has_values]
+            operation_df = operation_df.loc[:, has_values]
+
+            # Distinct palette for per-process bars
+            bar_colors = [distinct_colors[i % len(distinct_colors)] for i in range(len(capacity_additions_df.columns))]
 
             # Annotate if requested
-            process_capacity_df = self._annotate_dataframe(process_capacity_df, annotated)
-            process_operation_df = self._annotate_dataframe(process_operation_df, annotated)
+            capacity_additions_df = self._annotate_dataframe(capacity_additions_df, annotated)
+            capacity_removals_df = self._annotate_dataframe(capacity_removals_df, annotated)
+            operation_df = self._annotate_dataframe(operation_df, annotated)
 
         # Get product name for annotation
         product_name = self._get_name(product) if annotated else product
 
         # Create figure
-        fig, axes = self._create_clean_axes()
+        fig, axes = self._create_clean_axes(nrows=1, ncols=1)
         ax = axes[0]
 
         # Define x positions
         x_positions = np.arange(len(actual_production.index))
 
-        # Plot capacity changes as stacked bars if requested
-        if show_capacity_changes and capacity_additions_by_process is not None:
-            bar_width = 0.6
+        # Plot grouped bars if requested
+        if show_grouped_bars and capacity_additions_df is not None and not capacity_additions_df.empty:
+            bar_width = 0.35  # width for each grouped bar
+            offset = 0.20     # separation between bars
 
-            # Plot additions as positive stacked bars (by process)
-            if not capacity_additions_by_process.empty:
-                bottom_additions = np.zeros(len(x_positions))
-                for i, col in enumerate(capacity_additions_by_process.columns):
-                    values = capacity_additions_by_process[col].values
-                    ax.bar(
-                        x_positions,
-                        values,
-                        width=bar_width,
-                        bottom=bottom_additions,
-                        alpha=0.5,
-                        color=addition_colors[i] if i < len(addition_colors) else '#06A77D',
-                        label=f'+ {col}',
-                        edgecolor='white',
-                        linewidth=0.5,
-                        zorder=1
-                    )
-                    bottom_additions += values
+            # Grouped bars: capacity changes on left, operation on right
+            cap_positions = x_positions - offset
+            op_positions = x_positions + offset
 
-            # Plot removals as negative stacked bars (by process)
-            if not capacity_removals_by_process.empty:
-                bottom_removals = np.zeros(len(x_positions))
-                for i, col in enumerate(capacity_removals_by_process.columns):
-                    values = capacity_removals_by_process[col].values
-                    ax.bar(
-                        x_positions,
-                        -values,  # Negative for removals
-                        width=bar_width,
-                        bottom=bottom_removals,
-                        alpha=0.5,
-                        color=removal_colors[i] if i < len(removal_colors) else '#D62828',
-                        label=f'− {col}',
-                        edgecolor='white',
-                        linewidth=0.5,
-                        zorder=1
-                    )
-                    bottom_removals -= values
+            # Plot capacity additions as positive stacked bars (green fill, process color border)
+            bottom_additions = np.zeros(len(x_positions))
+            for i, col in enumerate(capacity_additions_df.columns):
+                add_values = capacity_additions_df[col].values
+                border_color = bar_colors[i] if i < len(bar_colors) else 'black'
 
-        # Plot process utilization breakdown if requested
-        if show_process_utilization and process_capacity_df is not None and not process_capacity_df.empty:
-            bar_width = 0.7
-
-            # Plot capacity as stacked bars (light colors, shows installed capacity)
-            bottom_capacity = np.zeros(len(x_positions))
-            for i, col in enumerate(process_capacity_df.columns):
-                capacity_values = process_capacity_df[col].values
-                color = process_utilization_colors[i] if i < len(process_utilization_colors) else f'C{i}'
-
-                # Capacity bar (light, represents installed capacity)
                 ax.bar(
-                    x_positions,
-                    capacity_values,
+                    cap_positions,
+                    add_values,
                     width=bar_width,
-                    bottom=bottom_capacity,
-                    alpha=0.3,
-                    color=color,
-                    edgecolor=color,
-                    linewidth=1,
-                    label=f'{col} (capacity)',
+                    bottom=bottom_additions,
+                    # alpha=0.7,
+                    color="#30A8349A",  # Green fill for additions
+                    edgecolor=border_color,  # Process color as border
+                    linewidth=1.5,
                     zorder=1
                 )
-                bottom_capacity += capacity_values
+                bottom_additions += add_values
 
-            # Plot operation as overlaid stacked bars (solid colors with hatch, shows actual use)
+            # Plot capacity removals as negative stacked bars (red fill, process color border)
+            bottom_removals = np.zeros(len(x_positions))
+            for i, col in enumerate(capacity_removals_df.columns):
+                rem_values = capacity_removals_df[col].values
+                border_color = bar_colors[i] if i < len(bar_colors) else 'black'
+
+                ax.bar(
+                    cap_positions,
+                    -rem_values,  # Negative for removals
+                    width=bar_width,
+                    bottom=bottom_removals,
+                    # alpha=0.7,
+                    color="#CD221F9A",  # Red fill for removals
+                    edgecolor=border_color,  # Process color as border
+                    linewidth=1.5,
+                    zorder=1
+                )
+                bottom_removals -= rem_values
+
+            # Plot operation as stacked bars (grouped right) - same colors, solid
             bottom_operation = np.zeros(len(x_positions))
-            for i, col in enumerate(process_operation_df.columns):
-                operation_values = process_operation_df[col].values
-                color = process_utilization_colors[i] if i < len(process_utilization_colors) else f'C{i}'
+            for i, col in enumerate(operation_df.columns):
+                operation_values = operation_df[col].values
+                color = bar_colors[i] if i < len(bar_colors) else f'C{i}'
 
-                # Only plot if there's any operation
-                if (operation_values > 0.001).any():
-                    ax.bar(
-                        x_positions,
-                        operation_values,
-                        width=bar_width,
-                        bottom=bottom_operation,
-                        alpha=0.8,
-                        color=color,
-                        edgecolor='white',
-                        linewidth=0.5,
-                        hatch='///',
-                        label=f'{col} (operated)',
-                        zorder=2
-                    )
+                ax.bar(
+                    op_positions,
+                    operation_values,
+                    width=bar_width,
+                    bottom=bottom_operation,
+                    alpha=0.9,
+                    color=color,
+                    edgecolor='black',
+                    linewidth=1,
+                    zorder=2
+                )
                 bottom_operation += operation_values
 
-            # Calculate and display utilization summary
-            total_capacity = process_capacity_df.sum().sum()
-            total_operation = process_operation_df.sum().sum()
-            if total_capacity > 0:
-                utilization_pct = (total_operation / total_capacity) * 100
-                ax.text(
-                    0.02, 0.98,
-                    f'Overall utilization: {utilization_pct:.1f}%',
-                    transform=ax.transAxes,
-                    fontsize=self._plot_config["fontsize"] - 2,
-                    verticalalignment='top',
-                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8)
-                )
+            # Add horizontal line at zero for capacity changes
+            ax.axhline(0, color='gray', linewidth=0.5, zorder=0)
 
-        # Plot actual production
+            # Add bar group labels at bottom
+            ax.text(cap_positions[0], -0.08, 'Δ Cap', transform=ax.get_xaxis_transform(),
+                   ha='center', va='top', fontsize=self._plot_config["fontsize"] - 3, color='gray')
+            ax.text(op_positions[0], -0.08, 'Op', transform=ax.get_xaxis_transform(),
+                   ha='center', va='top', fontsize=self._plot_config["fontsize"] - 3, color='gray')
+
+            # Create custom legend: process colors (as borders) + bar type distinction
+            from matplotlib.patches import Patch
+            # Process legend shows border color to identify process
+            process_legend = [Patch(facecolor='white', edgecolor=bar_colors[i], linewidth=2.5, label=col)
+                            for i, col in enumerate(capacity_additions_df.columns)]
+            # Type legend shows fill color meaning
+            type_legend = [
+                Patch(facecolor='#4CAF50', edgecolor='black', alpha=0.7, label='+ Capacity'),
+                Patch(facecolor='#E53935', edgecolor='black', alpha=0.7, label='− Capacity'),
+                Patch(facecolor='gray', edgecolor='black', alpha=0.9, label='Operation')
+            ]
+
+        # Plot production (demand assumed equal)
         ax.plot(
             x_positions,
             actual_production.values,
             marker='o',
             linewidth=self._plot_config["line_width"],
-            label='Actual Production',
+            label='Production / Demand',
             color='#2E86AB',
             linestyle='-',
             zorder=3
@@ -1033,20 +985,8 @@ class PostProcessor:
             zorder=3
         )
 
-        # Plot demand
-        ax.plot(
-            x_positions,
-            demand.values,
-            marker='^',
-            linewidth=self._plot_config["line_width"],
-            label='Demand',
-            color='#F18F01',
-            linestyle=':',
-            zorder=3
-        )
-
-        # Fill area between production and capacity (only if not showing bars or utilization)
-        if not show_capacity_changes and not show_process_utilization:
+        # Fill area between production and capacity (only if not showing grouped bars)
+        if not show_grouped_bars:
             ax.fill_between(
                 x_positions,
                 actual_production.values,
@@ -1062,18 +1002,12 @@ class PostProcessor:
         ax.set_ylabel(f"Quantity of {product_name}", fontsize=self._plot_config["fontsize"])
 
         # Update title based on mode
-        if show_process_utilization:
-            ax.set_title(
-                f"Production vs Capacity: {product_name}\n(solid = capacity, hatched = operated)",
-                fontsize=self._plot_config["fontsize"] + 2,
-                pad=20
-            )
-        else:
-            ax.set_title(
-                f"Production vs Capacity: {product_name}",
-                fontsize=self._plot_config["fontsize"] + 2,
-                pad=20
-            )
+        title = f"Production vs Capacity: {product_name}"
+        ax.set_title(
+            title,
+            fontsize=self._plot_config["fontsize"] + 2,
+            pad=10
+        )
 
         # Add grid
         ax.grid(
@@ -1083,21 +1017,30 @@ class PostProcessor:
         )
 
         # Add legend below the plot
-        # Adjust ncol based on number of legend entries
-        handles, labels = ax.get_legend_handles_labels()
-        ncol = min(4, max(2, len(handles) // 3 + 1)) if show_process_utilization else 3
-        ax.legend(
-            loc='upper center',
-            bbox_to_anchor=(0.5, -0.15),
-            ncol=ncol,
-            fontsize=self._plot_config["fontsize"] - 2,
-            frameon=False
-        )
+        if show_grouped_bars and capacity_additions_df is not None and not capacity_additions_df.empty:
+            # Custom legend for grouped bars: show processes + bar type distinction
+            all_handles = process_legend + type_legend
+            ncol = min(6, len(all_handles))
+            ax.legend(
+                handles=all_handles,
+                loc='upper center',
+                bbox_to_anchor=(0.5, -0.15),
+                ncol=ncol,
+                fontsize=self._plot_config["fontsize"] - 2,
+                frameon=False
+            )
+        else:
+            handles, labels = ax.get_legend_handles_labels()
+            ax.legend(
+                loc='upper center',
+                bbox_to_anchor=(0.5, -0.15),
+                ncol=3,
+                fontsize=self._plot_config["fontsize"] - 2,
+                frameon=False
+            )
 
         fig.tight_layout()
-        # Adjust bottom margin based on legend size
-        bottom_margin = 0.30 if show_process_utilization and len(handles) > 6 else 0.25
-        fig.subplots_adjust(bottom=bottom_margin)
+        fig.subplots_adjust(bottom=0.25)
         plt.show()
 
     def plot_utilization_heatmap(self, product=None, annotated=True, show_values=True):
