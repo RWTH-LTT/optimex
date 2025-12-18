@@ -660,12 +660,64 @@ class PostProcessor:
         fig.subplots_adjust(bottom=0.25)
         plt.show()
 
+    def get_existing_capacity(self) -> pd.DataFrame:
+        """
+        Extract existing (brownfield) capacity data from the model.
+
+        Returns a DataFrame showing which processes have existing capacity,
+        when they were installed, and their operational status at each time step.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with Time as index and (Process, Type) as MultiIndex columns.
+            Type can be 'existing_capacity' (total existing) or 'existing_operating'
+            (existing capacity in operation phase at that time).
+        """
+        existing_cap_dict = getattr(self.m, "_existing_capacity_dict", {})
+
+        if not existing_cap_dict:
+            # Return empty DataFrame if no existing capacity
+            return pd.DataFrame()
+
+        data = {}
+        for t in self.m.SYSTEM_TIME:
+            for p in self.m.PROCESS:
+                # Calculate existing capacity in operation at time t
+                op_start = pyo.value(self.m.process_operation_start[p])
+                op_end = pyo.value(self.m.process_operation_end[p])
+
+                existing_operating = 0
+                existing_total = 0
+
+                for (proc, inst_year), capacity in existing_cap_dict.items():
+                    if proc == p:
+                        existing_total += capacity
+                        tau_existing = t - inst_year
+                        if op_start <= tau_existing <= op_end:
+                            existing_operating += capacity
+
+                if existing_total > 0:
+                    data[(t, p, "existing_capacity")] = existing_total
+                    data[(t, p, "existing_operating")] = existing_operating
+
+        if not data:
+            return pd.DataFrame()
+
+        df = pd.DataFrame.from_dict(data, orient="index", columns=["Value"])
+        df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process", "Type"])
+        df = df.reset_index()
+        df_pivot = df.pivot(index="Time", columns=["Process", "Type"], values="Value")
+
+        return df_pivot
+
     def get_production_capacity(self) -> pd.DataFrame:
         """
         Calculate maximum available production capacity for each product at each time step.
 
         Capacity is determined by counting installations in their operation phase and
-        multiplying by their production coefficients.
+        multiplying by their production coefficients. This includes both new installations
+        (from var_installation) and existing (brownfield) capacity.
 
         Returns
         -------
@@ -675,6 +727,7 @@ class PostProcessor:
         """
         capacity_tensor = {}
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
+        existing_cap_dict = getattr(self.m, "_existing_capacity_dict", {})
 
         for f in self.m.PRODUCT:
             for t in self.m.SYSTEM_TIME:
@@ -682,19 +735,29 @@ class PostProcessor:
                 total_capacity = 0
 
                 for p in self.m.PROCESS:
-                    # Count installations in operation phase at time t
+                    op_start = pyo.value(self.m.process_operation_start[p])
+                    op_end = pyo.value(self.m.process_operation_end[p])
+
+                    # Count new installations in operation phase at time t
                     installations_operating = sum(
                         pyo.value(self.m.var_installation[p, t - tau])
                         for tau in self.m.PROCESS_TIME
                         if (t - tau in self.m.SYSTEM_TIME)
-                        and pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+                        and op_start <= tau <= op_end
                     )
+
+                    # Add existing (brownfield) capacity in operation phase
+                    for (proc, inst_year), capacity in existing_cap_dict.items():
+                        if proc == p:
+                            tau_existing = t - inst_year
+                            if op_start <= tau_existing <= op_end:
+                                installations_operating += capacity
 
                     # Production capacity per installation (sum over operation phase)
                     production_per_installation = sum(
                         self.m.foreground_production[p, f, tau]
                         for tau in self.m.PROCESS_TIME
-                        if pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+                        if op_start <= tau <= op_end
                     )
 
                     # Total capacity for this process
@@ -1070,6 +1133,7 @@ class PostProcessor:
             product = products_with_demand[0]
 
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
+        existing_cap_dict = getattr(self.m, "_existing_capacity_dict", {})
 
         # Calculate utilization for each process at each time
         utilization_data = {}
@@ -1077,11 +1141,14 @@ class PostProcessor:
         operation_data = {}
 
         for p in self.m.PROCESS:
+            op_start = pyo.value(self.m.process_operation_start[p])
+            op_end = pyo.value(self.m.process_operation_end[p])
+
             # Check if process produces this product
             prod_per_inst = sum(
                 self.m.foreground_production[p, product, tau]
                 for tau in self.m.PROCESS_TIME
-                if pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+                if op_start <= tau <= op_end
             )
 
             if prod_per_inst == 0:
@@ -1092,13 +1159,21 @@ class PostProcessor:
             operation_data[p] = {}
 
             for t in self.m.SYSTEM_TIME:
-                # Calculate capacity
+                # Calculate capacity from new installations
                 installations_operating = sum(
                     pyo.value(self.m.var_installation[p, t - tau])
                     for tau in self.m.PROCESS_TIME
                     if (t - tau in self.m.SYSTEM_TIME)
-                    and pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+                    and op_start <= tau <= op_end
                 )
+
+                # Add existing (brownfield) capacity in operation phase
+                for (proc, inst_year), cap in existing_cap_dict.items():
+                    if proc == p:
+                        tau_existing = t - inst_year
+                        if op_start <= tau_existing <= op_end:
+                            installations_operating += cap
+
                 capacity = installations_operating * prod_per_inst * fg_scale
 
                 # Calculate operation

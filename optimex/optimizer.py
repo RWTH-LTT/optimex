@@ -321,6 +321,27 @@ def create_model(
         default=0,  # Set default coupling value to 0 if not defined
     )
 
+    # Existing (brownfield) capacity: capacity installed before SYSTEM_TIME
+    # These contribute to operation capacity but NOT to installation-phase impacts
+    model.existing_capacity = pyo.Param(
+        model.PROCESS,
+        pyo.Any,  # Installation year (can be any year before SYSTEM_TIME)
+        within=pyo.NonNegativeReals,
+        doc="Existing capacity (process, installation_year) -> amount",
+        initialize=(
+            scaled_inputs.existing_capacity
+            if scaled_inputs.existing_capacity is not None
+            else {}
+        ),
+        default=0,
+    )
+    # Store the existing capacity dict for iteration
+    model._existing_capacity_dict = (
+        scaled_inputs.existing_capacity
+        if scaled_inputs.existing_capacity is not None
+        else {}
+    )
+
     model.category_impact_limit = pyo.Param(
         model.CATEGORY,
         within=pyo.Reals,
@@ -499,6 +520,11 @@ def create_model(
             real capacity. var_operation is in REAL units (dimensionless activity level).
 
             Only applied when process p produces product r (total_production > 0).
+
+            Brownfield (existing) capacity:
+            Existing capacity installed before SYSTEM_TIME is included in installations_in_operation
+            if it is still within its operation phase at time t. This allows brownfield capacity
+            to contribute to production without adding installation-phase impacts.
             """
             fg_scale = model.scales["foreground"]
 
@@ -516,12 +542,24 @@ def create_model(
                 return pyo.Constraint.Skip
 
             # Count installations currently in their operation phase (REAL units)
+            # This includes both new installations (var_installation) and existing capacity
             installations_in_operation = sum(
                 model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
                 if (t - tau in model.SYSTEM_TIME)
                 and model.process_operation_start[p] <= tau <= model.process_operation_end[p]
             )
+
+            # Add existing (brownfield) capacity that is still in operation phase
+            # For existing capacity installed at inst_year, tau = t - inst_year
+            # It's in operation if: process_operation_start <= tau <= process_operation_end
+            op_start = pyo.value(model.process_operation_start[p])
+            op_end = pyo.value(model.process_operation_end[p])
+            for (proc, inst_year), capacity in model._existing_capacity_dict.items():
+                if proc == p:
+                    tau_existing = t - inst_year
+                    if op_start <= tau_existing <= op_end:
+                        installations_in_operation += capacity
 
             # Capacity = total_production (SCALED) × fg_scale × installations (REAL) = (REAL)
             capacity = total_production_scaled * fg_scale * installations_in_operation
@@ -803,6 +841,16 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
                     if (t - tau in model.SYSTEM_TIME)
                     and pyo.value(model.process_operation_start[p]) <= tau <= pyo.value(model.process_operation_end[p])
                 )
+
+                # Add existing (brownfield) capacity that is still in operation phase
+                op_start = pyo.value(model.process_operation_start[p])
+                op_end = pyo.value(model.process_operation_end[p])
+                existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
+                for (proc, inst_year), cap in existing_cap_dict.items():
+                    if proc == p:
+                        tau_existing = t - inst_year
+                        if op_start <= tau_existing <= op_end:
+                            installations_in_operation += cap
 
                 # Capacity = total_production (SCALED) × fg_scale × installations (REAL)
                 capacity = total_production_scaled * fg_scale * installations_in_operation
