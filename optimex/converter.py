@@ -150,6 +150,15 @@ class OptimizationModelInputs(BaseModel):
             "process as multiplier of another."
         ),
     )
+    existing_capacity: Optional[Dict[Tuple[str, int], float]] = Field(
+        None,
+        description=(
+            "Existing (brownfield) capacity installed before the optimization horizon. "
+            "Maps (process, installation_year) to capacity amount. Installation years "
+            "must be before min(SYSTEM_TIME). These capacities contribute to operation "
+            "and production but their installation impacts are excluded (sunk costs)."
+        ),
+    )
     process_names: Optional[Dict[str, str]] = Field(
         None, description="Maps process identifiers to human-readable names."
     )
@@ -346,6 +355,22 @@ class OptimizationModelInputs(BaseModel):
                 if val <= 0:
                     raise ValueError(
                         f"Coupling value for ({p1}, {p2}) must be positive, got {val}"
+                    )
+
+        if data.get("existing_capacity") is not None:
+            min_system_time = min(system_times) if system_times else None
+            for (proc, inst_year), capacity in data["existing_capacity"].items():
+                validate_keys([proc], processes, "existing_capacity processes")
+                if min_system_time is not None and inst_year >= min_system_time:
+                    raise ValueError(
+                        f"Existing capacity installation year ({inst_year}) for process "
+                        f"'{proc}' must be before min(SYSTEM_TIME) ({min_system_time}). "
+                        "Brownfield capacity represents pre-existing installations."
+                    )
+                if capacity < 0:
+                    raise ValueError(
+                        f"Existing capacity for ({proc}, {inst_year}) must be "
+                        f"non-negative, got {capacity}"
                     )
 
         return data
@@ -690,6 +715,7 @@ class ModelInputManager:
             "cumulative_process_limits_max": None,
             "cumulative_process_limits_min": None,
             "process_coupling": None,
+            "existing_capacity": None,
         }
         self.model_inputs = OptimizationModelInputs(**data)
         return self.model_inputs
@@ -757,6 +783,7 @@ class ModelInputManager:
                 "process_operation_limits_max",
                 "process_operation_limits_min",
                 "process_coupling",
+                "existing_capacity",
             ]
 
             for field in tuple_key_fields:
@@ -801,6 +828,7 @@ class ModelInputManager:
                 "process_operation_limits_max",
                 "process_operation_limits_min",
                 "process_coupling",
+                "existing_capacity",
             ]
 
             for field in tuple_key_fields:
