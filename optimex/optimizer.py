@@ -33,7 +33,8 @@ Both decision variables remain in REAL (unscaled) units to:
 **Unscaled parameters**:
 - `background_inventory[bkg, i, e]`: kg emission / kg intermediate [UNSCALED]
 - `mapping[bkg, t]`: interpolation weights [UNSCALED, dimensionless]
-- `process_limits_*`: capacity limits [UNSCALED, matches var_installation]
+- `process_deployment_limits_*`: deployment limits [UNSCALED, matches var_installation]
+- `process_operation_limits_*`: operation limits [UNSCALED, matches var_operation]
 
 ### Dimensional Consistency
 
@@ -262,27 +263,51 @@ def create_model(
         default=0,
         initialize={k: v[1] for k, v in scaled_inputs.operation_time_limits.items()},
     )
-    model.process_limits_max = pyo.Param(
+    model.process_deployment_limits_max = pyo.Param(
         model.PROCESS,
         model.SYSTEM_TIME,
         within=pyo.Reals,
-        doc="maximum time specific process limit S_max",
-        default=scaled_inputs.process_limits_max_default,
+        doc="maximum time specific process deployment limit S_max",
+        default=scaled_inputs.process_deployment_limits_max_default,
         initialize=(
-            scaled_inputs.process_limits_max
-            if scaled_inputs.process_limits_max is not None
+            scaled_inputs.process_deployment_limits_max
+            if scaled_inputs.process_deployment_limits_max is not None
             else {}
         ),
     )
-    model.process_limits_min = pyo.Param(
+    model.process_deployment_limits_min = pyo.Param(
         model.PROCESS,
         model.SYSTEM_TIME,
         within=pyo.Reals,
-        doc="minimum time specific process limit S_min",
-        default=scaled_inputs.process_limits_min_default,
+        doc="minimum time specific process deployment limit S_min",
+        default=scaled_inputs.process_deployment_limits_min_default,
         initialize=(
-            scaled_inputs.process_limits_min
-            if scaled_inputs.process_limits_min is not None
+            scaled_inputs.process_deployment_limits_min
+            if scaled_inputs.process_deployment_limits_min is not None
+            else {}
+        ),
+    )
+    model.process_operation_limits_max = pyo.Param(
+        model.PROCESS,
+        model.SYSTEM_TIME,
+        within=pyo.Reals,
+        doc="maximum time specific process operation limit O_max",
+        default=scaled_inputs.process_operation_limits_max_default,
+        initialize=(
+            scaled_inputs.process_operation_limits_max
+            if scaled_inputs.process_operation_limits_max is not None
+            else {}
+        ),
+    )
+    model.process_operation_limits_min = pyo.Param(
+        model.PROCESS,
+        model.SYSTEM_TIME,
+        within=pyo.Reals,
+        doc="minimum time specific process operation limit O_min",
+        default=scaled_inputs.process_operation_limits_min_default,
+        initialize=(
+            scaled_inputs.process_operation_limits_min
+            if scaled_inputs.process_operation_limits_min is not None
             else {}
         ),
     )
@@ -342,18 +367,19 @@ def create_model(
         doc="Installation of the process",
     )
 
-    # Process limits
-    model.ProcessLimitMax = pyo.Constraint(
+    # Deployment limits
+    model.ProcessDeploymentLimitMax = pyo.Constraint(
         model.PROCESS,
         model.SYSTEM_TIME,
-        rule=lambda m, p, t: m.var_installation[p, t] <= m.process_limits_max[p, t],
+        rule=lambda m, p, t: m.var_installation[p, t] <= m.process_deployment_limits_max[p, t],
     )
 
-    model.ProcessLimitMin = pyo.Constraint(
+    model.ProcessDeploymentLimitMin = pyo.Constraint(
         model.PROCESS,
         model.SYSTEM_TIME,
-        rule=lambda m, p, t: m.var_installation[p, t] >= m.process_limits_min[p, t],
+        rule=lambda m, p, t: m.var_installation[p, t] >= m.process_deployment_limits_min[p, t],
     )
+
     model.CumulativeProcessLimitMax = pyo.Constraint(
         model.PROCESS,
         rule=lambda m, p: sum(m.var_installation[p, t] for t in m.SYSTEM_TIME)
@@ -390,7 +416,20 @@ def create_model(
         within=pyo.NonNegativeReals,  # Non-negative activity level
         doc="Operational activity level (production amounts at each time)",
     )
-    
+
+    # Operation limits
+    model.ProcessOperationLimitMax = pyo.Constraint(
+        model.PROCESS,
+        model.SYSTEM_TIME,
+        rule=lambda m, p, t: m.var_operation[p, t] <= m.process_operation_limits_max[p, t],
+    )
+
+    model.ProcessOperationLimitMin = pyo.Constraint(
+        model.PROCESS,
+        model.SYSTEM_TIME,
+        rule=lambda m, p, t: m.var_operation[p, t] >= m.process_operation_limits_min[p, t],
+    )
+
     if flexible_operation:
         # Expressions builder
         def scale_tensor_by_installation(tensor: pyo.Param, flow_set):

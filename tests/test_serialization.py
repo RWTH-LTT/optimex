@@ -119,8 +119,10 @@ def test_json_with_optional_fields():
         "characterization": {("climate_change", "CO2", 2020): 1e-12},
         "operation_time_limits": {"P1": (1, 1)},
         # Optional fields with tuple keys
-        "process_limits_max": {("P1", 2020): 100.0},
-        "process_limits_min": {("P1", 2020): 0.0},
+        "process_deployment_limits_max": {("P1", 2020): 100.0},
+        "process_deployment_limits_min": {("P1", 2020): 0.0},
+        "process_operation_limits_max": {("P1", 2020): 50.0},
+        "process_operation_limits_min": {("P1", 2020): 0.0},
         "process_coupling": {("P1", "P1"): 1.0},
     }
 
@@ -137,8 +139,10 @@ def test_json_with_optional_fields():
         loaded_inputs = manager_loaded.load(str(json_path))
 
         # Verify optional fields with tuple keys are preserved
-        assert loaded_inputs.process_limits_max == original_inputs.process_limits_max
-        assert loaded_inputs.process_limits_min == original_inputs.process_limits_min
+        assert loaded_inputs.process_deployment_limits_max == original_inputs.process_deployment_limits_max
+        assert loaded_inputs.process_deployment_limits_min == original_inputs.process_deployment_limits_min
+        assert loaded_inputs.process_operation_limits_max == original_inputs.process_operation_limits_max
+        assert loaded_inputs.process_operation_limits_min == original_inputs.process_operation_limits_min
         assert loaded_inputs.process_coupling == original_inputs.process_coupling
 
 

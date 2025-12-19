@@ -124,11 +124,17 @@ class OptimizationModelInputs(BaseModel):
     category_impact_limit: Optional[Dict[str, float]] = Field(
         None, description="Optional limits on impact categories."
     )
-    process_limits_max: Optional[Dict[Tuple[str, int], float]] = Field(
+    process_deployment_limits_max: Optional[Dict[Tuple[str, int], float]] = Field(
         None, description="Upper bounds on (process, system_time) deployment."
     )
-    process_limits_min: Optional[Dict[Tuple[str, int], float]] = Field(
+    process_deployment_limits_min: Optional[Dict[Tuple[str, int], float]] = Field(
         None, description="Lower bounds on (process, system_time) deployment."
+    )
+    process_operation_limits_max: Optional[Dict[Tuple[str, int], float]] = Field(
+        None, description="Upper bounds on (process, system_time) operation."
+    )
+    process_operation_limits_min: Optional[Dict[Tuple[str, int], float]] = Field(
+        None, description="Lower bounds on (process, system_time) operation."
     )
     cumulative_process_limits_max: Optional[Dict[str, float]] = Field(
         None, description=("Global upper bound on cumulative deployment for a process.")
@@ -148,17 +154,31 @@ class OptimizationModelInputs(BaseModel):
         None, description="Maps process identifiers to human-readable names."
     )
 
-    process_limits_max_default: float = Field(
+    process_deployment_limits_max_default: float = Field(
         default=float("inf"),
         description=(
             "Default upper bound for annual process deployment if not explicitly "
             "specified."
         ),
     )
-    process_limits_min_default: float = Field(
+    process_deployment_limits_min_default: float = Field(
         default=0.0,
         description=(
             "Default lower bound for annual process deployment if not explicitly "
+            "specified."
+        ),
+    )
+    process_operation_limits_max_default: float = Field(
+        default=float("inf"),
+        description=(
+            "Default upper bound for process operation if not explicitly "
+            "specified."
+        ),
+    )
+    process_operation_limits_min_default: float = Field(
+        default=0.0,
+        description=(
+            "Default lower bound for process operation if not explicitly "
             "specified."
         ),
     )
@@ -288,15 +308,25 @@ class OptimizationModelInputs(BaseModel):
             for key in data["category_impact_limit"].keys():
                 validate_keys([key], categories, "category_impact_limit")
 
-        if data.get("process_limits_max") is not None:
-            for key in data["process_limits_max"].keys():
-                validate_keys([key[0]], processes, "process_limits_max processes")
-                validate_keys([key[1]], system_times, "process_limits_max system times")
+        if data.get("process_deployment_limits_max") is not None:
+            for key in data["process_deployment_limits_max"].keys():
+                validate_keys([key[0]], processes, "process_deployment_limits_max processes")
+                validate_keys([key[1]], system_times, "process_deployment_limits_max system times")
 
-        if data.get("process_limits_min") is not None:
-            for key in data["process_limits_min"].keys():
-                validate_keys([key[0]], processes, "process_limits_min processes")
-                validate_keys([key[1]], system_times, "process_limits_min system times")
+        if data.get("process_deployment_limits_min") is not None:
+            for key in data["process_deployment_limits_min"].keys():
+                validate_keys([key[0]], processes, "process_deployment_limits_min processes")
+                validate_keys([key[1]], system_times, "process_deployment_limits_min system times")
+
+        if data.get("process_operation_limits_max") is not None:
+            for key in data["process_operation_limits_max"].keys():
+                validate_keys([key[0]], processes, "process_operation_limits_max processes")
+                validate_keys([key[1]], system_times, "process_operation_limits_max system times")
+
+        if data.get("process_operation_limits_min") is not None:
+            for key in data["process_operation_limits_min"].keys():
+                validate_keys([key[0]], processes, "process_operation_limits_min processes")
+                validate_keys([key[1]], system_times, "process_operation_limits_min system times")
 
         if data.get("cumulative_process_limits_max") is not None:
             for key in data["cumulative_process_limits_max"].keys():
@@ -379,15 +409,27 @@ class OptimizationModelInputs(BaseModel):
         This ensures logical consistency of the bounds - having min > max would
         create an infeasible constraint.
         """
-        # Check per-period process limits
-        if self.process_limits_min and self.process_limits_max:
-            for key in self.process_limits_min:
-                if key in self.process_limits_max:
-                    min_val = self.process_limits_min[key]
-                    max_val = self.process_limits_max[key]
+        # Check per-period deployment limits
+        if self.process_deployment_limits_min and self.process_deployment_limits_max:
+            for key in self.process_deployment_limits_min:
+                if key in self.process_deployment_limits_max:
+                    min_val = self.process_deployment_limits_min[key]
+                    max_val = self.process_deployment_limits_max[key]
                     if min_val > max_val:
                         raise ValueError(
-                            f"Process limit min ({min_val}) > max ({max_val}) for {key}. "
+                            f"Process deployment limit min ({min_val}) > max ({max_val}) for {key}. "
+                            "Constraints would be infeasible."
+                        )
+
+        # Check per-period operation limits
+        if self.process_operation_limits_min and self.process_operation_limits_max:
+            for key in self.process_operation_limits_min:
+                if key in self.process_operation_limits_max:
+                    min_val = self.process_operation_limits_min[key]
+                    max_val = self.process_operation_limits_max[key]
+                    if min_val > max_val:
+                        raise ValueError(
+                            f"Process operation limit min ({min_val}) > max ({max_val}) for {key}. "
                             "Constraints would be infeasible."
                         )
 
@@ -404,10 +446,17 @@ class OptimizationModelInputs(BaseModel):
                         )
 
         # Check defaults consistency
-        if self.process_limits_min_default > self.process_limits_max_default:
+        if self.process_deployment_limits_min_default > self.process_deployment_limits_max_default:
             raise ValueError(
-                f"process_limits_min_default ({self.process_limits_min_default}) > "
-                f"process_limits_max_default ({self.process_limits_max_default}). "
+                f"process_deployment_limits_min_default ({self.process_deployment_limits_min_default}) > "
+                f"process_deployment_limits_max_default ({self.process_deployment_limits_max_default}). "
+                "Constraints would be infeasible."
+            )
+
+        if self.process_operation_limits_min_default > self.process_operation_limits_max_default:
+            raise ValueError(
+                f"process_operation_limits_min_default ({self.process_operation_limits_min_default}) > "
+                f"process_operation_limits_max_default ({self.process_operation_limits_max_default}). "
                 "Constraints would be infeasible."
             )
 
@@ -544,9 +593,11 @@ class OptimizationModelInputs(BaseModel):
 
         return scaled, scaling_factors
 
-    class Config:
-        arbitrary_types_allowed = True
-        frozen = False
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "frozen": False,
+        "extra": "forbid",  # Reject unknown fields to catch typos
+    }
 
 
 class ModelInputManager:
@@ -632,8 +683,10 @@ class ModelInputManager:
             "operation_time_limits": lca_processor.operation_time_limits,
             # Optional constraints not populated by default
             "category_impact_limit": None,
-            "process_limits_max": None,
-            "process_limits_min": None,
+            "process_deployment_limits_max": None,
+            "process_deployment_limits_min": None,
+            "process_operation_limits_max": None,
+            "process_operation_limits_min": None,
             "cumulative_process_limits_max": None,
             "cumulative_process_limits_min": None,
             "process_coupling": None,
@@ -699,8 +752,10 @@ class ModelInputManager:
                 "background_inventory",
                 "mapping",
                 "characterization",
-                "process_limits_max",
-                "process_limits_min",
+                "process_deployment_limits_max",
+                "process_deployment_limits_min",
+                "process_operation_limits_max",
+                "process_operation_limits_min",
                 "process_coupling",
             ]
 
@@ -741,8 +796,10 @@ class ModelInputManager:
                 "background_inventory",
                 "mapping",
                 "characterization",
-                "process_limits_max",
-                "process_limits_min",
+                "process_deployment_limits_max",
+                "process_deployment_limits_min",
+                "process_operation_limits_max",
+                "process_operation_limits_min",
                 "process_coupling",
             ]
 
