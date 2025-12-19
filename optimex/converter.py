@@ -471,10 +471,10 @@ class OptimizationModelInputs(BaseModel):
                         )
                     
         # Cross-check cumulative vs. per-period limits
-        if self.process_limits_max and self.cumulative_process_limits_min:
+        if self.process_deployment_limits_max and self.cumulative_process_limits_min:
             for key in self.cumulative_process_limits_min:
                 total_max = sum(
-                    self.process_limits_max.get((key, t), 0.0)
+                    self.process_deployment_limits_max.get((key, t), 0.0)
                     for t in self.SYSTEM_TIME
                 )
                 min_cum = self.cumulative_process_limits_min[key]
@@ -483,10 +483,10 @@ class OptimizationModelInputs(BaseModel):
                         f"Cumulative process limit min ({min_cum}) > sum of per-period "
                         f"max ({total_max}) for {key}. Constraints would be infeasible."
                     )
-        if self.process_limits_min and self.cumulative_process_limits_max:
+        if self.process_deployment_limits_min and self.cumulative_process_limits_max:
             for key in self.cumulative_process_limits_max:
                 total_min = sum(
-                    self.process_limits_min.get((key, t), 0.0)
+                    self.process_deployment_limits_min.get((key, t), 0.0)
                     for t in self.SYSTEM_TIME
                 )
                 max_cum = self.cumulative_process_limits_max[key]
