@@ -356,3 +356,152 @@ def test_capacity_constraint_with_high_production():
     assert pytest.approx(4.0, rel=0.01) == objective, (
         f"Emissions should be 4.0 kg CO2, got {objective}"
     )
+
+
+def test_operation_limits_respected():
+    """
+    Test that operation limits correctly cap operation when it would otherwise be higher.
+
+    Creates a model with two processes:
+    - P1 (low emissions): preferred by optimizer
+    - P2 (high emissions): fallback when P1 is limited
+
+    Sets an operation limit on P1 that forces the optimizer to use P2 to meet
+    the remaining demand. Without the operation limit, P1 would be used exclusively.
+
+    This verifies that:
+    1. Operation is capped at the specified limit
+    2. The limit is binding (operation reaches the limit)
+    3. Remaining demand is fulfilled by the fallback process
+    """
+    model_inputs_dict = {
+        "PROCESS": ["P1_low_emission", "P2_high_emission"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": [],
+        "ELEMENTARY_FLOW": ["CO2"],
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020, 2021, 2022],
+        "CATEGORY": ["climate_change"],
+        "operation_time_limits": {
+            "P1_low_emission": (0, 0),
+            "P2_high_emission": (0, 0),
+        },
+        # Demand of 100 units per year
+        "demand": {
+            ("product", 2020): 100,
+            ("product", 2021): 100,
+            ("product", 2022): 100,
+        },
+        "foreground_technosphere": {},
+        "internal_demand_technosphere": {},
+        # P1 has low emissions (1 kg CO2 per operation), P2 has high emissions (10 kg CO2)
+        "foreground_biosphere": {
+            ("P1_low_emission", "CO2", 0): 1,
+            ("P2_high_emission", "CO2", 0): 10,
+        },
+        # Both processes produce 1 unit of product per unit of operation
+        "foreground_production": {
+            ("P1_low_emission", "product", 0): 1.0,
+            ("P2_high_emission", "product", 0): 1.0,
+        },
+        "operation_flow": {
+            ("P1_low_emission", "product"): True,
+            ("P1_low_emission", "CO2"): True,
+            ("P2_high_emission", "product"): True,
+            ("P2_high_emission", "CO2"): True,
+        },
+        "background_inventory": {},
+        "mapping": {
+            ("db_2020", 2020): 1.0,
+            ("db_2020", 2021): 1.0,
+            ("db_2020", 2022): 1.0,
+        },
+        "characterization": {
+            ("climate_change", "CO2", 2020): 1.0,
+            ("climate_change", "CO2", 2021): 1.0,
+            ("climate_change", "CO2", 2022): 1.0,
+        },
+    }
+
+    # First solve WITHOUT operation limits to establish baseline
+    model_inputs_baseline = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_baseline = optimizer.create_model(
+        inputs=model_inputs_baseline,
+        objective_category="climate_change",
+        name="test_operation_limits_baseline",
+        flexible_operation=True,
+    )
+    solved_baseline, obj_baseline, _ = optimizer.solve_model(
+        model_baseline, solver_name="glpk", tee=False
+    )
+
+    # Without limits, P1 should handle all demand (300 total)
+    p1_operation_baseline = sum(
+        pyo.value(solved_baseline.var_operation["P1_low_emission", t])
+        for t in solved_baseline.SYSTEM_TIME
+    )
+    p2_operation_baseline = sum(
+        pyo.value(solved_baseline.var_operation["P2_high_emission", t])
+        for t in solved_baseline.SYSTEM_TIME
+    )
+    assert pytest.approx(300, rel=0.01) == p1_operation_baseline, (
+        f"Without limits, P1 should handle all demand (300), got {p1_operation_baseline}"
+    )
+    assert pytest.approx(0, abs=0.01) == p2_operation_baseline, (
+        f"Without limits, P2 should not be used, got {p2_operation_baseline}"
+    )
+
+    # Now solve WITH operation limits on P1
+    # Limit P1 operation to 50 per year (150 total), forcing P2 to handle the rest
+    operation_limit = 50.0
+    model_inputs_limited = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_inputs_limited.process_operation_limits_max = {
+        ("P1_low_emission", 2020): operation_limit,
+        ("P1_low_emission", 2021): operation_limit,
+        ("P1_low_emission", 2022): operation_limit,
+    }
+
+    model_limited = optimizer.create_model(
+        inputs=model_inputs_limited,
+        objective_category="climate_change",
+        name="test_operation_limits_constrained",
+        flexible_operation=True,
+    )
+    solved_limited, obj_limited, results = optimizer.solve_model(
+        model_limited, solver_name="glpk", tee=False
+    )
+
+    # Verify solution is optimal
+    assert results.solver.status == pyo.SolverStatus.ok
+    assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+    # Check operation values for each year
+    for t in [2020, 2021, 2022]:
+        p1_op = pyo.value(solved_limited.var_operation["P1_low_emission", t])
+        p2_op = pyo.value(solved_limited.var_operation["P2_high_emission", t])
+
+        # P1 should be at the limit (binding constraint)
+        assert p1_op <= operation_limit * 1.001, (
+            f"P1 operation at {t} ({p1_op:.2f}) exceeds limit ({operation_limit})"
+        )
+        assert p1_op >= operation_limit * 0.999, (
+            f"P1 operation at {t} ({p1_op:.2f}) should be at limit ({operation_limit}), "
+            "constraint may not be binding"
+        )
+
+        # P2 should handle the remaining demand (100 - 50 = 50)
+        expected_p2 = 100 - operation_limit
+        assert pytest.approx(expected_p2, rel=0.01) == p2_op, (
+            f"P2 operation at {t} should be {expected_p2}, got {p2_op}"
+        )
+
+    # Verify that the limited solution has higher emissions
+    # Baseline: 300 * 1 = 300 kg CO2
+    # Limited: 150 * 1 + 150 * 10 = 150 + 1500 = 1650 kg CO2
+    assert obj_limited > obj_baseline, (
+        f"Limited objective ({obj_limited}) should be higher than baseline ({obj_baseline})"
+    )
+    assert pytest.approx(1650, rel=0.01) == obj_limited, (
+        f"Limited objective should be 1650 kg CO2, got {obj_limited}"
+    )

@@ -316,7 +316,7 @@ def test_operation_capacity_constraint_violation_prevented():
             ("climate_change", "CO2", t): 1.0 for t in [2020, 2021, 2022]
         },
         # Limit each year's installation to force distribution
-        "process_limits_max": {
+        "process_deployment_limits_max": {
             ("P1", 2020): 1,  # Can install max 1 at 2020
             ("P1", 2021): 1,  # Can install max 1 at 2021
         },
@@ -407,7 +407,7 @@ def test_operation_capacity_edge_case_zero_installation():
             ("climate_change", "CO2", t): 1.0 for t in [2020, 2021, 2022]
         },
         # Force no installations
-        "process_limits_max": {("P1", 2020): 0},
+        "process_deployment_limits_max": {("P1", 2020): 0},
     }
 
     model_inputs = converter.OptimizationModelInputs(**model_inputs_dict)

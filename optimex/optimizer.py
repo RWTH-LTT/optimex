@@ -33,7 +33,8 @@ Both decision variables remain in REAL (unscaled) units to:
 **Unscaled parameters**:
 - `background_inventory[bkg, i, e]`: kg emission / kg intermediate [UNSCALED]
 - `mapping[bkg, t]`: interpolation weights [UNSCALED, dimensionless]
-- `process_limits_*`: capacity limits [UNSCALED, matches var_installation]
+- `process_deployment_limits_*`: deployment limits [UNSCALED, matches var_installation]
+- `process_operation_limits_*`: operation limits [UNSCALED, matches var_operation]
 
 ### Dimensional Consistency
 
@@ -262,27 +263,51 @@ def create_model(
         default=0,
         initialize={k: v[1] for k, v in scaled_inputs.operation_time_limits.items()},
     )
-    model.process_limits_max = pyo.Param(
+    model.process_deployment_limits_max = pyo.Param(
         model.PROCESS,
         model.SYSTEM_TIME,
         within=pyo.Reals,
-        doc="maximum time specific process limit S_max",
-        default=scaled_inputs.process_limits_max_default,
+        doc="maximum time specific process deployment limit S_max",
+        default=scaled_inputs.process_deployment_limits_max_default,
         initialize=(
-            scaled_inputs.process_limits_max
-            if scaled_inputs.process_limits_max is not None
+            scaled_inputs.process_deployment_limits_max
+            if scaled_inputs.process_deployment_limits_max is not None
             else {}
         ),
     )
-    model.process_limits_min = pyo.Param(
+    model.process_deployment_limits_min = pyo.Param(
         model.PROCESS,
         model.SYSTEM_TIME,
         within=pyo.Reals,
-        doc="minimum time specific process limit S_min",
-        default=scaled_inputs.process_limits_min_default,
+        doc="minimum time specific process deployment limit S_min",
+        default=scaled_inputs.process_deployment_limits_min_default,
         initialize=(
-            scaled_inputs.process_limits_min
-            if scaled_inputs.process_limits_min is not None
+            scaled_inputs.process_deployment_limits_min
+            if scaled_inputs.process_deployment_limits_min is not None
+            else {}
+        ),
+    )
+    model.process_operation_limits_max = pyo.Param(
+        model.PROCESS,
+        model.SYSTEM_TIME,
+        within=pyo.Reals,
+        doc="maximum time specific process operation limit O_max",
+        default=scaled_inputs.process_operation_limits_max_default,
+        initialize=(
+            scaled_inputs.process_operation_limits_max
+            if scaled_inputs.process_operation_limits_max is not None
+            else {}
+        ),
+    )
+    model.process_operation_limits_min = pyo.Param(
+        model.PROCESS,
+        model.SYSTEM_TIME,
+        within=pyo.Reals,
+        doc="minimum time specific process operation limit O_min",
+        default=scaled_inputs.process_operation_limits_min_default,
+        initialize=(
+            scaled_inputs.process_operation_limits_min
+            if scaled_inputs.process_operation_limits_min is not None
             else {}
         ),
     )
@@ -321,6 +346,27 @@ def create_model(
         default=0,  # Set default coupling value to 0 if not defined
     )
 
+    # Existing (brownfield) capacity: capacity installed before SYSTEM_TIME
+    # These contribute to operation capacity but NOT to installation-phase impacts
+    model.existing_capacity = pyo.Param(
+        model.PROCESS,
+        pyo.Any,  # Installation year (can be any year before SYSTEM_TIME)
+        within=pyo.NonNegativeReals,
+        doc="Existing capacity (process, installation_year) -> amount",
+        initialize=(
+            scaled_inputs.existing_capacity
+            if scaled_inputs.existing_capacity is not None
+            else {}
+        ),
+        default=0,
+    )
+    # Store the existing capacity dict for iteration
+    model._existing_capacity_dict = (
+        scaled_inputs.existing_capacity
+        if scaled_inputs.existing_capacity is not None
+        else {}
+    )
+
     model.category_impact_limit = pyo.Param(
         model.CATEGORY,
         within=pyo.Reals,
@@ -342,18 +388,19 @@ def create_model(
         doc="Installation of the process",
     )
 
-    # Process limits
-    model.ProcessLimitMax = pyo.Constraint(
+    # Deployment limits
+    model.ProcessDeploymentLimitMax = pyo.Constraint(
         model.PROCESS,
         model.SYSTEM_TIME,
-        rule=lambda m, p, t: m.var_installation[p, t] <= m.process_limits_max[p, t],
+        rule=lambda m, p, t: m.var_installation[p, t] <= m.process_deployment_limits_max[p, t],
     )
 
-    model.ProcessLimitMin = pyo.Constraint(
+    model.ProcessDeploymentLimitMin = pyo.Constraint(
         model.PROCESS,
         model.SYSTEM_TIME,
-        rule=lambda m, p, t: m.var_installation[p, t] >= m.process_limits_min[p, t],
+        rule=lambda m, p, t: m.var_installation[p, t] >= m.process_deployment_limits_min[p, t],
     )
+
     model.CumulativeProcessLimitMax = pyo.Constraint(
         model.PROCESS,
         rule=lambda m, p: sum(m.var_installation[p, t] for t in m.SYSTEM_TIME)
@@ -390,7 +437,20 @@ def create_model(
         within=pyo.NonNegativeReals,  # Non-negative activity level
         doc="Operational activity level (production amounts at each time)",
     )
-    
+
+    # Operation limits
+    model.ProcessOperationLimitMax = pyo.Constraint(
+        model.PROCESS,
+        model.SYSTEM_TIME,
+        rule=lambda m, p, t: m.var_operation[p, t] <= m.process_operation_limits_max[p, t],
+    )
+
+    model.ProcessOperationLimitMin = pyo.Constraint(
+        model.PROCESS,
+        model.SYSTEM_TIME,
+        rule=lambda m, p, t: m.var_operation[p, t] >= m.process_operation_limits_min[p, t],
+    )
+
     if flexible_operation:
         # Expressions builder
         def scale_tensor_by_installation(tensor: pyo.Param, flow_set):
@@ -499,6 +559,11 @@ def create_model(
             real capacity. var_operation is in REAL units (dimensionless activity level).
 
             Only applied when process p produces product r (total_production > 0).
+
+            Brownfield (existing) capacity:
+            Existing capacity installed before SYSTEM_TIME is included in installations_in_operation
+            if it is still within its operation phase at time t. This allows brownfield capacity
+            to contribute to production without adding installation-phase impacts.
             """
             fg_scale = model.scales["foreground"]
 
@@ -516,12 +581,24 @@ def create_model(
                 return pyo.Constraint.Skip
 
             # Count installations currently in their operation phase (REAL units)
+            # This includes both new installations (var_installation) and existing capacity
             installations_in_operation = sum(
                 model.var_installation[p, t - tau]
                 for tau in model.PROCESS_TIME
                 if (t - tau in model.SYSTEM_TIME)
                 and model.process_operation_start[p] <= tau <= model.process_operation_end[p]
             )
+
+            # Add existing (brownfield) capacity that is still in operation phase
+            # For existing capacity installed at inst_year, tau = t - inst_year
+            # It's in operation if: process_operation_start <= tau <= process_operation_end
+            op_start = pyo.value(model.process_operation_start[p])
+            op_end = pyo.value(model.process_operation_end[p])
+            for (proc, inst_year), capacity in model._existing_capacity_dict.items():
+                if proc == p:
+                    tau_existing = t - inst_year
+                    if op_start <= tau_existing <= op_end:
+                        installations_in_operation += capacity
 
             # Capacity = total_production (SCALED) × fg_scale × installations (REAL) = (REAL)
             capacity = total_production_scaled * fg_scale * installations_in_operation
@@ -803,6 +880,16 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
                     if (t - tau in model.SYSTEM_TIME)
                     and pyo.value(model.process_operation_start[p]) <= tau <= pyo.value(model.process_operation_end[p])
                 )
+
+                # Add existing (brownfield) capacity that is still in operation phase
+                op_start = pyo.value(model.process_operation_start[p])
+                op_end = pyo.value(model.process_operation_end[p])
+                existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
+                for (proc, inst_year), cap in existing_cap_dict.items():
+                    if proc == p:
+                        tau_existing = t - inst_year
+                        if op_start <= tau_existing <= op_end:
+                            installations_in_operation += cap
 
                 # Capacity = total_production (SCALED) × fg_scale × installations (REAL)
                 capacity = total_production_scaled * fg_scale * installations_in_operation
