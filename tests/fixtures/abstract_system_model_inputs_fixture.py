@@ -9,7 +9,7 @@ def abstract_system_model_inputs():
     of an abstract system."""
     return {
         "PROCESS": ["P1", "P2"],
-        "REFERENCE_PRODUCT": ["R1"],
+        "PRODUCT": ["R1"],
         "INTERMEDIATE_FLOW": ["I1", "I2"],
         "ELEMENTARY_FLOW": ["CO2", "CH4"],
         "BACKGROUND_ID": ["db_2020", "db_2030"],
@@ -34,6 +34,7 @@ def abstract_system_model_inputs():
             ("P1", "I1", 0): 27.5,
             ("P2", "I2", 0): 1,
         },
+        "internal_demand_technosphere": {},
         "foreground_biosphere": {
             ("P1", "CO2", 1): 10,
             ("P1", "CO2", 2): 10,
@@ -130,15 +131,16 @@ def abstract_system_model_inputs():
 @pytest.fixture(
     scope="module",
     params=["flex", "constrained"], # "fixed",
-    ids=["flexible_operation", "constrained_land_use"], # "fixed_operation", 
+    ids=["flexible_operation", "constrained_process_limit"], # "fixed_operation", 
 )
 def abstract_system_model(request, abstract_system_model_inputs):
     model_type = request.param  # This will be 'fixed' or 'flex'
     model_inputs = converter.OptimizationModelInputs(**abstract_system_model_inputs)
     if model_type == "constrained":
-        # Set the impact limit for the constrained model
-        model_inputs.category_impact_limit = {
-            "land_use": 88.5,
+        # Limit P1 process to force use of less optimal P2
+        # This creates a meaningful constraint that increases climate change impact
+        model_inputs.cumulative_process_limits_max = {
+            "P1": 10.0,  # Limit P1 to 10 installations (optimal uses 20 of each)
         }
     # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(

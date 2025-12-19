@@ -1,4 +1,8 @@
 .DS_Store
+.bw2data/
+.build/
+.claude/
+claude.md
 docs_local/
 
 # Byte-compiled / optimized / DLL files
