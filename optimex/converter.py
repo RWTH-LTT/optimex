@@ -402,6 +402,33 @@ class OptimizationModelInputs(BaseModel):
                             f"Cumulative process limit min ({min_val}) > max ({max_val}) "
                             f"for {proc}. Constraints would be infeasible."
                         )
+                    
+        # Cross-check cumulative vs. per-period limits
+        if self.process_limits_max and self.cumulative_process_limits_min:
+            for key in self.cumulative_process_limits_min:
+                total_max = sum(
+                    self.process_limits_max.get((key, t), 0.0)
+                    for t in self.SYSTEM_TIME
+                )
+                min_cum = self.cumulative_process_limits_min[key]
+                if min_cum > total_max:
+                    raise ValueError(
+                        f"Cumulative process limit min ({min_cum}) > sum of per-period "
+                        f"max ({total_max}) for {key}. Constraints would be infeasible."
+                    )
+        if self.process_limits_min and self.cumulative_process_limits_max:
+            for key in self.cumulative_process_limits_max:
+                total_min = sum(
+                    self.process_limits_min.get((key, t), 0.0)
+                    for t in self.SYSTEM_TIME
+                )
+                max_cum = self.cumulative_process_limits_max[key]
+                if total_min > max_cum:
+                    raise ValueError(
+                        f"Sum of per-period process limit min ({total_min}) > cumulative "
+                        f"process limit max ({max_cum}) for {key}. Constraints would be infeasible."
+                    )
+
 
         # Check defaults consistency
         if self.process_limits_min_default > self.process_limits_max_default:
