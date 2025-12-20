@@ -11,8 +11,11 @@ export default defineAppConfig({
       exclude: []
     },
     header: {
-      logo: true,
-      title: 'optimex'
+      logo: {
+        light: '/optimex_light_nomargins.svg',
+        dark: '/optimex_dark_nomargins.svg'
+      },
+      title: false
     },
     footer: {
       credits: 'Copyright © 2025 optimex developers',
