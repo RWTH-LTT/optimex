@@ -24,12 +24,12 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Python lib directories (but not docs-new/src/lib)
+/lib/
+/lib64/
 parts/
 sdist/
 var/
