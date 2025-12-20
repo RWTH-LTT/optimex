@@ -5,7 +5,8 @@ import { Home } from './pages/Home'
 import { Installation } from './pages/Installation'
 import { Theory } from './pages/Theory'
 import { Examples } from './pages/Examples'
-import { ApiReference } from './pages/ApiReference'
+import { ApiOverview } from './pages/ApiOverview'
+import { ApiModule } from './pages/ApiModule'
 
 function App() {
   return (
@@ -17,7 +18,8 @@ function App() {
             <Route path="installation" element={<Installation />} />
             <Route path="theory" element={<Theory />} />
             <Route path="examples" element={<Examples />} />
-            <Route path="api" element={<ApiReference />} />
+            <Route path="api" element={<ApiOverview />} />
+            <Route path="api/:module" element={<ApiModule />} />
           </Route>
         </Routes>
       </BrowserRouter>
