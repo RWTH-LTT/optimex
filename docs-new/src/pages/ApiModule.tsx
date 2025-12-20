@@ -149,7 +149,7 @@ function ClassDoc({ classInfo, moduleName }: { classInfo: ClassInfo; moduleName:
   )
 }
 
-function Sidebar({ moduleInfo, moduleName }: { moduleInfo: ModuleInfo; moduleName: string }) {
+function Sidebar({ moduleInfo }: { moduleInfo: ModuleInfo }) {
   return (
     <div className="sticky top-20 space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto">
       <div>
@@ -302,7 +302,7 @@ export function ApiModule() {
       </div>
 
       <aside className="hidden lg:block w-64 flex-shrink-0">
-        <Sidebar moduleInfo={moduleInfo} moduleName={fullModuleName} />
+        <Sidebar moduleInfo={moduleInfo} />
       </aside>
     </div>
   )
