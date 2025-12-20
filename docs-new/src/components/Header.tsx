@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
+import { ThemeToggle } from './ThemeToggle'
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -32,12 +33,14 @@ export function Header() {
           </nav>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2">
-          <nav className="flex items-center">
+          <nav className="flex items-center space-x-1">
+            <ThemeToggle />
             <a
               href="https://github.com/RWTH-LTT/optimex"
               target="_blank"
               rel="noreferrer"
-              className="hidden sm:inline-flex items-center justify-center text-sm font-medium transition-colors hover:text-foreground/80 text-foreground/60 h-9 py-2 mr-2 px-0"
+              className="hidden sm:inline-flex items-center justify-center text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground h-9 w-9 rounded-md"
+              aria-label="GitHub repository"
             >
               <svg
                 viewBox="0 0 438.549 438.549"
@@ -49,9 +52,10 @@ export function Header() {
               <span className="sr-only">GitHub</span>
             </a>
             <button
-              className="inline-flex items-center justify-center md:hidden rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:text-accent-foreground h-9 py-2 mr-2 px-0 text-base hover:bg-transparent"
+              className="inline-flex items-center justify-center md:hidden rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 w-9"
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle menu"
             >
               {mobileMenuOpen ? (
                 <X className="h-5 w-5" />
