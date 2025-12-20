@@ -1,4 +1,12 @@
+import { useEffect } from 'react'
+import Prism from 'prismjs'
+import 'prismjs/components/prism-bash'
+
 export function Installation() {
+  useEffect(() => {
+    Prism.highlightAll()
+  }, [])
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -12,13 +20,13 @@ export function Installation() {
         <h2>Install via pip</h2>
         <p>The easiest way to install optimex is using pip:</p>
         <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-          <code>pip install optimex</code>
+          <code className="language-bash">pip install optimex</code>
         </pre>
 
         <h2>Install via conda</h2>
         <p>You can also install optimex using conda:</p>
         <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-          <code>conda install -c diepers optimex</code>
+          <code className="language-bash">conda install -c diepers optimex</code>
         </pre>
 
         <h2>Development Installation</h2>
@@ -26,7 +34,7 @@ export function Installation() {
           To install optimex for development with all dev dependencies:
         </p>
         <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-          <code>{`git clone https://github.com/RWTH-LTT/optimex.git
+          <code className="language-bash">{`git clone https://github.com/RWTH-LTT/optimex.git
 cd optimex
 pip install -e ".[dev]"`}</code>
         </pre>
@@ -44,7 +52,7 @@ pip install -e ".[dev]"`}</code>
         <h2>Verify Installation</h2>
         <p>You can verify your installation by importing optimex in Python:</p>
         <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-          <code>{`python -c "import optimex; print(optimex.__version__)"`}</code>
+          <code className="language-bash">{`python -c "import optimex; print(optimex.__version__)"`}</code>
         </pre>
       </div>
     </div>
