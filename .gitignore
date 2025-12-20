@@ -5,6 +5,14 @@
 claude.md
 docs_local/
 
+# Nuxt / Node.js
+docs/node_modules
+docs/.nuxt
+docs/.output
+docs/dist
+docs/.nitro
+docs/.cache
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

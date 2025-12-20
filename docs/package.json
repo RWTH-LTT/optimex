@@ -1,0 +1,19 @@
+{
+  "name": "optimex-docs",
+  "version": "1.0.0",
+  "description": "Documentation for optimex - Time-explicit Transition Pathway Optimization",
+  "private": true,
+  "scripts": {
+    "dev": "nuxi dev",
+    "build": "nuxi build",
+    "generate": "nuxi generate",
+    "preview": "nuxi preview",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@nuxt-themes/docus": "^1.14.7",
+    "@nuxt/eslint-config": "^0.2.0",
+    "eslint": "^8.50.0",
+    "nuxt": "^3.15.1"
+  }
+}
