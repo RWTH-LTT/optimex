@@ -64,12 +64,12 @@ def setup_separated_background_system():
             "exchanges": [
                 {
                     "amount": 1,
-                    "type": bd.labels.production_edge_default,
+                    "type": "production",
                     "input": ("bg_2020", "electricity"),  # Produces the electricity PRODUCT
                 },
                 {
                     "amount": 0.5,
-                    "type": bd.labels.biosphere_edge_default,
+                    "type": "biosphere",
                     "input": ("biosphere3", "CO2"),
                 },
             ],
@@ -239,7 +239,7 @@ def test_separated_background_process_linkage(setup_separated_background_system)
     # Verify the process produces the product
     production_exchanges = [
         exc for exc in electricity_process.exchanges()
-        if exc.get('type') == bd.labels.production_edge_default
+        if exc.get('type') == "production"
     ]
     
     assert len(production_exchanges) == 1, (
