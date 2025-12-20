@@ -7,6 +7,7 @@ import { Theory } from './pages/Theory'
 import { Examples } from './pages/Examples'
 import { ApiOverview } from './pages/ApiOverview'
 import { ApiModule } from './pages/ApiModule'
+import { NotebookViewer } from './pages/NotebookViewer'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
             <Route path="installation" element={<Installation />} />
             <Route path="theory" element={<Theory />} />
             <Route path="examples" element={<Examples />} />
+            <Route path="examples/:notebook" element={<NotebookViewer />} />
             <Route path="api" element={<ApiOverview />} />
             <Route path="api/:module" element={<ApiModule />} />
           </Route>

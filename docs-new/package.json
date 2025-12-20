@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "python3 scripts/generate-api-docs.py && tsc -b && vite build",
-    "prebuild": "python3 scripts/generate-api-docs.py",
+    "build": "python3 scripts/generate-api-docs.py && python3 scripts/convert-notebooks.py && tsc -b && vite build",
+    "prebuild": "python3 scripts/generate-api-docs.py && python3 scripts/convert-notebooks.py",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.10.4",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",

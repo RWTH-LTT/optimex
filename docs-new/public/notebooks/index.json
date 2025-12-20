@@ -1,0 +1,24 @@
+{
+  "notebooks": [
+    {
+      "name": "basic_optimex_example.ipynb",
+      "path": "/notebooks/basic_optimex_example.ipynb"
+    },
+    {
+      "name": "h2.ipynb",
+      "path": "/notebooks/h2.ipynb"
+    },
+    {
+      "name": "methanol.ipynb",
+      "path": "/notebooks/methanol.ipynb"
+    },
+    {
+      "name": "cdr.ipynb",
+      "path": "/notebooks/cdr.ipynb"
+    },
+    {
+      "name": "basic_optimex_example_two_decision_layers.ipynb",
+      "path": "/notebooks/basic_optimex_example_two_decision_layers.ipynb"
+    }
+  ]
+}
