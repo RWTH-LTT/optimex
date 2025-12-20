@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "nuxi dev",
     "build": "nuxi build",
-    "generate": "nuxi generate",
+    "generate": "python3 scripts/generate_api_docs.py && nuxi generate",
     "preview": "nuxi preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "api-docs": "python3 scripts/generate_api_docs.py"
   },
   "devDependencies": {
     "@nuxt-themes/docus": "^1.14.7",

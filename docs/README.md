@@ -7,6 +7,7 @@ This directory contains the documentation for optimex built with [Docus](https:/
 ### Prerequisites
 
 - Node.js 18+ and npm
+- Python 3.8+ (for API documentation generation)
 
 ### Development
 
@@ -26,7 +27,7 @@ The documentation will be available at http://localhost:3000
 
 ### Build for Production
 
-Generate the static site:
+Generate API documentation and build the static site:
 
 ```bash
 npm run generate
@@ -40,11 +41,33 @@ Preview the production build:
 npm run preview
 ```
 
+## API Documentation
+
+The API Reference section is automatically generated from Python source code docstrings using AST parsing.
+
+### Generate API Docs Manually
+
+To regenerate the API documentation:
+
+```bash
+npm run api-docs
+```
+
+This runs `scripts/generate_api_docs.py` which:
+- Parses Python modules in the `optimex` package
+- Extracts docstrings from modules, classes, and functions
+- Generates markdown files in `content/8.api/`
+- Creates an index page listing all modules
+
+The API documentation is automatically regenerated when running `npm run generate`.
+
 ## Project Structure
 
 - `content/` - Documentation content in Markdown format
+  - `8.api/` - Auto-generated API reference (do not edit manually)
 - `public/` - Static assets (images, logos, etc.)
 - `components/` - Vue components
+- `scripts/` - Build scripts (e.g., API doc generator)
 - `app.config.ts` - Docus configuration
 - `nuxt.config.ts` - Nuxt configuration
 
