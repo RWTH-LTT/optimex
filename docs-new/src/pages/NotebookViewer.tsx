@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ChevronRight, ExternalLink, AlertCircle } from 'lucide-react'
+import Prism from 'prismjs'
+import 'prismjs/themes/prism-tomorrow.css'
+import 'prismjs/components/prism-python'
 
 interface NotebookCell {
   cell_type: string
@@ -19,6 +22,10 @@ interface NotebookData {
 function CodeCell({ cell }: { cell: NotebookCell }) {
   const source = Array.isArray(cell.source) ? cell.source.join('') : cell.source
 
+  useEffect(() => {
+    Prism.highlightAll()
+  }, [source])
+
   return (
     <div className="border rounded-lg overflow-hidden mb-4">
       {/* Input */}
@@ -28,8 +35,8 @@ function CodeCell({ cell }: { cell: NotebookCell }) {
             [{cell.execution_count || ' '}]:
           </span>
         </div>
-        <pre className="p-4 overflow-x-auto">
-          <code className="text-sm font-mono">{source}</code>
+        <pre className="p-4 overflow-x-auto !m-0 !bg-transparent">
+          <code className="language-python text-sm">{source}</code>
         </pre>
       </div>
 
