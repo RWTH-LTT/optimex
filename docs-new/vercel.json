@@ -1,6 +1,0 @@
-{
-  "buildCommand": "cd docs-new && npm install && npm run build",
-  "outputDirectory": "docs-new/dist",
-  "devCommand": "cd docs-new && npm run dev",
-  "installCommand": "cd docs-new && npm install"
-}
