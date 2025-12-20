@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import Prism from 'prismjs'
 import 'prismjs/components/prism-bash'
+import { CopyButton } from '../components/CopyButton'
 
 export function Installation() {
   useEffect(() => {
@@ -19,25 +20,42 @@ export function Installation() {
       <div className="prose prose-neutral dark:prose-invert max-w-none">
         <h2>Install via pip</h2>
         <p>The easiest way to install optimex is using pip:</p>
-        <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-          <code className="language-bash">pip install optimex</code>
-        </pre>
+        <div className="relative">
+          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
+            <code className="language-bash">pip install optimex</code>
+          </pre>
+          <div className="absolute top-2 right-2">
+            <CopyButton text="pip install optimex" />
+          </div>
+        </div>
 
         <h2>Install via conda</h2>
         <p>You can also install optimex using conda:</p>
-        <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-          <code className="language-bash">conda install -c diepers optimex</code>
-        </pre>
+        <div className="relative">
+          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
+            <code className="language-bash">conda install -c diepers optimex</code>
+          </pre>
+          <div className="absolute top-2 right-2">
+            <CopyButton text="conda install -c diepers optimex" />
+          </div>
+        </div>
 
         <h2>Development Installation</h2>
         <p>
           To install optimex for development with all dev dependencies:
         </p>
-        <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-          <code className="language-bash">{`git clone https://github.com/RWTH-LTT/optimex.git
+        <div className="relative">
+          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
+            <code className="language-bash">{`git clone https://github.com/RWTH-LTT/optimex.git
 cd optimex
 pip install -e ".[dev]"`}</code>
-        </pre>
+          </pre>
+          <div className="absolute top-2 right-2">
+            <CopyButton text={`git clone https://github.com/RWTH-LTT/optimex.git
+cd optimex
+pip install -e ".[dev]"`} />
+          </div>
+        </div>
 
         <h2>Requirements</h2>
         <p>optimex requires Python 3.9 or higher and has the following dependencies:</p>
@@ -51,9 +69,14 @@ pip install -e ".[dev]"`}</code>
 
         <h2>Verify Installation</h2>
         <p>You can verify your installation by importing optimex in Python:</p>
-        <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-          <code className="language-bash">{`python -c "import optimex; print(optimex.__version__)"`}</code>
-        </pre>
+        <div className="relative">
+          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
+            <code className="language-bash">{`python -c "import optimex; print(optimex.__version__)"`}</code>
+          </pre>
+          <div className="absolute top-2 right-2">
+            <CopyButton text={`python -c "import optimex; print(optimex.__version__)"`} />
+          </div>
+        </div>
       </div>
     </div>
   )

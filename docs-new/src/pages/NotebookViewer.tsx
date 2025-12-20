@@ -4,6 +4,7 @@ import { ChevronRight, ExternalLink, AlertCircle } from 'lucide-react'
 import Prism from 'prismjs'
 import 'prismjs/themes/prism-tomorrow.css'
 import 'prismjs/components/prism-python'
+import { CopyButton } from '../components/CopyButton'
 
 interface NotebookCell {
   cell_type: string
@@ -29,11 +30,12 @@ function CodeCell({ cell }: { cell: NotebookCell }) {
   return (
     <div className="border rounded-lg overflow-hidden mb-4">
       {/* Input */}
-      <div className="bg-muted/30">
-        <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/50">
+      <div className="bg-muted/30 relative">
+        <div className="flex items-center justify-between gap-2 px-4 py-2 border-b bg-muted/50">
           <span className="text-xs font-mono text-muted-foreground">
             [{cell.execution_count || ' '}]:
           </span>
+          <CopyButton text={source} />
         </div>
         <pre className="p-4 overflow-x-auto !m-0 !bg-transparent">
           <code className="language-python text-sm">{source}</code>
