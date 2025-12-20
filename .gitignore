@@ -5,6 +5,11 @@
 claude.md
 docs_local/
 
+# Node.js / docs-new
+docs-new/node_modules/
+docs-new/dist/
+docs-new/.vite/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

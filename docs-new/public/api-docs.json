@@ -1,0 +1,1753 @@
+{
+  "optimex.optimizer": {
+    "functions": [
+      {
+        "name": "create_model",
+        "args": [
+          "inputs",
+          "name",
+          "objective_category",
+          "flexible_operation",
+          "debug_path"
+        ],
+        "returns": "pyo.ConcreteModel",
+        "docstring": "Build a Pyomo ConcreteModel for the optimization problem based on the provided\ninputs.\n\nThis function constructs a fully defined Pyomo model using data from a `OptimizationModelInputs`\ninstance. It optionally supports flexible operation of processes and can save\nintermediate data to a specified path.\n\nParameters\n----------\ninputs : OptimizationModelInputs\n    Structured input data containing all flows, mappings, and constraints\n    required for model construction.\nname : str\n    Name of the Pyomo model instance.\nobjective_category : str\n    The category of impact to be minimized in the optimization problem.\nflexible_operation : bool, optional\n    Enables flexible operation mode for processes. When set to True, the model\n    introduces additional variables that allow processes to operate between 0 and\n    their maximum installed capacity during their designated process time. This\n    allows partial operation of a process rather than enforcing full capacity usage\n    at all times.\n\n    Flexible operation is based on scaling the inventory associated with the first\n    time step of operation. In contrast, fixed operation (when `flexible_operation`\n    is False) assumes that processes always run at full capacity once deployed.\ndebug_path : str, optional\n    If provided, specifies the directory path where intermediate model data (such as\n    the LP formulation) or diagnostics may be stored.\n\nReturns\n-------\npyo.ConcreteModel\n    A fully constructed Pyomo model ready for optimization.",
+        "line": 74,
+        "is_async": false
+      },
+      {
+        "name": "process_coupling_rule",
+        "args": [
+          "model",
+          "p1",
+          "p2",
+          "t"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 416,
+        "is_async": false
+      },
+      {
+        "name": "in_operation_phase",
+        "args": [
+          "p",
+          "tau"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 431,
+        "is_async": false
+      },
+      {
+        "name": "scale_tensor_by_installation",
+        "args": [
+          "tensor",
+          "flow_set"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 456,
+        "is_async": false
+      },
+      {
+        "name": "expr",
+        "args": [
+          "m",
+          "p",
+          "x",
+          "t"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 457,
+        "is_async": false
+      },
+      {
+        "name": "scale_tensor_by_operation",
+        "args": [
+          "tensor",
+          "flow_set"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 473,
+        "is_async": false
+      },
+      {
+        "name": "expr",
+        "args": [
+          "m",
+          "p",
+          "x",
+          "t"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 474,
+        "is_async": false
+      },
+      {
+        "name": "scaled_inventory_tensor",
+        "args": [
+          "model",
+          "p",
+          "e",
+          "t"
+        ],
+        "returns": null,
+        "docstring": "Returns a Pyomo expression for the total inventory impact for a given\nprocess p, elementary flow e, and time step t.",
+        "line": 522,
+        "is_async": false
+      },
+      {
+        "name": "operation_capacity_constraint_rule",
+        "args": [
+          "model",
+          "p",
+          "r",
+          "t"
+        ],
+        "returns": null,
+        "docstring": "Capacity constraint: o_t \u2264 (total production per installation) \u00d7 (installations in operation)\n\nThis constraint ensures operation level cannot exceed the total production\ncapacity provided by active installations. The formulation matches the\ndemand constraint which also sums production over the operation phase.\n\nNote: foreground_production is SCALED, so we multiply by fg_scale to get\nreal capacity. var_operation is in REAL units (dimensionless activity level).\n\nOnly applied when process p produces product r (total_production > 0).\n\nBrownfield (existing) capacity:\nExisting capacity installed before SYSTEM_TIME is included in installations_in_operation\nif it is still within its operation phase at time t. This allows brownfield capacity\nto contribute to production without adding installation-phase impacts.",
+        "line": 550,
+        "is_async": false
+      },
+      {
+        "name": "product_demand_fulfillment_rule",
+        "args": [
+          "model",
+          "r",
+          "t"
+        ],
+        "returns": null,
+        "docstring": "Demand constraint: total_production \u00d7 o_t \u2265 f_t\n\nFor production flows: use total production per installation (sum across operation phase).\no_t represents production amount, bounded by installed capacity.\n\nTotal production must meet:\n- External demand (from demand parameter)\n- Internal consumption by other foreground processes\n\nThis is LINEAR: parameter \u00d7 variable",
+        "line": 614,
+        "is_async": false
+      },
+      {
+        "name": "category_process_time_specific_impact",
+        "args": [
+          "model",
+          "c",
+          "p",
+          "t"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 674,
+        "is_async": false
+      },
+      {
+        "name": "total_impact_in_category",
+        "args": [
+          "model",
+          "c"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 690,
+        "is_async": false
+      },
+      {
+        "name": "category_impact_limit_rule",
+        "args": [
+          "model",
+          "c"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 700,
+        "is_async": false
+      },
+      {
+        "name": "objective_function",
+        "args": [
+          "model"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 707,
+        "is_async": false
+      },
+      {
+        "name": "solve_model",
+        "args": [
+          "model",
+          "solver_name",
+          "solver_args",
+          "solver_options",
+          "tee",
+          "compute_iis"
+        ],
+        "returns": "Tuple[pyo.ConcreteModel, float, SolverResults]",
+        "docstring": "Solve a Pyomo optimization model using a specified solver and\ndenormalize the objective (and optional duals) using stored scales.\n\nParameters\n----------\nmodel : pyo.ConcreteModel\n    The Pyomo model to be solved. Must have attribute `scales` with keys\n    'foreground' and 'characterization'.\nsolver_name : str, optional\n    Name of the solver (default: \"gurobi\").\nsolver_args : dict, optional\n    Args to pass to SolverFactory.\nsolver_options : dict, optional\n    Solver-specific options, e.g. timelimit, mipgap.\ntee : bool, optional\n    If True, prints solver output.\ncompute_iis : bool, optional\n    If True and infeasible, writes IIS to file.\n**solve_kwargs\n    Additional kwargs for solver.solve().\n\nReturns\n-------\nmodel : pyo.ConcreteModel\n    The solved model (with original scaling preserved).\ntrue_obj : float\n    The denormalized objective value.\nresults : SolverResults\n    The raw Pyomo solver results object.",
+        "line": 721,
+        "is_async": false
+      },
+      {
+        "name": "validate_operation_bounds",
+        "args": [
+          "model",
+          "tolerance"
+        ],
+        "returns": "Dict[str, Any]",
+        "docstring": "Validate that operation levels respect capacity constraints.\n\nThis function performs post-solve validation to ensure that var_operation\ndoes not exceed the production capacity from installations in operation phase.\n\nThe capacity constraint is: var_operation <= total_production * fg_scale * installations\n\nParameters\n----------\nmodel : pyo.ConcreteModel\n    A solved Pyomo model with flexible operation mode.\ntolerance : float, optional\n    Relative tolerance for validation (default: 1e-6).\n\nReturns\n-------\ndict\n    Validation results with keys:\n    - \"valid\": bool, True if all operation levels respect capacity\n    - \"violations\": list of tuples (process, time, operation, capacity, violation_type)\n    - \"max_violation\": float, maximum violation found\n    - \"summary\": str, human-readable summary\n\nRaises\n------\nValueError\n    If model is not in flexible operation mode or not solved.",
+        "line": 817,
+        "is_async": false
+      }
+    ],
+    "classes": [],
+    "module_doc": "Optimization model construction and solving for temporal LCA-based pathway optimization.\n\nThis module creates and solves Pyomo optimization models that minimize environmental\nimpacts over time while meeting demand constraints and respecting process limits.\n\n## Scaling Convention\n\nThe optimization uses a two-tier scaling system for numerical stability:\n\n### Decision Variables (REAL UNITS)\n- `var_installation[p, t]`: Number of process units installed (dimensionless)\n- `var_operation[p, t]`: Operation level (dimensionless, 0 to capacity)\n\nBoth decision variables remain in REAL (unscaled) units to:\n1. Maintain physical interpretability\n2. Allow direct comparison with process limits\n3. Ensure correct background inventory calculations\n\n### Parameters (SCALED UNITS)\n\n**Foreground parameters** (scaled by `fg_scale`):\n- `foreground_production[p, r, tau]`: kg product per process unit [SCALED]\n- `foreground_biosphere[p, e, tau]`: kg emission per process unit [SCALED]\n- `foreground_technosphere[p, i, tau]`: kg intermediate per process unit [SCALED]\n- `internal_demand_technosphere[p, r, tau]`: kg product per process unit [SCALED]\n- `demand[r, t]`: kg product demanded [SCALED]\n\n**Characterization parameters** (scaled by `cat_scales[category]`):\n- `characterization[c, e, t]`: impact per kg emission [SCALED]\n- `category_impact_limit[c]`: maximum impact allowed [SCALED]\n\n**Unscaled parameters**:\n- `background_inventory[bkg, i, e]`: kg emission / kg intermediate [UNSCALED]\n- `mapping[bkg, t]`: interpolation weights [UNSCALED, dimensionless]\n- `process_deployment_limits_*`: deployment limits [UNSCALED, matches var_installation]\n- `process_operation_limits_*`: operation limits [UNSCALED, matches var_operation]\n\n### Dimensional Consistency\n\nWhen SCALED parameters are multiplied by REAL decision variables:\n```\nscaled_param [kg SCALED/process] \u00d7 var_real [# processes] = result [kg SCALED]\n```\n\nTo convert back to REAL units:\n```\nresult [kg SCALED] \u00d7 fg_scale [REAL/SCALED] = result [kg REAL]\n```\n\nExample constraint dimensional analysis:\n```\nProductDemandFulfillment:\n    production [kg SCALED/operation] \u00d7 var_operation [#] = demand [kg SCALED] \u2713\n\nOperationLimit (LHS):\n    var_operation [#] \u00d7 production [kg SCALED/operation] \u00d7 fg_scale = [kg REAL]\nOperationLimit (RHS):\n    production [kg SCALED/process] \u00d7 fg_scale \u00d7 var_installation [#] = [kg REAL]\n```"
+  },
+  "optimex.converter": {
+    "functions": [
+      {
+        "name": "check_all_keys",
+        "args": [
+          "cls",
+          "data"
+        ],
+        "returns": null,
+        "docstring": "Validate that all dictionary keys reference valid set elements.\n\nThis validator ensures that all keys in the input dictionaries (e.g., demand,\nforeground_technosphere) reference elements that exist in the corresponding\nsets (e.g., PROCESS, PRODUCT, SYSTEM_TIME). This prevents runtime errors\nfrom invalid references.\n\nParameters\n----------\ndata : dict\n    The raw data dictionary before model instantiation.\n\nReturns\n-------\ndict\n    The validated data dictionary.\n\nRaises\n------\nValueError\n    If any dictionary key references an element not in the corresponding set.",
+        "line": 210,
+        "is_async": false
+      },
+      {
+        "name": "validate_keys",
+        "args": [
+          "keys",
+          "valid_set",
+          "context"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 244,
+        "is_async": false
+      },
+      {
+        "name": "validate_constant_operation_flows",
+        "args": [
+          "self"
+        ],
+        "returns": "'OptimizationModelInputs'",
+        "docstring": "Validate that flows marked as operational are constant over process time.\n\nFor flexible operation mode, flows that occur during the operation phase must\nhave constant values across process time steps. This is because the optimization\nscales these flows linearly with the operation variable. Time-varying operational\nflows would require fixed operation mode instead.\n\nReturns\n-------\nOptimizationModelInputs\n    Self, after validation.\n\nRaises\n------\nValueError\n    If any operational flow has varying values across process time.",
+        "line": 382,
+        "is_async": false
+      },
+      {
+        "name": "check_constancy",
+        "args": [
+          "flow_data",
+          "flow_type"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 401,
+        "is_async": false
+      },
+      {
+        "name": "validate_process_limits_consistency",
+        "args": [
+          "self"
+        ],
+        "returns": "'OptimizationModelInputs'",
+        "docstring": "Validate that min limits are not greater than max limits for process bounds.\n\nThis ensures logical consistency of the bounds - having min > max would\ncreate an infeasible constraint.",
+        "line": 430,
+        "is_async": false
+      },
+      {
+        "name": "warn_negative_tau_boundary",
+        "args": [
+          "self"
+        ],
+        "returns": "'OptimizationModelInputs'",
+        "docstring": "Warn about negative process times that may fall outside SYSTEM_TIME.\n\nWhen tau < 0 (e.g., construction before deployment), the contribution\nappears at system time (t - tau). If min(SYSTEM_TIME) - tau < min(SYSTEM_TIME),\nthose contributions are lost for early installations.\n\nExample: With SYSTEM_TIME starting at 2020 and tau=-1:\n- Installation at 2020 has construction at t=2019 (NOT in SYSTEM_TIME)\n- These emissions are silently ignored\n\nThis validator warns users about this boundary condition.",
+        "line": 525,
+        "is_async": false
+      },
+      {
+        "name": "get_scaled_copy",
+        "args": [
+          "self"
+        ],
+        "returns": "Tuple['OptimizationModelInputs', Dict[str, Any]]",
+        "docstring": "Create a scaled copy of inputs for numerical stability in optimization.\n\nScaling improves solver performance by normalizing values to similar magnitudes.\nThe method scales foreground tensors, characterization factors, demand, and\nlimits while preserving the original data structure. Scaling factors are returned\nfor denormalizing results.\n\nReturns\n-------\ntuple[OptimizationModelInputs, dict]\n    - Scaled copy of the model inputs\n    - Dictionary of scaling factors used:\n        - \"foreground\": Scale factor for all foreground tensors and demand\n        - \"characterization\": Dict mapping each category to its scale factor",
+        "line": 571,
+        "is_async": false
+      },
+      {
+        "name": "__init__",
+        "args": [
+          "self"
+        ],
+        "returns": null,
+        "docstring": "Initialize a new ModelInputManager with empty model inputs.\n\nThe manager starts with no model inputs. Use `parse_from_lca_processor()`\nto populate inputs from an LCADataProcessor, or use `load()` to load\npreviously saved inputs from disk.",
+        "line": 699,
+        "is_async": false
+      },
+      {
+        "name": "parse_from_lca_processor",
+        "args": [
+          "self",
+          "lca_processor"
+        ],
+        "returns": "OptimizationModelInputs",
+        "docstring": "Extracts data from the LCADataProcessor and constructs OptimizationModelInputs.",
+        "line": 709,
+        "is_async": false
+      },
+      {
+        "name": "override",
+        "args": [
+          "self"
+        ],
+        "returns": "OptimizationModelInputs",
+        "docstring": "Override fields of the current OptimizationModelInputs instance and re-validate.\n\nParameters:\n    overrides: Keyword arguments matching OptimizationModelInputs fields to override.",
+        "line": 750,
+        "is_async": false
+      },
+      {
+        "name": "_tuple_key_to_str",
+        "args": [
+          "key"
+        ],
+        "returns": "str",
+        "docstring": "Convert tuple key to JSON-serializable string.",
+        "line": 763,
+        "is_async": false
+      },
+      {
+        "name": "_str_to_tuple_key",
+        "args": [
+          "key_str"
+        ],
+        "returns": "Tuple",
+        "docstring": "Convert JSON string back to tuple key.",
+        "line": 768,
+        "is_async": false
+      },
+      {
+        "name": "_serialize_dict_with_tuple_keys",
+        "args": [
+          "d"
+        ],
+        "returns": "Optional[Dict]",
+        "docstring": "Convert dictionary with tuple keys to dictionary with string keys.",
+        "line": 773,
+        "is_async": false
+      },
+      {
+        "name": "_deserialize_dict_with_tuple_keys",
+        "args": [
+          "d"
+        ],
+        "returns": "Optional[Dict]",
+        "docstring": "Convert dictionary with string keys back to dictionary with tuple keys.",
+        "line": 780,
+        "is_async": false
+      },
+      {
+        "name": "save",
+        "args": [
+          "self",
+          "path"
+        ],
+        "returns": "None",
+        "docstring": "Save the current OptimizationModelInputs to a JSON or pickle file based on extension.\nSupports .json and .pkl extensions.",
+        "line": 786,
+        "is_async": false
+      },
+      {
+        "name": "load",
+        "args": [
+          "self",
+          "path"
+        ],
+        "returns": "OptimizationModelInputs",
+        "docstring": "Load OptimizationModelInputs from a JSON or pickle file.",
+        "line": 834,
+        "is_async": false
+      }
+    ],
+    "classes": [
+      {
+        "name": "OptimizationModelInputs",
+        "bases": [
+          "BaseModel"
+        ],
+        "docstring": "Interface data structure for linking LCA-based outputs with optimization inputs.\n\nThis class organizes all relevant inputs needed to build a temporal, process-based\nlife cycle model suitable for linear optimization, including foreground and\nbackground exchanges, temporal system information, and optional process constraints.",
+        "methods": [
+          {
+            "name": "check_all_keys",
+            "args": [
+              "cls",
+              "data"
+            ],
+            "returns": null,
+            "docstring": "Validate that all dictionary keys reference valid set elements.\n\nThis validator ensures that all keys in the input dictionaries (e.g., demand,\nforeground_technosphere) reference elements that exist in the corresponding\nsets (e.g., PROCESS, PRODUCT, SYSTEM_TIME). This prevents runtime errors\nfrom invalid references.\n\nParameters\n----------\ndata : dict\n    The raw data dictionary before model instantiation.\n\nReturns\n-------\ndict\n    The validated data dictionary.\n\nRaises\n------\nValueError\n    If any dictionary key references an element not in the corresponding set.",
+            "line": 210,
+            "is_async": false
+          },
+          {
+            "name": "validate_constant_operation_flows",
+            "args": [
+              "self"
+            ],
+            "returns": "'OptimizationModelInputs'",
+            "docstring": "Validate that flows marked as operational are constant over process time.\n\nFor flexible operation mode, flows that occur during the operation phase must\nhave constant values across process time steps. This is because the optimization\nscales these flows linearly with the operation variable. Time-varying operational\nflows would require fixed operation mode instead.\n\nReturns\n-------\nOptimizationModelInputs\n    Self, after validation.\n\nRaises\n------\nValueError\n    If any operational flow has varying values across process time.",
+            "line": 382,
+            "is_async": false
+          },
+          {
+            "name": "validate_process_limits_consistency",
+            "args": [
+              "self"
+            ],
+            "returns": "'OptimizationModelInputs'",
+            "docstring": "Validate that min limits are not greater than max limits for process bounds.\n\nThis ensures logical consistency of the bounds - having min > max would\ncreate an infeasible constraint.",
+            "line": 430,
+            "is_async": false
+          },
+          {
+            "name": "warn_negative_tau_boundary",
+            "args": [
+              "self"
+            ],
+            "returns": "'OptimizationModelInputs'",
+            "docstring": "Warn about negative process times that may fall outside SYSTEM_TIME.\n\nWhen tau < 0 (e.g., construction before deployment), the contribution\nappears at system time (t - tau). If min(SYSTEM_TIME) - tau < min(SYSTEM_TIME),\nthose contributions are lost for early installations.\n\nExample: With SYSTEM_TIME starting at 2020 and tau=-1:\n- Installation at 2020 has construction at t=2019 (NOT in SYSTEM_TIME)\n- These emissions are silently ignored\n\nThis validator warns users about this boundary condition.",
+            "line": 525,
+            "is_async": false
+          },
+          {
+            "name": "get_scaled_copy",
+            "args": [
+              "self"
+            ],
+            "returns": "Tuple['OptimizationModelInputs', Dict[str, Any]]",
+            "docstring": "Create a scaled copy of inputs for numerical stability in optimization.\n\nScaling improves solver performance by normalizing values to similar magnitudes.\nThe method scales foreground tensors, characterization factors, demand, and\nlimits while preserving the original data structure. Scaling factors are returned\nfor denormalizing results.\n\nReturns\n-------\ntuple[OptimizationModelInputs, dict]\n    - Scaled copy of the model inputs\n    - Dictionary of scaling factors used:\n        - \"foreground\": Scale factor for all foreground tensors and demand\n        - \"characterization\": Dict mapping each category to its scale factor",
+            "line": 571,
+            "is_async": false
+          }
+        ],
+        "line": 22
+      },
+      {
+        "name": "ModelInputManager",
+        "bases": [],
+        "docstring": "Interface between LCA data processing and optimization modeling.\n\nThe `ModelInputManager` is responsible for transforming, validating, and managing\nstructured data inputs for optimization models derived from an `LCADataProcessor`.\n\nResponsibilities:\n\n- Extracts raw structural and quantitative data from an `LCADataProcessor` instance.\n- Constructs and validates a `OptimizationModelInputs` Pydantic model, ensuring all necessary\n  fields are populated and internally consistent.\n- Allows for user-defined overrides of any input fields to enable customization,\n  correction, or scenario-specific tuning.\n- Supports serialization and deserialization of `OptimizationModelInputs` for reproducibility,\n  sharing, or caching via `.json` or `.pickle`.\n- Provides access to scaled versions of the model inputs (e.g., for numerical\n  stability in optimization solvers), with metadata on scaling transformations.\n\nThis class is intended to serve as the main interface between upstream life cycle\nassessment (LCA) data and downstream optimization workflows, abstracting away\nvalidation, preprocessing, and I/O concerns from both ends.\n\nExample\n-------\n>>> # Initialize\n>>> manager = ModelInputManager()\n>>>\n>>> # Parse data from LCA data processor\n>>> inputs = manager.parse_from_lca_processor(lca_data_processor)\n>>>\n>>> # Optionally override fields\n>>> inputs = manager.override_inputs(PROCESS=[\"P1\", \"P2\"], demand={...})\n>>>\n>>> # Save to disk\n>>> manager.save(\"inputs.json\")\n>>>\n>>> # Load from disk\n>>> manager.load(\"inputs.json\")\n>>>\n>>> # Get a numerically scaled version\n>>> scaled_inputs, scale_factors = inputs.get_scaled_copy()",
+        "methods": [
+          {
+            "name": "__init__",
+            "args": [
+              "self"
+            ],
+            "returns": null,
+            "docstring": "Initialize a new ModelInputManager with empty model inputs.\n\nThe manager starts with no model inputs. Use `parse_from_lca_processor()`\nto populate inputs from an LCADataProcessor, or use `load()` to load\npreviously saved inputs from disk.",
+            "line": 699,
+            "is_async": false
+          },
+          {
+            "name": "parse_from_lca_processor",
+            "args": [
+              "self",
+              "lca_processor"
+            ],
+            "returns": "OptimizationModelInputs",
+            "docstring": "Extracts data from the LCADataProcessor and constructs OptimizationModelInputs.",
+            "line": 709,
+            "is_async": false
+          },
+          {
+            "name": "override",
+            "args": [
+              "self"
+            ],
+            "returns": "OptimizationModelInputs",
+            "docstring": "Override fields of the current OptimizationModelInputs instance and re-validate.\n\nParameters:\n    overrides: Keyword arguments matching OptimizationModelInputs fields to override.",
+            "line": 750,
+            "is_async": false
+          },
+          {
+            "name": "_tuple_key_to_str",
+            "args": [
+              "key"
+            ],
+            "returns": "str",
+            "docstring": "Convert tuple key to JSON-serializable string.",
+            "line": 763,
+            "is_async": false
+          },
+          {
+            "name": "_str_to_tuple_key",
+            "args": [
+              "key_str"
+            ],
+            "returns": "Tuple",
+            "docstring": "Convert JSON string back to tuple key.",
+            "line": 768,
+            "is_async": false
+          },
+          {
+            "name": "_serialize_dict_with_tuple_keys",
+            "args": [
+              "d"
+            ],
+            "returns": "Optional[Dict]",
+            "docstring": "Convert dictionary with tuple keys to dictionary with string keys.",
+            "line": 773,
+            "is_async": false
+          },
+          {
+            "name": "_deserialize_dict_with_tuple_keys",
+            "args": [
+              "d"
+            ],
+            "returns": "Optional[Dict]",
+            "docstring": "Convert dictionary with string keys back to dictionary with tuple keys.",
+            "line": 780,
+            "is_async": false
+          },
+          {
+            "name": "save",
+            "args": [
+              "self",
+              "path"
+            ],
+            "returns": "None",
+            "docstring": "Save the current OptimizationModelInputs to a JSON or pickle file based on extension.\nSupports .json and .pkl extensions.",
+            "line": 786,
+            "is_async": false
+          },
+          {
+            "name": "load",
+            "args": [
+              "self",
+              "path"
+            ],
+            "returns": "OptimizationModelInputs",
+            "docstring": "Load OptimizationModelInputs from a JSON or pickle file.",
+            "line": 834,
+            "is_async": false
+          }
+        ],
+        "line": 655
+      }
+    ],
+    "module_doc": "Model input conversion and validation for optimization.\n\nThis module bridges LCA data processing and optimization by converting outputs from\nLCADataProcessor into structured OptimizationModelInputs. It provides validation,\nscaling, serialization, and constraint management for optimization model inputs.\n\nKey classes:\n    - OptimizationModelInputs: Validated data structure for optimization inputs\n    - ModelInputManager: Handles conversion, serialization, and constraint overrides"
+  },
+  "optimex.lca_processor": {
+    "functions": [
+      {
+        "name": "dynamic",
+        "args": [
+          "self"
+        ],
+        "returns": "bool",
+        "docstring": "Indicates whether this is a dynamic characterization method.",
+        "line": 88,
+        "is_async": false
+      },
+      {
+        "name": "__init__",
+        "args": [
+          "self",
+          "config"
+        ],
+        "returns": "None",
+        "docstring": "Initialize the LCADataProcessor with the LCA configuration.\n\nParameters\n----------\nconfig : LCAConfig\n    The configuration object containing all settings for demand,\n    temporal parameters, characterization methods, and background inventory.",
+        "line": 193,
+        "is_async": false
+      },
+      {
+        "name": "processes",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the processes dictionary.",
+        "line": 250,
+        "is_async": false
+      },
+      {
+        "name": "intermediate_flows",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the intermediate flows dictionary.",
+        "line": 255,
+        "is_async": false
+      },
+      {
+        "name": "elementary_flows",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the elementary flows dictionary.",
+        "line": 260,
+        "is_async": false
+      },
+      {
+        "name": "reference_products",
+        "args": [
+          "self"
+        ],
+        "returns": "set",
+        "docstring": "Read-only access to the functional flows list.",
+        "line": 265,
+        "is_async": false
+      },
+      {
+        "name": "system_time",
+        "args": [
+          "self"
+        ],
+        "returns": "set",
+        "docstring": "Read-only access to the system time list.",
+        "line": 270,
+        "is_async": false
+      },
+      {
+        "name": "category",
+        "args": [
+          "self"
+        ],
+        "returns": "set",
+        "docstring": "Read-only access to the impact categories list.",
+        "line": 275,
+        "is_async": false
+      },
+      {
+        "name": "process_time",
+        "args": [
+          "self"
+        ],
+        "returns": "set",
+        "docstring": "Read-only access to the process time list.",
+        "line": 280,
+        "is_async": false
+      },
+      {
+        "name": "foreground_technosphere",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the foreground technosphere tensor.",
+        "line": 285,
+        "is_async": false
+      },
+      {
+        "name": "foreground_biosphere",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the foreground biosphere tensor.",
+        "line": 290,
+        "is_async": false
+      },
+      {
+        "name": "foreground_production",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the foreground production tensor.",
+        "line": 295,
+        "is_async": false
+      },
+      {
+        "name": "background_inventory",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the inventory tensor.",
+        "line": 300,
+        "is_async": false
+      },
+      {
+        "name": "mapping",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the mapping matrix.",
+        "line": 305,
+        "is_async": false
+      },
+      {
+        "name": "characterization",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the characterization matrix.",
+        "line": 310,
+        "is_async": false
+      },
+      {
+        "name": "demand",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the parsed demand dictionary.",
+        "line": 315,
+        "is_async": false
+      },
+      {
+        "name": "operation_flow",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the operation flow dictionary.",
+        "line": 320,
+        "is_async": false
+      },
+      {
+        "name": "operation_time_limits",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the operation time limits dictionary.",
+        "line": 325,
+        "is_async": false
+      },
+      {
+        "name": "products",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the products dictionary.",
+        "line": 330,
+        "is_async": false
+      },
+      {
+        "name": "internal_demand_technosphere",
+        "args": [
+          "self"
+        ],
+        "returns": "dict",
+        "docstring": "Read-only access to the internal demand technosphere tensor.",
+        "line": 335,
+        "is_async": false
+      },
+      {
+        "name": "_parse_demand",
+        "args": [
+          "self"
+        ],
+        "returns": "None",
+        "docstring": "Parse and process the demand dictionary from the configuration.\n\nThis method transforms the demand data into a dictionary mapping (product_code, year)\ntuples to their corresponding amounts. It validates that demand is specified on\nforeground product nodes.\n\nSide Effects\n------------\nUpdates the following instance attributes:\n    - self._demand: dict with keys (product_code, year) and values as amounts.\n    - self._products: dict mapping product codes to product names.\n    - self._system_time: range of years covering the longest demand interval.",
+        "line": 339,
+        "is_async": false
+      },
+      {
+        "name": "_construct_foreground_tensors",
+        "args": [
+          "self"
+        ],
+        "returns": "None",
+        "docstring": "Construct foreground technosphere, biosphere, and production tensors with\ntime-explicit structure, supporting explicit product nodes.\n\nThis method constructs tensors based on explicit process and product nodes.\nIt processes only process nodes (type=process_node_default) and handles\nthree types of edges: production edges (to product nodes), consumption edges\n(from background or foreground products), and biosphere edges (emissions).\n\nSide Effects\n-----------\nUpdates the following instance attributes:\n    - self._foreground_technosphere: dict mapping (process_code, flow_code, year)\n      to amount for external intermediate flows (background consumption).\n    - self._internal_demand_technosphere: dict mapping (process_code, product_code, year)\n      to amount for internal product consumption (foreground products).\n    - self._foreground_biosphere: dict mapping (process_code, flow_code, year)\n      to amount for biosphere flows (emissions).\n    - self._foreground_production: dict mapping (process_code, product_code, year)\n      to amount for product production.\n    - self._products: dict mapping product codes to their names.\n    - self._intermediate_flows: dict mapping background intermediate flow codes\n      to their names.\n    - self._elementary_flows: dict mapping elementary flow codes to their names.\n    - self._processes: dict mapping process codes to their names.\n    - self._operation_flow: dict mapping (process_code, flow_code) to boolean\n      indicating if the flow occurs during the operation phase.\n    - self._operation_time_limits: dict mapping process codes to their\n      operation time limits, if defined.",
+        "line": 391,
+        "is_async": false
+      },
+      {
+        "name": "log_tensor_dimensions",
+        "args": [
+          "tensor",
+          "name"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 512,
+        "is_async": false
+      },
+      {
+        "name": "_calculate_inventory_of_db",
+        "args": [
+          "self",
+          "db_name",
+          "intermediate_flows",
+          "methods",
+          "cutoff"
+        ],
+        "returns": "Tuple[dict, dict]",
+        "docstring": "Calculate the life cycle inventory for a specified background database.\n\nPerforms an LCA for each intermediate flow exchanged with the given database\nusing the specified LCIA method. Intermediate flows are mapped to resulting\nelementary flows to construct an inventory tensor. A cutoff threshold is\napplied to filter insignificant results.\n\nParameters\n----------\ndb_name : str\n    Name of the background database to analyze.\nintermediate_flows : dict\n    Dictionary mapping intermediate flow codes to flow names.\nmethods : List[tuple]\n    A List of LCIA methods represented by a tuple (e.g.,\n    `(\"EF v3.1\", \"climate change\", \"global warming potential (GWP100)\")`).\ncutoff : float\n    Number of top elementary flows (per intermediate flow) to retain based on\n    impact magnitude. Used to reduce computational complexity.\n\nReturns\n-------\ninventory_tensor : dict\n    Dictionary with keys as (db_name, intermediate_flow_code,\n    elementary_flow_code) and values as flow amounts.\nelementary_flows : dict\n    Dictionary mapping elementary flow codes to their names.",
+        "line": 527,
+        "is_async": false
+      },
+      {
+        "name": "parallel_inventory_tensor_calculation",
+        "args": [
+          "self",
+          "cutoff",
+          "n_jobs"
+        ],
+        "returns": "dict",
+        "docstring": "Not yet implemented. Could improve performance significantly by parallelizing",
+        "line": 619,
+        "is_async": false
+      },
+      {
+        "name": "_sequential_inventory_tensor_calculation",
+        "args": [
+          "self"
+        ],
+        "returns": "None",
+        "docstring": "Compute the background inventory tensor for all background databases\nsequentially.\n\nThis method performs time-explicit LCA calculations for each background\ndatabase listed in `self.background_dbs`. For each intermediate flow in the\nforeground system, it calculates associated elementary flows using the\nconfigured characterization methods and applies a cutoff to retain only the\nmost relevant contributions.\n\nThe results are stored in a sparse tensor structure that maps:\n    (database name, intermediate flow code, elementary flow code) \u2192 amount\n\nErrors during database processing are logged, and processing continues for\nremaining databases.\n\nSide Effects\n------------\nUpdates internal tensors and flow mappings used in downstream modeling.\n    - self._background_inventory: Combined inventory tensor for all\n      background databases.\n    - self._elementary_flows: Updated dictionary of all observed elementary\n      flows.",
+        "line": 625,
+        "is_async": false
+      },
+      {
+        "name": "_prepare_background_inventory",
+        "args": [
+          "self"
+        ],
+        "returns": "None",
+        "docstring": "Prepare the background inventory tensor, either by loading from a file or\ncomputing it.\n\nIf a file path is provided in the configuration (`path_to_load`), the\ninventory tensor is loaded from that pickle file. Otherwise, it is computed\nbased on the specified method (`sequential` or `parallel`). After computation\nor loading, the tensor may be saved to disk if `path_to_save` is provided.\n\nThe background inventory tensor maps (database, intermediate flow, elementary\nflow) to amount. It updates internal state:\n    - self._background_inventory\n    - self._elementary_flows\n\n.. warning::\n    Only unpickle data you trust. Loading pickle files from untrusted sources\n    can be insecure.",
+        "line": 677,
+        "is_async": false
+      },
+      {
+        "name": "_construct_mapping_matrix",
+        "args": [
+          "self"
+        ],
+        "returns": "None",
+        "docstring": "Construct a linear interpolation-based mapping matrix between system time points\nand background databases, based on their associated reference years.\n\nFor each year in the system timeline, this method computes interpolation weights\nfor each background database based on their configured reference dates. The\nresult is stored in `self._mapping`, mapping (db_name, year) tuples to\ninterpolation weights.\n\nThe weights sum to 1 for each year and are linearly interpolated between the\nclosest two databases. If the year is outside the range of database reference\nyears, all weight  is assigned to the nearest boundary database.\n\nSide Effects\n------------\nUpdates\n    - `self._mapping`: dict with keys (db_name, year) and float values\nrepresenting weights.",
+        "line": 731,
+        "is_async": false
+      },
+      {
+        "name": "_construct_characterization_tensor",
+        "args": [
+          "self"
+        ],
+        "returns": "None",
+        "docstring": "Construct the characterization tensor for LCIA methods over system time points.\n\nThis method computes characterization factors for elementary flows across all\nsystem years, supporting both static and dynamic methods. It handles metrics\nlike Global Warming Potential (GWP) and Cumulative Radiative Forcing (CRF)\nwhen dynamic characterization is requested.\n\nSide Effects\n-----------\nUpdates the following instance attribute:\n    - self._characterization: dict mapping (method_name, elementary_flow_code,\n    system_year) to characterization factor values.",
+        "line": 782,
+        "is_async": false
+      }
+    ],
+    "classes": [
+      {
+        "name": "MetricEnum",
+        "bases": [
+          "str",
+          "Enum"
+        ],
+        "docstring": "Supported metrics for dynamic impact characterization.\n\nAttributes:\n    GWP: Global Warming Potential - time-dependent radiative forcing metric\n    CRF: Cumulative Radiative Forcing - integrated radiative forcing over time horizon",
+        "methods": [],
+        "line": 29
+      },
+      {
+        "name": "TemporalResolutionEnum",
+        "bases": [
+          "str",
+          "Enum"
+        ],
+        "docstring": "Supported temporal resolutions for the optimization model.\n\nAttributes:\n    year: Annual time steps (currently the only supported resolution)",
+        "methods": [],
+        "line": 42
+      },
+      {
+        "name": "CharacterizationMethodConfig",
+        "bases": [
+          "BaseModel"
+        ],
+        "docstring": "Configuration for a single LCIA characterization method.\n\nAttributes:\n    category_name: User-defined identifier for the impact category\n        (e.g., 'climate_change_dynamic_gwp').\n    brightway_method: Brightway method identifier tuple, either 2 or 3 elements\n        (e.g., ('GWP', 'example') or ('IPCC', 'climate change', 'GWP 100a')).\n    metric: Impact metric used for dynamic characterization.\n        None implies static method.\n        Supported values: 'GWP', 'CRF'.",
+        "methods": [
+          {
+            "name": "dynamic",
+            "args": [
+              "self"
+            ],
+            "returns": "bool",
+            "docstring": "Indicates whether this is a dynamic characterization method.",
+            "line": 88,
+            "is_async": false
+          }
+        ],
+        "line": 53
+      },
+      {
+        "name": "TemporalConfig",
+        "bases": [
+          "BaseModel"
+        ],
+        "docstring": "Configuration related to temporal aspects of the model.\n\nAttributes:\n    start_date: The start date of the time horizon.\n    temporal_resolution: Temporal resolution for the model.\n        Options: 'year', 'month', 'day'.\n    time_horizon: Length of the time horizon (in units of `temporal_resolution`).\n    fixed_time_horizon: If True, the time horizon is calculated from the time of the functional \n        unit (FU) instead of the time of emission\n    database_dates: Mapping from database names to their respective reference dates.",
+        "methods": [],
+        "line": 93
+      },
+      {
+        "name": "BackgroundInventoryConfig",
+        "bases": [
+          "BaseModel"
+        ],
+        "docstring": "Configuration for background inventory data.\n\nAttributes:\n    cutoff: Cutoff threshold for the number of top elementary flows to retain based on impact magnitude.\n    calculation_method: Method for calculating the inventory tensor. Options: 'sequential', 'parallel'.\n    path_to_save: Optional path to save the inventory tensor.\n    path_to_load: Optional path to load the inventory tensor.",
+        "methods": [],
+        "line": 128
+      },
+      {
+        "name": "LCAConfig",
+        "bases": [
+          "BaseModel"
+        ],
+        "docstring": "Configuration class for Life Cycle Assessment (LCA) data processing.\n\nAttributes:\n    demand: Dictionary {product_node: temporal_distribution} containing time-explicit demands for each product.\n        Keys must be Brightway product node objects (bd.get_node(...)).\n    temporal: Temporal configuration for model time behavior.\n    characterization_methods: List of characterization method configurations.\n    background_inventory: Configuration for background inventory data calculation.",
+        "methods": [],
+        "line": 159
+      },
+      {
+        "name": "Config",
+        "bases": [],
+        "docstring": "",
+        "methods": [],
+        "line": 178
+      },
+      {
+        "name": "LCADataProcessor",
+        "bases": [],
+        "docstring": "Class to perform time-explicit Life Cycle Assessment (LCA)\ncomputations and gather necessary data for building an optimization model.\n\nThis class is primarily responsible for executing the LCA-based computations\nrequired to collect all the data needed for building `OptimizationModelInputs`. It is reliant on\nBrightway2, an open-source framework for Life Cycle Assessment, to perform the\ncalculations and retrieve LCA results.",
+        "methods": [
+          {
+            "name": "__init__",
+            "args": [
+              "self",
+              "config"
+            ],
+            "returns": "None",
+            "docstring": "Initialize the LCADataProcessor with the LCA configuration.\n\nParameters\n----------\nconfig : LCAConfig\n    The configuration object containing all settings for demand,\n    temporal parameters, characterization methods, and background inventory.",
+            "line": 193,
+            "is_async": false
+          },
+          {
+            "name": "processes",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the processes dictionary.",
+            "line": 250,
+            "is_async": false
+          },
+          {
+            "name": "intermediate_flows",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the intermediate flows dictionary.",
+            "line": 255,
+            "is_async": false
+          },
+          {
+            "name": "elementary_flows",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the elementary flows dictionary.",
+            "line": 260,
+            "is_async": false
+          },
+          {
+            "name": "reference_products",
+            "args": [
+              "self"
+            ],
+            "returns": "set",
+            "docstring": "Read-only access to the functional flows list.",
+            "line": 265,
+            "is_async": false
+          },
+          {
+            "name": "system_time",
+            "args": [
+              "self"
+            ],
+            "returns": "set",
+            "docstring": "Read-only access to the system time list.",
+            "line": 270,
+            "is_async": false
+          },
+          {
+            "name": "category",
+            "args": [
+              "self"
+            ],
+            "returns": "set",
+            "docstring": "Read-only access to the impact categories list.",
+            "line": 275,
+            "is_async": false
+          },
+          {
+            "name": "process_time",
+            "args": [
+              "self"
+            ],
+            "returns": "set",
+            "docstring": "Read-only access to the process time list.",
+            "line": 280,
+            "is_async": false
+          },
+          {
+            "name": "foreground_technosphere",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the foreground technosphere tensor.",
+            "line": 285,
+            "is_async": false
+          },
+          {
+            "name": "foreground_biosphere",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the foreground biosphere tensor.",
+            "line": 290,
+            "is_async": false
+          },
+          {
+            "name": "foreground_production",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the foreground production tensor.",
+            "line": 295,
+            "is_async": false
+          },
+          {
+            "name": "background_inventory",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the inventory tensor.",
+            "line": 300,
+            "is_async": false
+          },
+          {
+            "name": "mapping",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the mapping matrix.",
+            "line": 305,
+            "is_async": false
+          },
+          {
+            "name": "characterization",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the characterization matrix.",
+            "line": 310,
+            "is_async": false
+          },
+          {
+            "name": "demand",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the parsed demand dictionary.",
+            "line": 315,
+            "is_async": false
+          },
+          {
+            "name": "operation_flow",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the operation flow dictionary.",
+            "line": 320,
+            "is_async": false
+          },
+          {
+            "name": "operation_time_limits",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the operation time limits dictionary.",
+            "line": 325,
+            "is_async": false
+          },
+          {
+            "name": "products",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the products dictionary.",
+            "line": 330,
+            "is_async": false
+          },
+          {
+            "name": "internal_demand_technosphere",
+            "args": [
+              "self"
+            ],
+            "returns": "dict",
+            "docstring": "Read-only access to the internal demand technosphere tensor.",
+            "line": 335,
+            "is_async": false
+          },
+          {
+            "name": "_parse_demand",
+            "args": [
+              "self"
+            ],
+            "returns": "None",
+            "docstring": "Parse and process the demand dictionary from the configuration.\n\nThis method transforms the demand data into a dictionary mapping (product_code, year)\ntuples to their corresponding amounts. It validates that demand is specified on\nforeground product nodes.\n\nSide Effects\n------------\nUpdates the following instance attributes:\n    - self._demand: dict with keys (product_code, year) and values as amounts.\n    - self._products: dict mapping product codes to product names.\n    - self._system_time: range of years covering the longest demand interval.",
+            "line": 339,
+            "is_async": false
+          },
+          {
+            "name": "_construct_foreground_tensors",
+            "args": [
+              "self"
+            ],
+            "returns": "None",
+            "docstring": "Construct foreground technosphere, biosphere, and production tensors with\ntime-explicit structure, supporting explicit product nodes.\n\nThis method constructs tensors based on explicit process and product nodes.\nIt processes only process nodes (type=process_node_default) and handles\nthree types of edges: production edges (to product nodes), consumption edges\n(from background or foreground products), and biosphere edges (emissions).\n\nSide Effects\n-----------\nUpdates the following instance attributes:\n    - self._foreground_technosphere: dict mapping (process_code, flow_code, year)\n      to amount for external intermediate flows (background consumption).\n    - self._internal_demand_technosphere: dict mapping (process_code, product_code, year)\n      to amount for internal product consumption (foreground products).\n    - self._foreground_biosphere: dict mapping (process_code, flow_code, year)\n      to amount for biosphere flows (emissions).\n    - self._foreground_production: dict mapping (process_code, product_code, year)\n      to amount for product production.\n    - self._products: dict mapping product codes to their names.\n    - self._intermediate_flows: dict mapping background intermediate flow codes\n      to their names.\n    - self._elementary_flows: dict mapping elementary flow codes to their names.\n    - self._processes: dict mapping process codes to their names.\n    - self._operation_flow: dict mapping (process_code, flow_code) to boolean\n      indicating if the flow occurs during the operation phase.\n    - self._operation_time_limits: dict mapping process codes to their\n      operation time limits, if defined.",
+            "line": 391,
+            "is_async": false
+          },
+          {
+            "name": "_calculate_inventory_of_db",
+            "args": [
+              "self",
+              "db_name",
+              "intermediate_flows",
+              "methods",
+              "cutoff"
+            ],
+            "returns": "Tuple[dict, dict]",
+            "docstring": "Calculate the life cycle inventory for a specified background database.\n\nPerforms an LCA for each intermediate flow exchanged with the given database\nusing the specified LCIA method. Intermediate flows are mapped to resulting\nelementary flows to construct an inventory tensor. A cutoff threshold is\napplied to filter insignificant results.\n\nParameters\n----------\ndb_name : str\n    Name of the background database to analyze.\nintermediate_flows : dict\n    Dictionary mapping intermediate flow codes to flow names.\nmethods : List[tuple]\n    A List of LCIA methods represented by a tuple (e.g.,\n    `(\"EF v3.1\", \"climate change\", \"global warming potential (GWP100)\")`).\ncutoff : float\n    Number of top elementary flows (per intermediate flow) to retain based on\n    impact magnitude. Used to reduce computational complexity.\n\nReturns\n-------\ninventory_tensor : dict\n    Dictionary with keys as (db_name, intermediate_flow_code,\n    elementary_flow_code) and values as flow amounts.\nelementary_flows : dict\n    Dictionary mapping elementary flow codes to their names.",
+            "line": 527,
+            "is_async": false
+          },
+          {
+            "name": "parallel_inventory_tensor_calculation",
+            "args": [
+              "self",
+              "cutoff",
+              "n_jobs"
+            ],
+            "returns": "dict",
+            "docstring": "Not yet implemented. Could improve performance significantly by parallelizing",
+            "line": 619,
+            "is_async": false
+          },
+          {
+            "name": "_sequential_inventory_tensor_calculation",
+            "args": [
+              "self"
+            ],
+            "returns": "None",
+            "docstring": "Compute the background inventory tensor for all background databases\nsequentially.\n\nThis method performs time-explicit LCA calculations for each background\ndatabase listed in `self.background_dbs`. For each intermediate flow in the\nforeground system, it calculates associated elementary flows using the\nconfigured characterization methods and applies a cutoff to retain only the\nmost relevant contributions.\n\nThe results are stored in a sparse tensor structure that maps:\n    (database name, intermediate flow code, elementary flow code) \u2192 amount\n\nErrors during database processing are logged, and processing continues for\nremaining databases.\n\nSide Effects\n------------\nUpdates internal tensors and flow mappings used in downstream modeling.\n    - self._background_inventory: Combined inventory tensor for all\n      background databases.\n    - self._elementary_flows: Updated dictionary of all observed elementary\n      flows.",
+            "line": 625,
+            "is_async": false
+          },
+          {
+            "name": "_prepare_background_inventory",
+            "args": [
+              "self"
+            ],
+            "returns": "None",
+            "docstring": "Prepare the background inventory tensor, either by loading from a file or\ncomputing it.\n\nIf a file path is provided in the configuration (`path_to_load`), the\ninventory tensor is loaded from that pickle file. Otherwise, it is computed\nbased on the specified method (`sequential` or `parallel`). After computation\nor loading, the tensor may be saved to disk if `path_to_save` is provided.\n\nThe background inventory tensor maps (database, intermediate flow, elementary\nflow) to amount. It updates internal state:\n    - self._background_inventory\n    - self._elementary_flows\n\n.. warning::\n    Only unpickle data you trust. Loading pickle files from untrusted sources\n    can be insecure.",
+            "line": 677,
+            "is_async": false
+          },
+          {
+            "name": "_construct_mapping_matrix",
+            "args": [
+              "self"
+            ],
+            "returns": "None",
+            "docstring": "Construct a linear interpolation-based mapping matrix between system time points\nand background databases, based on their associated reference years.\n\nFor each year in the system timeline, this method computes interpolation weights\nfor each background database based on their configured reference dates. The\nresult is stored in `self._mapping`, mapping (db_name, year) tuples to\ninterpolation weights.\n\nThe weights sum to 1 for each year and are linearly interpolated between the\nclosest two databases. If the year is outside the range of database reference\nyears, all weight  is assigned to the nearest boundary database.\n\nSide Effects\n------------\nUpdates\n    - `self._mapping`: dict with keys (db_name, year) and float values\nrepresenting weights.",
+            "line": 731,
+            "is_async": false
+          },
+          {
+            "name": "_construct_characterization_tensor",
+            "args": [
+              "self"
+            ],
+            "returns": "None",
+            "docstring": "Construct the characterization tensor for LCIA methods over system time points.\n\nThis method computes characterization factors for elementary flows across all\nsystem years, supporting both static and dynamic methods. It handles metrics\nlike Global Warming Potential (GWP) and Cumulative Radiative Forcing (CRF)\nwhen dynamic characterization is requested.\n\nSide Effects\n-----------\nUpdates the following instance attribute:\n    - self._characterization: dict mapping (method_name, elementary_flow_code,\n    system_year) to characterization factor values.",
+            "line": 782,
+            "is_async": false
+          }
+        ],
+        "line": 182
+      }
+    ],
+    "module_doc": "Time-explicit LCA data processing for optimization.\n\nThis module provides classes and utilities for performing time-explicit Life Cycle\nAssessment (LCA) computations using Brightway. It processes\ntemporal distributions of product demands, constructs foreground and background\ninventory tensors, and prepares characterization factors for optimization.\n\nKey classes:\n    - LCAConfig: Configuration for LCA computations\n    - LCADataProcessor: Main class for time-explicit LCA processing"
+  },
+  "optimex.postprocessing": {
+    "functions": [
+      {
+        "name": "__init__",
+        "args": [
+          "self",
+          "solved_model",
+          "plot_config"
+        ],
+        "returns": null,
+        "docstring": "",
+        "line": 58,
+        "is_async": false
+      },
+      {
+        "name": "_create_color_map",
+        "args": [
+          "self"
+        ],
+        "returns": null,
+        "docstring": "Create a consistent color mapping for all processes and products.\nReturns a dict mapping item names to colors.",
+        "line": 90,
+        "is_async": false
+      },
+      {
+        "name": "_get_name",
+        "args": [
+          "self",
+          "code"
+        ],
+        "returns": "str",
+        "docstring": "Get the human-readable name for a code with caching.\nTries foreground database first, then falls back to code if not found.",
+        "line": 108,
+        "is_async": false
+      },
+      {
+        "name": "_annotate_dataframe",
+        "args": [
+          "self",
+          "df",
+          "annotated"
+        ],
+        "returns": null,
+        "docstring": "Annotate DataFrame columns with human-readable names if requested.\nHandles both single-level and multi-level column indices.",
+        "line": 127,
+        "is_async": false
+      },
+      {
+        "name": "_get_colors_for_dataframe",
+        "args": [
+          "self",
+          "df"
+        ],
+        "returns": null,
+        "docstring": "Get consistent colors for DataFrame columns.\nHandles both single-level and multi-level column indices.",
+        "line": 148,
+        "is_async": false
+      },
+      {
+        "name": "_format_label",
+        "args": [
+          "self",
+          "label"
+        ],
+        "returns": null,
+        "docstring": "Convert column labels (including MultiIndex tuples) to readable strings.",
+        "line": 167,
+        "is_async": false
+      },
+      {
+        "name": "_set_smart_xticks",
+        "args": [
+          "self",
+          "ax",
+          "labels"
+        ],
+        "returns": null,
+        "docstring": "Downsample x-axis tick labels to avoid clutter.\n\nParameters\n----------\nax : matplotlib axis\n    Axis on which ticks will be set.\nlabels : iterable\n    Original labels corresponding to each position along the x-axis.",
+        "line": 173,
+        "is_async": false
+      },
+      {
+        "name": "_create_clean_axes",
+        "args": [
+          "self",
+          "nrows",
+          "ncols",
+          "figsize"
+        ],
+        "returns": null,
+        "docstring": "Create a grid of clean axes with consistent formatting.\nReturns fig, flattened list of axes.",
+        "line": 203,
+        "is_async": false
+      },
+      {
+        "name": "_apply_bar_styles",
+        "args": [
+          "self",
+          "df",
+          "ax",
+          "colors",
+          "title",
+          "legend_title"
+        ],
+        "returns": null,
+        "docstring": "Apply standard bar plot styling with consistent colors.\n\nParameters\n----------\ndf : DataFrame\n    Data to plot\nax : matplotlib axis\n    Axis to plot on\ncolors : list\n    List of colors for each column\ntitle : str, optional\n    Plot title\nlegend_title : str, optional\n    Legend title",
+        "line": 230,
+        "is_async": false
+      },
+      {
+        "name": "get_impacts",
+        "args": [
+          "self"
+        ],
+        "returns": "pd.DataFrame",
+        "docstring": "Extract environmental impacts by category, process, and time.\n\nReturns denormalized impact values from the solved optimization model,\norganized as a pivoted DataFrame with time as rows and (category, process)\nas column MultiIndex.\n\nReturns\n-------\npd.DataFrame\n    Pivoted DataFrame with 'Time' as index and MultiIndex columns for\n    (Category, Process) combinations. Values represent environmental\n    impacts in the units of the characterization method.",
+        "line": 274,
+        "is_async": false
+      },
+      {
+        "name": "get_radiative_forcing",
+        "args": [
+          "self"
+        ],
+        "returns": "pd.DataFrame",
+        "docstring": "Extract radiative forcing time series from model results.\n\nThis method is currently not implemented. It will extract the scaled inventory\nand compute radiative forcing profiles over time for climate impact assessment.\n\nReturns\n-------\npd.DataFrame\n    DataFrame with radiative forcing values over time.\n\nRaises\n------\nNotImplementedError\n    This method is not yet implemented.",
+        "line": 311,
+        "is_async": false
+      },
+      {
+        "name": "get_installation",
+        "args": [
+          "self"
+        ],
+        "returns": "pd.DataFrame",
+        "docstring": "Extracts the installation data from the model and returns it as a DataFrame.\nThe DataFrame will have a MultiIndex with 'Time' and 'Process'.\nThe values are the installed capacities for each process at each time step.",
+        "line": 340,
+        "is_async": false
+      },
+      {
+        "name": "get_operation",
+        "args": [
+          "self"
+        ],
+        "returns": "pd.DataFrame",
+        "docstring": "Extracts the operation data from the model and returns it as a DataFrame.\nThe DataFrame will have a MultiIndex with 'Time' and 'Process'.\nThe values are the operational levels for each process at each time step.\n\nNote: var_operation is not scaled because when both demand and\nforeground_production are scaled by the same factor, the scaling\ncancels out in the constraint: demand = production * operation.",
+        "line": 361,
+        "is_async": false
+      },
+      {
+        "name": "get_production",
+        "args": [
+          "self"
+        ],
+        "returns": "pd.DataFrame",
+        "docstring": "Extracts the production data from the model and returns it as a DataFrame.\nThe DataFrame will have a MultiIndex with 'Process', 'Product', and\n'Time'. The values are the total production for each process and product\nat each time step.",
+        "line": 383,
+        "is_async": false
+      },
+      {
+        "name": "get_demand",
+        "args": [
+          "self"
+        ],
+        "returns": "pd.DataFrame",
+        "docstring": "Extracts the demand data from the model and returns it as a DataFrame.\nThe DataFrame will have a MultiIndex with 'Product' and 'Time'.\nThe values are the demand for each Product at each time step.",
+        "line": 432,
+        "is_async": false
+      },
+      {
+        "name": "plot_impacts",
+        "args": [
+          "self",
+          "df_impacts",
+          "annotated"
+        ],
+        "returns": null,
+        "docstring": "Plot a stacked bar chart for impacts by category and process over time.\n\nCreates a figure with one subplot per impact category, showing process\ncontributions as stacked bars. Automatically denormalizes scaled values\nand optionally displays human-readable process names.\n\nParameters\n----------\ndf_impacts : DataFrame, optional\n    DataFrame with Time as index, Categories and Processes as columns.\n    Columns must be a MultiIndex: (Category, Process). If not provided,\n    automatically extracted via get_impacts().\nannotated : bool, default=True\n    If True, show human-readable names from Brightway database instead\n    of process codes.",
+        "line": 453,
+        "is_async": false
+      },
+      {
+        "name": "plot_production_and_demand",
+        "args": [
+          "self",
+          "prod_df",
+          "demand_df",
+          "annotated"
+        ],
+        "returns": null,
+        "docstring": "Plot a stacked bar chart for production and line(s) for demand.\n\nParameters\n----------\nprod_df : DataFrame, optional\n    DataFrame with Time as index, (Process, Product) as columns\ndemand_df : DataFrame, optional\n    DataFrame with Time as index, Products as columns\nannotated : bool, default=True\n    If True, show human-readable names instead of codes",
+        "line": 504,
+        "is_async": false
+      },
+      {
+        "name": "plot_installation",
+        "args": [
+          "self",
+          "df_installation",
+          "annotated"
+        ],
+        "returns": null,
+        "docstring": "Plot a stacked bar chart for installation data.\n\nParameters\n----------\ndf_installation : DataFrame, optional\n    DataFrame with Time as index, Processes as columns\nannotated : bool, default=True\n    If True, show human-readable names instead of codes",
+        "line": 597,
+        "is_async": false
+      },
+      {
+        "name": "plot_operation",
+        "args": [
+          "self",
+          "df_operation",
+          "annotated"
+        ],
+        "returns": null,
+        "docstring": "Plot a stacked bar chart for operation data.\n\nParameters\n----------\ndf_operation : DataFrame, optional\n    DataFrame with Time as index, Processes as columns\nannotated : bool, default=True\n    If True, show human-readable names instead of codes",
+        "line": 630,
+        "is_async": false
+      },
+      {
+        "name": "get_existing_capacity",
+        "args": [
+          "self"
+        ],
+        "returns": "pd.DataFrame",
+        "docstring": "Extract existing (brownfield) capacity data from the model.\n\nReturns a DataFrame showing which processes have existing capacity,\nwhen they were installed, and their operational status at each time step.\n\nReturns\n-------\npd.DataFrame\n    DataFrame with Time as index and (Process, Type) as MultiIndex columns.\n    Type can be 'existing_capacity' (total existing) or 'existing_operating'\n    (existing capacity in operation phase at that time).",
+        "line": 663,
+        "is_async": false
+      },
+      {
+        "name": "get_production_capacity",
+        "args": [
+          "self"
+        ],
+        "returns": "pd.DataFrame",
+        "docstring": "Calculate maximum available production capacity for each product at each time step.\n\nCapacity is determined by counting installations in their operation phase and\nmultiplying by their production coefficients. This includes both new installations\n(from var_installation) and existing (brownfield) capacity.\n\nReturns\n-------\npd.DataFrame\n    DataFrame with Time as index and Products as columns.\n    Values represent maximum production capacity (not actual production).",
+        "line": 714,
+        "is_async": false
+      },
+      {
+        "name": "plot_production_vs_capacity",
+        "args": [
+          "self",
+          "product",
+          "prod_df",
+          "capacity_df",
+          "demand_df",
+          "annotated",
+          "show_grouped_bars"
+        ],
+        "returns": null,
+        "docstring": "Plot actual production vs maximum available capacity for a specific product.\n\nShows two lines:\n- Production (demand is assumed equal and overlaid)\n- Maximum available capacity (dashed line)\n\nOptionally shows grouped bars per time step:\n- Left bar: New capacity installations (stacked by process)\n- Right bar: Operation level (stacked by process)\n\nParameters\n----------\nproduct : str, optional\n    Product to plot. If None, uses the first product with non-zero demand.\nprod_df : pd.DataFrame, optional\n    Production DataFrame from get_production()\ncapacity_df : pd.DataFrame, optional\n    Capacity DataFrame from get_production_capacity()\ndemand_df : pd.DataFrame, optional\n    Demand DataFrame from get_demand()\nannotated : bool, default=True\n    If True, show human-readable names instead of codes\nshow_grouped_bars : bool, default=False\n    If True, show grouped bars for capacity installations and operation",
+        "line": 777,
+        "is_async": false
+      },
+      {
+        "name": "plot_utilization_heatmap",
+        "args": [
+          "self",
+          "product",
+          "annotated",
+          "show_values"
+        ],
+        "returns": null,
+        "docstring": "Plot a heatmap showing capacity utilization by process over time.\n\nThis provides a clean, dedicated view of which processes are being\noperated vs sitting idle at each time step.\n\nParameters\n----------\nproduct : str, optional\n    Product to analyze. If None, uses the first product with non-zero demand.\nannotated : bool, default=True\n    If True, show human-readable process names instead of codes.\nshow_values : bool, default=True\n    If True, show utilization percentages in cells.",
+        "line": 1110,
+        "is_async": false
+      }
+    ],
+    "classes": [
+      {
+        "name": "PostProcessor",
+        "bases": [],
+        "docstring": "A class for post-processing and visualizing results from a solved Pyomo model.\n\nThis class provides plotting utilities with configurable styles for generating\nvisualizations such as stacked bar charts, line plots, etc., from model outputs.\n\nParameters\n----------\nsolved_model : pyo.ConcreteModel\n    A solved Pyomo model instance containing the data to be processed and visualized.\n\nplot_config : dict, optional\n    A dictionary of plot styling options to override default settings. Recognized keys include:\n        - \"figsize\" : tuple of (width, height) in inches\n        - \"fontsize\" : int, font size for labels and titles\n        - \"grid_alpha\" : float, transparency of grid lines\n        - \"grid_linestyle\" : str, line style for grid (e.g., \"--\", \":\", \"-.\")\n        - \"rotation\" : int, angle of x-axis tick label rotation\n        - \"bar_width\" : float, width of bars in bar charts\n        - \"colormap\" : list of colors used for plotting\n        - \"line_color\" : str, color of lines in line plots\n        - \"line_marker\" : str, marker style for line plots\n        - \"line_width\" : float, width of lines in line plots\n        - \"max_xticks\" : int, maximum number of x-axis ticks to display\n\n    Unrecognized keys are ignored.\n\nAttributes\n----------\nm : pyo.ConcreteModel\n    The solved Pyomo model.\n\n_plot_config : dict\n    The finalized configuration dictionary used for plotting.",
+        "methods": [
+          {
+            "name": "__init__",
+            "args": [
+              "self",
+              "solved_model",
+              "plot_config"
+            ],
+            "returns": null,
+            "docstring": "",
+            "line": 58,
+            "is_async": false
+          },
+          {
+            "name": "_create_color_map",
+            "args": [
+              "self"
+            ],
+            "returns": null,
+            "docstring": "Create a consistent color mapping for all processes and products.\nReturns a dict mapping item names to colors.",
+            "line": 90,
+            "is_async": false
+          },
+          {
+            "name": "_get_name",
+            "args": [
+              "self",
+              "code"
+            ],
+            "returns": "str",
+            "docstring": "Get the human-readable name for a code with caching.\nTries foreground database first, then falls back to code if not found.",
+            "line": 108,
+            "is_async": false
+          },
+          {
+            "name": "_annotate_dataframe",
+            "args": [
+              "self",
+              "df",
+              "annotated"
+            ],
+            "returns": null,
+            "docstring": "Annotate DataFrame columns with human-readable names if requested.\nHandles both single-level and multi-level column indices.",
+            "line": 127,
+            "is_async": false
+          },
+          {
+            "name": "_get_colors_for_dataframe",
+            "args": [
+              "self",
+              "df"
+            ],
+            "returns": null,
+            "docstring": "Get consistent colors for DataFrame columns.\nHandles both single-level and multi-level column indices.",
+            "line": 148,
+            "is_async": false
+          },
+          {
+            "name": "_format_label",
+            "args": [
+              "self",
+              "label"
+            ],
+            "returns": null,
+            "docstring": "Convert column labels (including MultiIndex tuples) to readable strings.",
+            "line": 167,
+            "is_async": false
+          },
+          {
+            "name": "_set_smart_xticks",
+            "args": [
+              "self",
+              "ax",
+              "labels"
+            ],
+            "returns": null,
+            "docstring": "Downsample x-axis tick labels to avoid clutter.\n\nParameters\n----------\nax : matplotlib axis\n    Axis on which ticks will be set.\nlabels : iterable\n    Original labels corresponding to each position along the x-axis.",
+            "line": 173,
+            "is_async": false
+          },
+          {
+            "name": "_create_clean_axes",
+            "args": [
+              "self",
+              "nrows",
+              "ncols",
+              "figsize"
+            ],
+            "returns": null,
+            "docstring": "Create a grid of clean axes with consistent formatting.\nReturns fig, flattened list of axes.",
+            "line": 203,
+            "is_async": false
+          },
+          {
+            "name": "_apply_bar_styles",
+            "args": [
+              "self",
+              "df",
+              "ax",
+              "colors",
+              "title",
+              "legend_title"
+            ],
+            "returns": null,
+            "docstring": "Apply standard bar plot styling with consistent colors.\n\nParameters\n----------\ndf : DataFrame\n    Data to plot\nax : matplotlib axis\n    Axis to plot on\ncolors : list\n    List of colors for each column\ntitle : str, optional\n    Plot title\nlegend_title : str, optional\n    Legend title",
+            "line": 230,
+            "is_async": false
+          },
+          {
+            "name": "get_impacts",
+            "args": [
+              "self"
+            ],
+            "returns": "pd.DataFrame",
+            "docstring": "Extract environmental impacts by category, process, and time.\n\nReturns denormalized impact values from the solved optimization model,\norganized as a pivoted DataFrame with time as rows and (category, process)\nas column MultiIndex.\n\nReturns\n-------\npd.DataFrame\n    Pivoted DataFrame with 'Time' as index and MultiIndex columns for\n    (Category, Process) combinations. Values represent environmental\n    impacts in the units of the characterization method.",
+            "line": 274,
+            "is_async": false
+          },
+          {
+            "name": "get_radiative_forcing",
+            "args": [
+              "self"
+            ],
+            "returns": "pd.DataFrame",
+            "docstring": "Extract radiative forcing time series from model results.\n\nThis method is currently not implemented. It will extract the scaled inventory\nand compute radiative forcing profiles over time for climate impact assessment.\n\nReturns\n-------\npd.DataFrame\n    DataFrame with radiative forcing values over time.\n\nRaises\n------\nNotImplementedError\n    This method is not yet implemented.",
+            "line": 311,
+            "is_async": false
+          },
+          {
+            "name": "get_installation",
+            "args": [
+              "self"
+            ],
+            "returns": "pd.DataFrame",
+            "docstring": "Extracts the installation data from the model and returns it as a DataFrame.\nThe DataFrame will have a MultiIndex with 'Time' and 'Process'.\nThe values are the installed capacities for each process at each time step.",
+            "line": 340,
+            "is_async": false
+          },
+          {
+            "name": "get_operation",
+            "args": [
+              "self"
+            ],
+            "returns": "pd.DataFrame",
+            "docstring": "Extracts the operation data from the model and returns it as a DataFrame.\nThe DataFrame will have a MultiIndex with 'Time' and 'Process'.\nThe values are the operational levels for each process at each time step.\n\nNote: var_operation is not scaled because when both demand and\nforeground_production are scaled by the same factor, the scaling\ncancels out in the constraint: demand = production * operation.",
+            "line": 361,
+            "is_async": false
+          },
+          {
+            "name": "get_production",
+            "args": [
+              "self"
+            ],
+            "returns": "pd.DataFrame",
+            "docstring": "Extracts the production data from the model and returns it as a DataFrame.\nThe DataFrame will have a MultiIndex with 'Process', 'Product', and\n'Time'. The values are the total production for each process and product\nat each time step.",
+            "line": 383,
+            "is_async": false
+          },
+          {
+            "name": "get_demand",
+            "args": [
+              "self"
+            ],
+            "returns": "pd.DataFrame",
+            "docstring": "Extracts the demand data from the model and returns it as a DataFrame.\nThe DataFrame will have a MultiIndex with 'Product' and 'Time'.\nThe values are the demand for each Product at each time step.",
+            "line": 432,
+            "is_async": false
+          },
+          {
+            "name": "plot_impacts",
+            "args": [
+              "self",
+              "df_impacts",
+              "annotated"
+            ],
+            "returns": null,
+            "docstring": "Plot a stacked bar chart for impacts by category and process over time.\n\nCreates a figure with one subplot per impact category, showing process\ncontributions as stacked bars. Automatically denormalizes scaled values\nand optionally displays human-readable process names.\n\nParameters\n----------\ndf_impacts : DataFrame, optional\n    DataFrame with Time as index, Categories and Processes as columns.\n    Columns must be a MultiIndex: (Category, Process). If not provided,\n    automatically extracted via get_impacts().\nannotated : bool, default=True\n    If True, show human-readable names from Brightway database instead\n    of process codes.",
+            "line": 453,
+            "is_async": false
+          },
+          {
+            "name": "plot_production_and_demand",
+            "args": [
+              "self",
+              "prod_df",
+              "demand_df",
+              "annotated"
+            ],
+            "returns": null,
+            "docstring": "Plot a stacked bar chart for production and line(s) for demand.\n\nParameters\n----------\nprod_df : DataFrame, optional\n    DataFrame with Time as index, (Process, Product) as columns\ndemand_df : DataFrame, optional\n    DataFrame with Time as index, Products as columns\nannotated : bool, default=True\n    If True, show human-readable names instead of codes",
+            "line": 504,
+            "is_async": false
+          },
+          {
+            "name": "plot_installation",
+            "args": [
+              "self",
+              "df_installation",
+              "annotated"
+            ],
+            "returns": null,
+            "docstring": "Plot a stacked bar chart for installation data.\n\nParameters\n----------\ndf_installation : DataFrame, optional\n    DataFrame with Time as index, Processes as columns\nannotated : bool, default=True\n    If True, show human-readable names instead of codes",
+            "line": 597,
+            "is_async": false
+          },
+          {
+            "name": "plot_operation",
+            "args": [
+              "self",
+              "df_operation",
+              "annotated"
+            ],
+            "returns": null,
+            "docstring": "Plot a stacked bar chart for operation data.\n\nParameters\n----------\ndf_operation : DataFrame, optional\n    DataFrame with Time as index, Processes as columns\nannotated : bool, default=True\n    If True, show human-readable names instead of codes",
+            "line": 630,
+            "is_async": false
+          },
+          {
+            "name": "get_existing_capacity",
+            "args": [
+              "self"
+            ],
+            "returns": "pd.DataFrame",
+            "docstring": "Extract existing (brownfield) capacity data from the model.\n\nReturns a DataFrame showing which processes have existing capacity,\nwhen they were installed, and their operational status at each time step.\n\nReturns\n-------\npd.DataFrame\n    DataFrame with Time as index and (Process, Type) as MultiIndex columns.\n    Type can be 'existing_capacity' (total existing) or 'existing_operating'\n    (existing capacity in operation phase at that time).",
+            "line": 663,
+            "is_async": false
+          },
+          {
+            "name": "get_production_capacity",
+            "args": [
+              "self"
+            ],
+            "returns": "pd.DataFrame",
+            "docstring": "Calculate maximum available production capacity for each product at each time step.\n\nCapacity is determined by counting installations in their operation phase and\nmultiplying by their production coefficients. This includes both new installations\n(from var_installation) and existing (brownfield) capacity.\n\nReturns\n-------\npd.DataFrame\n    DataFrame with Time as index and Products as columns.\n    Values represent maximum production capacity (not actual production).",
+            "line": 714,
+            "is_async": false
+          },
+          {
+            "name": "plot_production_vs_capacity",
+            "args": [
+              "self",
+              "product",
+              "prod_df",
+              "capacity_df",
+              "demand_df",
+              "annotated",
+              "show_grouped_bars"
+            ],
+            "returns": null,
+            "docstring": "Plot actual production vs maximum available capacity for a specific product.\n\nShows two lines:\n- Production (demand is assumed equal and overlaid)\n- Maximum available capacity (dashed line)\n\nOptionally shows grouped bars per time step:\n- Left bar: New capacity installations (stacked by process)\n- Right bar: Operation level (stacked by process)\n\nParameters\n----------\nproduct : str, optional\n    Product to plot. If None, uses the first product with non-zero demand.\nprod_df : pd.DataFrame, optional\n    Production DataFrame from get_production()\ncapacity_df : pd.DataFrame, optional\n    Capacity DataFrame from get_production_capacity()\ndemand_df : pd.DataFrame, optional\n    Demand DataFrame from get_demand()\nannotated : bool, default=True\n    If True, show human-readable names instead of codes\nshow_grouped_bars : bool, default=False\n    If True, show grouped bars for capacity installations and operation",
+            "line": 777,
+            "is_async": false
+          },
+          {
+            "name": "plot_utilization_heatmap",
+            "args": [
+              "self",
+              "product",
+              "annotated",
+              "show_values"
+            ],
+            "returns": null,
+            "docstring": "Plot a heatmap showing capacity utilization by process over time.\n\nThis provides a clean, dedicated view of which processes are being\noperated vs sitting idle at each time step.\n\nParameters\n----------\nproduct : str, optional\n    Product to analyze. If None, uses the first product with non-zero demand.\nannotated : bool, default=True\n    If True, show human-readable process names instead of codes.\nshow_values : bool, default=True\n    If True, show utilization percentages in cells.",
+            "line": 1110,
+            "is_async": false
+          }
+        ],
+        "line": 21
+      }
+    ],
+    "module_doc": "Post-processing and visualization of optimization results.\n\nThis module provides tools to extract, process, and visualize results from solved\noptimization models. The PostProcessor class handles denormalization of scaled\nresults, data extraction into DataFrames, and creation of publication-quality plots\nfor impacts, installation schedules, production, and operation profiles.\n\nKey classes:\n    - PostProcessor: Extract and visualize optimization results"
+  },
+  "optimex.__init__": {
+    "functions": [],
+    "classes": [],
+    "module_doc": "optimex."
+  }
+}
