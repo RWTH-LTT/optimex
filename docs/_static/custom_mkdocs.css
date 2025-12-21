@@ -71,6 +71,7 @@
 /* Fix excessive horizontal spacing in Jupyter notebooks */
 .jp-Notebook {
     padding: 0 !important;
+    margin: 0 auto !important;
 }
 
 .jp-Cell {
@@ -93,12 +94,24 @@
     margin-left: 0 !important;
 }
 
-/* Adjust notebook container width */
+/* Adjust notebook container width to match regular pages */
 article.md-content__inner .jp-Notebook {
     max-width: 100% !important;
+    width: 100% !important;
+}
+
+/* Ensure notebook content uses same width as other pages */
+.jp-Notebook-content {
+    max-width: 100% !important;
+    padding: 0 !important;
 }
 
 /* Fix code cell spacing */
 .highlight {
     margin-left: 0 !important;
+}
+
+/* Match the article content width for notebooks */
+article .jp-RenderedHTMLCommon {
+    max-width: 100% !important;
 }
