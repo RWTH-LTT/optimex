@@ -77,21 +77,27 @@
 .jp-Cell {
     margin-left: 0 !important;
     padding-left: 0 !important;
+    margin-right: 0 !important;
+    padding-right: 0 !important;
 }
 
 .jp-InputArea,
 .jp-OutputArea {
     padding-left: 0 !important;
+    padding-right: 0 !important;
 }
 
 .jp-InputPrompt,
 .jp-OutputPrompt {
     min-width: 60px !important;
+    max-width: 60px !important;
     padding-right: 0.5em !important;
+    flex-shrink: 0 !important;
 }
 
 .jp-CodeCell {
     margin-left: 0 !important;
+    margin-right: 0 !important;
 }
 
 /* Adjust notebook container width to match regular pages */
@@ -109,9 +115,29 @@ article.md-content__inner .jp-Notebook {
 /* Fix code cell spacing */
 .highlight {
     margin-left: 0 !important;
+    margin-right: 0 !important;
 }
 
 /* Match the article content width for notebooks */
 article .jp-RenderedHTMLCommon {
     max-width: 100% !important;
+}
+
+/* Ensure code/output areas don't have extra margins */
+.jp-Cell-inputWrapper,
+.jp-Cell-outputWrapper {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+/* Fix rendered markdown cells */
+.jp-MarkdownCell {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Fix rendered output */
+.jp-OutputArea-output {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
 }
