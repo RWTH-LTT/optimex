@@ -67,3 +67,38 @@
 .md-content__inner {
     padding-bottom: 3rem;
 }
+
+/* Fix excessive horizontal spacing in Jupyter notebooks */
+.jp-Notebook {
+    padding: 0 !important;
+}
+
+.jp-Cell {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+}
+
+.jp-InputArea,
+.jp-OutputArea {
+    padding-left: 0 !important;
+}
+
+.jp-InputPrompt,
+.jp-OutputPrompt {
+    min-width: 60px !important;
+    padding-right: 0.5em !important;
+}
+
+.jp-CodeCell {
+    margin-left: 0 !important;
+}
+
+/* Adjust notebook container width */
+article.md-content__inner .jp-Notebook {
+    max-width: 100% !important;
+}
+
+/* Fix code cell spacing */
+.highlight {
+    margin-left: 0 !important;
+}
