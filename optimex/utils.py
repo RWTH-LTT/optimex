@@ -9,7 +9,7 @@ This module provides helper functions for common optimex tasks like:
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Union, List
+from typing import Dict, List, Optional, Union
 
 import bw2data as bd
 import numpy as np
@@ -232,16 +232,16 @@ def setup_optimex_process(
     # Setup temporal distribution parameters
     if temporal_distribution_params is None:
         temporal_distribution_params = {
-            'start': operation_time_limits[0],
-            'end': operation_time_limits[1],
+            "start": operation_time_limits[0],
+            "end": operation_time_limits[1],
         }
 
     # Get default values for optional params
-    start = temporal_distribution_params.get('start', 0)
-    end = temporal_distribution_params.get('end', 10)
-    steps = temporal_distribution_params.get('steps', None)
-    kind = temporal_distribution_params.get('kind', 'uniform')
-    resolution = temporal_distribution_params.get('resolution', 'Y')
+    start = temporal_distribution_params.get("start", 0)
+    end = temporal_distribution_params.get("end", 10)
+    steps = temporal_distribution_params.get("steps", None)
+    kind = temporal_distribution_params.get("kind", "uniform")
+    resolution = temporal_distribution_params.get("resolution", "Y")
 
     if steps is None:
         steps = end - start + 1
@@ -346,7 +346,9 @@ def create_temporal_demand(
     >>>
     >>> # Custom amounts
     >>> custom_amounts = np.array([10, 12, 15, 18, 20])
-    >>> demand = create_temporal_demand(methanol, range(2025, 2030), amounts=custom_amounts)
+    >>> demand = create_temporal_demand(
+    ...     methanol, range(2025, 2030), amounts=custom_amounts
+    ... )
     """
     years_list = list(years)
 

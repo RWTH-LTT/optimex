@@ -4,7 +4,6 @@ import bw2data as bd
 import numpy as np
 import pytest
 from bw_temporalis import TemporalDistribution
-from datetime import datetime
 
 from optimex import utils
 
@@ -167,9 +166,7 @@ class TestAddTemporalDistributionToExchanges:
             input=product, amount=1.0, type=bd.labels.production_edge_default
         ).save()
 
-        utils.add_temporal_distribution_to_exchanges(
-            process, start=0, end=10, steps=11
-        )
+        utils.add_temporal_distribution_to_exchanges(process, start=0, end=10, steps=11)
 
         for exc in process.exchanges():
             td = exc["temporal_distribution"]
@@ -424,4 +421,3 @@ class TestCreateTemporalDemand:
         assert amounts[-1] == 15.0
         # Check it's roughly linear
         assert np.allclose(np.diff(amounts), np.diff(amounts)[0])
-
