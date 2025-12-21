@@ -62,7 +62,7 @@ extra:
       name: Launch interactive Demo on Binder
 
 extra_css:
-  - _static/custom.css
+  - _static/custom_mkdocs.css
 
 markdown_extensions:
   - abbr

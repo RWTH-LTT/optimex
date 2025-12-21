@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block styles %}
+  {{ super() }}
+  <style>
+    /* Logo switching based on theme */
+    [data-md-color-scheme="default"] .md-header__button.md-logo img[src*="dark"] {
+      display: none;
+    }
+    [data-md-color-scheme="slate"] .md-header__button.md-logo img[src*="light"] {
+      display: none;
+    }
+  </style>
+{% endblock %}
+
+{% block site_name %}
+  <a href="{{ config.site_url | default(nav.homepage.url, true) | url }}" title="{{ config.site_name | e }}" class="md-header__button md-logo" aria-label="{{ config.site_name }}" data-md-component="logo">
+    <img src="{{ base_url }}/_static/optimex_light_nomargins.svg" alt="logo" />
+    <img src="{{ base_url }}/_static/optimex_dark_nomargins.svg" alt="logo" />
+  </a>
+{% endblock %}
