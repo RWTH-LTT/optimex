@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "nuxi dev",
     "build": "nuxi build",
-    "generate": "python3 scripts/generate_api_docs.py && nuxi generate",
+    "generate": "python3 scripts/generate_api_docs.py && python3 scripts/convert_notebooks.py && nuxi generate",
     "preview": "nuxi preview",
     "lint": "eslint .",
-    "api-docs": "python3 scripts/generate_api_docs.py"
+    "api-docs": "python3 scripts/generate_api_docs.py",
+    "notebooks": "python3 scripts/convert_notebooks.py"
   },
   "devDependencies": {
     "@nuxt-themes/docus": "^1.14.7",
