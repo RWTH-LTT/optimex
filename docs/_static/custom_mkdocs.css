@@ -1,13 +1,17 @@
 /* Color scheme variables for light mode */
 [data-md-color-scheme="default"] {
-    --md-primary-fg-color: #00695c;
-    --md-accent-fg-color: #00bfa5;
+    --md-primary-fg-color: #00549f;
+    --md-primary-fg-color--light: #1976d2;
+    --md-primary-fg-color--dark: #003d71;
+    --md-accent-fg-color: #74b944;
 }
 
 /* Color scheme variables for dark mode */
 [data-md-color-scheme="slate"] {
-    --md-primary-fg-color: #26a69a;
-    --md-accent-fg-color: #64ffda;
+    --md-primary-fg-color: #8ebae5;
+    --md-primary-fg-color--light: #a8cff0;
+    --md-primary-fg-color--dark: #6a9bc8;
+    --md-accent-fg-color: #74b944;
 }
 
 /* Logo styling */
