@@ -2,69 +2,42 @@
 
 Here are some examples on how you can use the `optimex` package.
 
-::::{grid} 1 2 2 2
-:gutter: 4
+<div class="grid cards" markdown>
 
-:::{grid-item-card} 📘✏️ Basic `optimex` Example
-:link: ./basic_optimex_example.html
-:link-type: url
-:class-body: sphinx-design-class-body-examples
-:text-align: left
-:style: margin-bottom: 20px;
-A simple example on how to use `optimex`, explaining its capabilities based on a dummy case.
-<!-- ```{image} ./data/ev_lifecycle_dark.svg
-:class: only-dark
-```
-```{image} ./data/ev_lifecycle_light.svg
-:class: only-light
-``` -->
-+++
-by @JanTautorus
-:::
+-   **📘✏️ Basic `optimex` Example**
 
-:::{grid-item-card} 🌱💧 Mini Hydrogen Example
-:link: ./mini_hydrogen_case.html
-:link-type: url
-:class-body: sphinx-design-class-body-examples
-:text-align: left
-:style: margin-bottom: 20px;
-Demonstrating optimex on a very simple hydrogen case study, with production via SMR or PEM electrolysis.
-<!-- ```{image} ./data/ev_lifecycle_dark.svg
-:class: only-dark
-```
-```{image} ./data/ev_lifecycle_light.svg
-:class: only-light
-``` -->
-+++
-by @TimoDiepers & @JanTautorus
-:::
+    ---
 
-:::{grid-item-card} More Examples coming soon... ⏳🚧
-:link: ./index.html
-:link-type: url
-:class-body: sphinx-design-class-body-examples
-:text-align: left
-:style: margin-bottom: 20px;
-Just be patient...
-+++
-by @You?
-:::
+    A simple example on how to use `optimex`, explaining its capabilities based on a dummy case.
 
-:::{grid-item-card} Do you have anything to add? 🧐
-:link: ./index.html
-:link-type: url
-:class-body: sphinx-design-class-body-examples
-:text-align: left
-:style: margin-bottom: 20px;
-Please contact us if you want to share your super cool example!
-+++
-by @You?
-:::
+    [View Example :octicons-arrow-right-24:](./basic_optimex_example.ipynb){ .md-button }
 
-```{toctree}
----
-hidden:
-maxdepth: 1
----
-self
-```
+    by @JanTautorus
+
+-   **🌱💧 Mini Hydrogen Example**
+
+    ---
+
+    Demonstrating optimex on a very simple hydrogen case study, with production via SMR or PEM electrolysis.
+
+    [View Example :octicons-arrow-right-24:](./mini_hydrogen_case.ipynb){ .md-button }
+
+    by @TimoDiepers & @JanTautorus
+
+-   **More Examples coming soon... ⏳🚧**
+
+    ---
+
+    Just be patient...
+
+    by @You?
+
+-   **Do you have anything to add? 🧐**
+
+    ---
+
+    Please contact us if you want to share your super cool example!
+
+    by @You?
+
+</div>
