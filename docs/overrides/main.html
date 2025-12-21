@@ -4,9 +4,11 @@
   {{ super() }}
   <style>
     /* Logo switching based on theme */
+    /* In light mode, hide the dark version (which has light-colored text) */
     [data-md-color-scheme="default"] .md-header__button.md-logo img[src*="dark"] {
       display: none;
     }
+    /* In dark mode, hide the light version (which has dark-colored text) */
     [data-md-color-scheme="slate"] .md-header__button.md-logo img[src*="light"] {
       display: none;
     }
@@ -15,7 +17,9 @@
 
 {% block site_name %}
   <a href="{{ config.site_url | default(nav.homepage.url, true) | url }}" title="{{ config.site_name | e }}" class="md-header__button md-logo" aria-label="{{ config.site_name }}" data-md-component="logo">
-    <img src="{{ base_url }}/_static/optimex_light_nomargins.svg" alt="logo" />
-    <img src="{{ base_url }}/_static/optimex_dark_nomargins.svg" alt="logo" />
+    <!-- Light logo (dark text) for light mode -->
+    <img src="{{ base_url }}/_static/optimex_light_nomargins.svg" alt="logo" class="light-mode-logo" />
+    <!-- Dark logo (light text) for dark mode -->
+    <img src="{{ base_url }}/_static/optimex_dark_nomargins.svg" alt="logo" class="dark-mode-logo" />
   </a>
 {% endblock %}
