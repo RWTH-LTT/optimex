@@ -3,3 +3,4 @@ mkdocs-material>=9.5.0
 mkdocstrings[python]>=1.0.0
 mkdocs-jupyter>=0.25.0
 pymdown-extensions>=10.0
+pngquant>=3.0.3

@@ -12,25 +12,28 @@ copyright: Copyright &copy; 2025 optimex developers
 theme:
   name: material
   custom_dir: docs/overrides
+  font:
+    text: Inter
+    code: Consolas
   language: en
-  logo: _static/optimex_light_nomargins.svg
+  logo: _static/favicons/favicon.svg
   favicon: _static/favicons/favicon.svg
   palette:
     # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: blue
-      accent: light green
+      primary: white
+      accent: blue
       toggle:
-        icon: material/brightness-7
+        icon: material/weather-sunny
         name: Switch to dark mode
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: blue
-      accent: light green
+      primary: black
+      accent: blue
       toggle:
-        icon: material/brightness-4
+        icon: material/weather-night
         name: Switch to light mode
   features:
     - announce.dismiss
@@ -42,9 +45,11 @@ theme:
     - navigation.footer
     - navigation.indexes
     - navigation.instant
+    - navigation.instant.progress
     - navigation.sections
     - navigation.tabs
-    - navigation.tabs.sticky
+    # - navigation.path
+    # - navigation.tabs.sticky
     - navigation.top
     - navigation.tracking
     - search.highlight
@@ -106,6 +111,7 @@ plugins:
   - search:
       separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
   - autorefs
+  # - optimize
   - mkdocstrings:
       enabled: !ENV [ENABLE_MKDOCSTRINGS, true]
       default_handler: python

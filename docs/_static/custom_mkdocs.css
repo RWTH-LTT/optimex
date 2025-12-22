@@ -1,58 +1,18 @@
 /* Color scheme variables for light mode */
-[data-md-color-scheme="default"] {
+/* [data-md-color-scheme="default"] {
     --md-primary-fg-color: #00549f;
     --md-primary-fg-color--light: #1976d2;
     --md-primary-fg-color--dark: #003d71;
     --md-accent-fg-color: #74b944;
-}
+} */
 
 /* Color scheme variables for dark mode */
-[data-md-color-scheme="slate"] {
+/* [data-md-color-scheme="slate"] {
     --md-primary-fg-color: #8ebae5;
     --md-primary-fg-color--light: #a8cff0;
     --md-primary-fg-color--dark: #6a9bc8;
     --md-accent-fg-color: #74b944;
-}
-
-/* Logo styling */
-.md-header__button.md-logo img {
-    max-width: 200px;
-    height: auto;
-}
-
-/* Card styling for grid cards */
-.md-typeset .grid.cards>:-webkit-any(ul,ol)>li,
-.md-typeset .grid.cards>:-moz-any(ul,ol)>li,
-.md-typeset .grid.cards>:is(ul,ol)>li {
-    border-radius: 12px;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.md-typeset .grid.cards>:-webkit-any(ul,ol)>li:hover,
-.md-typeset .grid.cards>:-moz-any(ul,ol)>li:hover,
-.md-typeset .grid.cards>:is(ul,ol)>li:hover {
-    transform: scale(1.02);
-    box-shadow: 0 6px 40px rgba(0, 0, 0, 0.15);
-}
-
-/* Image styling for theme-specific images */
-.margin-bottom-16 {
-    margin-bottom: 16px;
-}
-
-.no-pointer-events {
-    pointer-events: none !important;
-    cursor: default;
-}
-
-[data-md-color-scheme="default"] .only-dark {
-    display: none;
-}
-
-[data-md-color-scheme="slate"] .only-light {
-    display: none;
-}
+} */
 
 /* Tabs styling */
 .tabbed-set {
