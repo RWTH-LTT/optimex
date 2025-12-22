@@ -408,6 +408,20 @@
     background-color: transparent !important;
 }
 
+.md-code__nav {
+    background-color: transparent !important;
+}
+
+[data-md-color-scheme="default"]
+.md-code__button {
+    color:  rgba(0, 0, 0, 0.2);
+}
+
+[data-md-color-scheme="slate"]
+.md-code__button {
+    color:  rgba(255, 255, 255, 0.2);
+}
+
 /* ============================================================================
    9. JUPYTER NOTEBOOKS
    ============================================================================ */
@@ -484,4 +498,9 @@
 /* Back to top button - dark mode */
 [data-md-color-scheme="slate"] .md-top {
     border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.md-top {
+    padding: 4px 8px;
+    border-radius: 0.5rem;
 }
