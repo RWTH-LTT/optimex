@@ -257,7 +257,7 @@
 .md-tabs__link {
     border-radius: 0.4rem 0.4rem 0 0;
     position: relative;
-    transition: background-color 0.3s ease, color 0.3s ease;
+    transition: background-color 0.3s ease, color 0.3s ease, border-bottom-color 0.3s ease;
     padding: 0.6rem 1rem;
     border-bottom: 3px solid transparent;
 }
@@ -265,13 +265,12 @@
 /* Active tab indicator - bottom border */
 .md-tabs__item--active .md-tabs__link {
     border-bottom: 3px solid var(--md-accent-fg-color, #2196f3);
-    transition: border-bottom-color 0.3s ease;
 }
 
 /* Hover state - background highlight with rounded borders */
 .md-tabs__link:hover {
     background-color: rgba(0, 0, 0, 0.05);
-    border-radius: 0.5rem;
+    border-radius: 0.5rem 0.5rem 0 0;
 }
 
 /* Dark mode hover state */
