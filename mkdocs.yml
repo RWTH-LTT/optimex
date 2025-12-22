@@ -3,11 +3,11 @@ site_description: Time-Explicit Life Cycle Optimization
 site_author: Timo Diepers, Jan Tautorus
 site_url: https://optimex.readthedocs.io/
 
-repo_name: TimoDiepers/optimex
-repo_url: https://github.com/TimoDiepers/optimex
+repo_name: RWTH-LTT/optimex
+repo_url: https://github.com/RWTH-LTT/optimex
 edit_uri: edit/main/docs/
 
-copyright: Copyright &copy; 2025 optimex developers
+copyright: Copyright &copy; 2025 Institute of Technical Thermodynamics, RWTH Aachen University
 
 theme:
   name: material
@@ -60,10 +60,10 @@ theme:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/TimoDiepers/optimex
+      link: https://github.com/RWTH-LTT/optimex
       name: Open this Repo on GitHub
     - icon: fontawesome/solid/rocket
-      link: https://mybinder.org/v2/gh/TimoDiepers/optimex/main?urlpath=%2Fdoc%2Ftree%2Fnotebooks%2Fbasic_optimex_example.ipynb
+      link: https://mybinder.org/v2/gh/RWTH-LTT/optimex/main?urlpath=%2Fdoc%2Ftree%2Fnotebooks%2Fbasic_optimex_example.ipynb
       name: Launch interactive Demo on Binder
 
 extra_css:
