@@ -43,6 +43,17 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* ========================================
+   Disable filters when search is open
+   ======================================== */
+[data-md-toggle="search"]:checked ~ .md-header,
+[data-md-toggle="search"]:checked ~ .md-header .md-tabs {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    /* Optional: Make background solid when searching to hide content behind */
+    background-color: var(--md-default-bg-color) !important;
+}
+
 /* Header border when scrolled (tabs hidden) - dark mode */
 [data-md-color-scheme="slate"] .md-header--shadow {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
@@ -127,7 +138,6 @@
 
 .md-search__output {
     border-radius: 0 0 0.5rem 0.5rem;
-    overflow: hidden;
 }
 
 .md-search__scrollwrap {
