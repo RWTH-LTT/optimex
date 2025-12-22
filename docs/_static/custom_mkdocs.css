@@ -412,6 +412,21 @@
    9. JUPYTER NOTEBOOKS
    ============================================================================ */
 
+/* Fix heading width issue caused by action buttons */
+.jp-RenderedHTMLCommon h1,
+.jp-RenderedHTMLCommon h2,
+.jp-RenderedHTMLCommon h3 {
+    clear: both;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* Ensure notebook content uses full width */
+.jp-Notebook {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
 /* Hide prompts */
 .jp-InputPrompt,
 .jp-OutputPrompt {
