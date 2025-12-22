@@ -141,3 +141,4 @@ dmypy.json
 notebooks/import_ecoinvent.ipynb
 notebooks/premise_usage.ipynb
 notebooks/results
+screenshots/
