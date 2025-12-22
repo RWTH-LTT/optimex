@@ -270,7 +270,6 @@
 /* Hover state - background highlight with rounded borders */
 .md-tabs__link:hover {
     background-color: rgba(0, 0, 0, 0.05);
-    border-radius: 0.4rem 0.4rem 0 0;
 }
 
 /* Dark mode hover state */
