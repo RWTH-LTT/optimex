@@ -46,19 +46,27 @@ $ pip install -e ".[dev]"
 
 ## How to build the documentation locally
 
-Make sure you have installed the `dev` and `docs` extras of the package.
+Make sure you have installed the `docs` extras of the package.
 
 ```console
-$ pip install -e ".[dev,docs]"
+$ pip install -e ".[docs]"
 ```
 
-Build the documentation providing the `docs` directory at the root of the project as the source
-and specifying the output directory.
+Serve the documentation locally with live reload:
 
 ```console
-# use docs as source and docs/_build as output
-sphinx-build docs docs/_build
+$ mkdocs serve
 ```
+
+The documentation will be available at `http://127.0.0.1:8000/`.
+
+To build static documentation files:
+
+```console
+$ mkdocs build
+```
+
+The built documentation will be in the `site` directory.
 
 ## How to test the project
 

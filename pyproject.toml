@@ -64,6 +64,12 @@ dev = [
     "pytest-randomly",
     "setuptools",
 ]
+docs = [
+    "mkdocs-material",
+    "mkdocs-autorefs",
+    "mkdocstrings[python]",
+    "mkdocs-jupyter",
+]
 
 [tool.setuptools]
 license-files = ["LICENSE"]

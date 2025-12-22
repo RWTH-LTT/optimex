@@ -147,8 +147,13 @@ plugins:
       allow_errors: false
 
 nav:
-  - Home: index.md
-  - Installation: content/installation.md
+  - Home:
+    - index.md
+    - Changelog: content/changelog.md
+    - License: content/license.md
+    - Contributing: content/contributing.md
+    - Code of Conduct: content/codeofconduct.md
+  - Getting Started: content/installation.md
   - Theory: content/theory.md
   - Examples:
     - content/examples/index.md
@@ -156,10 +161,6 @@ nav:
     - Mini Hydrogen Case: content/examples/mini_hydrogen_case.ipynb
   - API Reference:
     - optimex: api/index.md
-  - Contributing: content/contributing.md
-  - Code of Conduct: content/codeofconduct.md
-  - License: content/license.md
-  - Changelog: content/changelog.md
 
 extra_javascript:
   - https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.0/es5/tex-mml-chtml.min.js

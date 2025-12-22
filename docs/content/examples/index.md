@@ -11,6 +11,8 @@ Here are some examples on how you can use the `optimex` package.
     A simple example on how to use `optimex`, explaining its capabilities based on a dummy case.
 
     [:octicons-arrow-right-24: View Example](./basic_optimex_example.ipynb)
+    
+    ---
 
     *by @JanTautorus*
 
@@ -21,6 +23,8 @@ Here are some examples on how you can use the `optimex` package.
     Demonstrating optimex on a very simple hydrogen case study, with production via SMR or PEM electrolysis.
 
     [:octicons-arrow-right-24: View Example](./mini_hydrogen_case.ipynb)
+    
+    ---
 
     *by @TimoDiepers & @JanTautorus*
 
@@ -30,6 +34,8 @@ Here are some examples on how you can use the `optimex` package.
 
     Just be patient...
 
+    ---
+
     *by @You?*
 
 -   :material-comment-question-outline: **Do you have anything to add?**
@@ -37,6 +43,8 @@ Here are some examples on how you can use the `optimex` package.
     ---
 
     Please contact us if you want to share your super cool example!
+
+    ---
 
     *by @You?*
 

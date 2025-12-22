@@ -10,28 +10,28 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
 
 <div class="grid cards" markdown>
 
--   :material-clock-time-four-outline: **Life Cycle Timing**
+-   :material-clock-time-four-outline:{ .lg .middle style="color: #4dabf7" } **Life Cycle Timing**
 
     ---
 
     The processes within a product's life cycle occur in sequence rather than all at once: production comes first, the use phase and end-of-life follow. As a result, emissions are also spread over time.
-    
+
     `optimex` captures this by distributing process inputs and outputs over time.
 
--   :material-cog-outline: **Technology Evolution**
+-   :material-cog-outline:{ .lg .middle style="color: #69db7c" } **Technology Evolution**
 
     ---
 
     In the future, processes will (hopefully) reduce their emissions. So, the time at which a process happens affects its impacts, with later occurence often resulting in lower emissions.
-    
+
     `optimex` reflects this by allowing process inventories to change over time.
 
--   :material-chart-line: **Emission Accumulation**
+-   :material-chart-line:{ .lg .middle style="color: #ffa94d" } **Emission Accumulation**
 
     ---
 
     Most impacts come from emission accumulation, but are typically modeled as separate pulses. Emission timing affects how they accumulate, influencing environmental impacts.
-    
+
     `optimex` considers the emission timing, enabling characterization via dynamic LCIA.
 
 </div>

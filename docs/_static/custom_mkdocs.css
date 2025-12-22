@@ -11,6 +11,64 @@
     --md-default-bg-color: #0B0C0F;
 }
 
+/* ========================================
+   Header & Nav Glassmorphism - Light Mode
+   ======================================== */
+[data-md-color-scheme="default"] .md-header {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+}
+
+[data-md-color-scheme="default"] .md-tabs {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+}
+
+/* ========================================
+   Header & Nav Glassmorphism - Dark Mode
+   ======================================== */
+[data-md-color-scheme="slate"] .md-header {
+    background-color: rgba(11, 12, 15, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+    box-shadow: none !important;
+}
+
+[data-md-color-scheme="slate"] .md-tabs {
+    background-color: rgba(11, 12, 15, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Header border when scrolled (tabs hidden) - dark mode */
+[data-md-color-scheme="slate"] .md-header--shadow {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: none !important;
+}
+
+/* ========================================
+   Footer Styling - Light Mode
+   ======================================== */
+[data-md-color-scheme="default"] .md-footer {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* ========================================
+   Footer Styling - Dark Mode
+   ======================================== */
+[data-md-color-scheme="slate"] .md-footer {
+    background-color: rgba(11, 12, 15, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 /* [data-md-color-scheme="slate"] .md-header {                    
       border-bottom: 1px solid #333333;                          
       background-color: #0b0c0f8a;
@@ -57,6 +115,11 @@
     border-radius: 0.5rem;
 }
 
+/* Search field background - dark mode */
+[data-md-color-scheme="slate"] .md-search__form {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
 /* Expanded search */
 .md-search__inner {
     border-radius: 0.5rem;
@@ -86,6 +149,15 @@
     transition: filter 0.2s ease;
 }
 
+/* Blur header elements except search */
+[data-md-toggle="search"]:checked ~ .md-header .md-header__button.md-logo,
+[data-md-toggle="search"]:checked ~ .md-header .md-header__title,
+[data-md-toggle="search"]:checked ~ .md-header .md-header__option,
+[data-md-toggle="search"]:checked ~ .md-header .md-header__source {
+    filter: blur(6px);
+    transition: filter 0.2s ease;
+}
+
 .md-search__overlay {
     background-color: rgba(0, 0, 0, 0.3);
     backdrop-filter: blur(6px);
@@ -98,12 +170,34 @@
     border-radius: 0.4rem;
 }
 
-.highlight {
-    border-radius: 0.4rem;
-}
-
 .md-typeset pre {
     border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.highlight {
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+/* Code block colors - dark mode */
+[data-md-color-scheme="slate"] .highlight {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-md-color-scheme="slate"] .highlight code {
+    background-color: transparent !important;
+}
+
+/* Code block colors - light mode */
+[data-md-color-scheme="default"] .highlight {
+    background-color: rgba(0, 0, 0, 0.03) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-md-color-scheme="default"] .highlight code {
+    background-color: transparent !important;
 }
 
 /* Admonitions */
@@ -154,6 +248,11 @@
     border-radius: 0.4rem;
 }
 
+/* Back to top button - dark mode */
+[data-md-color-scheme="slate"] .md-top {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
 /* Navigation tabs */
 .md-tabs__link {
     border-radius: 0.4rem 0.4rem 0 0;
@@ -174,13 +273,6 @@
     border-radius: 0.4rem;
 }
 
-/* Jupyter notebook cells */
-.jp-Cell,
-.jp-InputArea,
-.jp-OutputArea {
-    border-radius: 0.5rem;
-}
-
 /* Tabs styling */
 .tabbed-set {
     border-radius: 0.5rem;
@@ -199,76 +291,51 @@
     padding-bottom: 3rem;
 }
 
-/* Fix excessive horizontal spacing in Jupyter notebooks */
-.jp-Notebook {
-    padding: 0 !important;
-    margin: 0 auto !important;
-}
+/* ========================================
+   Jupyter Notebook Styling
+   ======================================== */
 
-.jp-Cell {
-    margin-left: 0 !important;
-    padding-left: 0 !important;
-    margin-right: 0 !important;
-    padding-right: 0 !important;
-}
-
-.jp-InputArea,
-.jp-OutputArea {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-}
-
+/* Hide input/output prompts (In[1]:, Out[1]:) for cleaner look */
 .jp-InputPrompt,
 .jp-OutputPrompt {
-    min-width: 60px !important;
-    max-width: 60px !important;
-    padding-right: 0.5em !important;
-    flex-shrink: 0 !important;
+    display: none !important;
 }
 
-.jp-CodeCell {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
+/* Input area (code) */
+.jp-InputArea {
+    border-radius: 0.5rem !important;
+    overflow-x: scroll !important;
 }
 
-/* Adjust notebook container width to match regular pages */
-article.md-content__inner .jp-Notebook {
-    max-width: 100% !important;
-    width: 100% !important;
+.jp-InputArea-editor {
+    border-radius: 0.5rem !important;
+    overflow-x: scroll !important;
 }
 
-/* Ensure notebook content uses same width as other pages */
-.jp-Notebook-content {
-    max-width: 100% !important;
-    padding: 0 !important;
+.jp-CodeMirrorEditor pre {
+    overflow-x: scroll !important;
 }
 
-/* Fix code cell spacing */
-.highlight {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
+/* Notebook code cells - dark mode (match regular code blocks) */
+[data-md-color-scheme="slate"] .jp-CodeMirrorEditor {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
-/* Match the article content width for notebooks */
-article .jp-RenderedHTMLCommon {
-    max-width: 100% !important;
+[data-md-color-scheme="slate"] .jp-CodeMirrorEditor-editor,
+[data-md-color-scheme="slate"] .jp-CodeMirrorEditor .highlight-ipynb {
+    background-color: transparent !important;
+    border: none !important;
 }
 
-/* Ensure code/output areas don't have extra margins */
-.jp-Cell-inputWrapper,
-.jp-Cell-outputWrapper {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
+/* Notebook code cells - light mode (match regular code blocks) */
+[data-md-color-scheme="default"] .jp-CodeMirrorEditor {
+    background-color: rgba(0, 0, 0, 0.03) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 
-/* Fix rendered markdown cells */
-.jp-MarkdownCell {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-}
-
-/* Fix rendered output */
-.jp-OutputArea-output {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+[data-md-color-scheme="default"] .jp-CodeMirrorEditor-editor,
+[data-md-color-scheme="default"] .jp-CodeMirrorEditor .highlight-ipynb {
+    background-color: transparent !important;
+    border: none !important;
 }

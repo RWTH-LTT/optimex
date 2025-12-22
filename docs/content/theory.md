@@ -19,6 +19,5 @@ These temporal considerations are implemented by extending the standard 2D LCA m
 
 This framework allows for a more representative modeling of environmental impacts, ultimately supporting better-informed decisions for sustainable system transitions.
 
-```{note}
-An explanation on how exactly `optimex` handles the dimensional expansion of LCA vectors and matrices will be added at some point in the near future.
-```
+!!! note
+    An explanation on how exactly `optimex` handles the dimensional expansion of LCA vectors and matrices will be added at some point in the near future.
