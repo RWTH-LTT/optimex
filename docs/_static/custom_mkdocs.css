@@ -1,0 +1,341 @@
+/* Color scheme variables for light mode */
+/* [data-md-color-scheme="default"] {
+    --md-primary-fg-color: #00549f;
+    --md-primary-fg-color--light: #1976d2;
+    --md-primary-fg-color--dark: #003d71;
+    --md-accent-fg-color: #74b944;
+} */
+
+/* Color scheme variables for dark mode */
+[data-md-color-scheme="slate"] {
+    --md-default-bg-color: #0B0C0F;
+}
+
+/* ========================================
+   Header & Nav Glassmorphism - Light Mode
+   ======================================== */
+[data-md-color-scheme="default"] .md-header {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+}
+
+[data-md-color-scheme="default"] .md-tabs {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+}
+
+/* ========================================
+   Header & Nav Glassmorphism - Dark Mode
+   ======================================== */
+[data-md-color-scheme="slate"] .md-header {
+    background-color: rgba(11, 12, 15, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+    box-shadow: none !important;
+}
+
+[data-md-color-scheme="slate"] .md-tabs {
+    background-color: rgba(11, 12, 15, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Header border when scrolled (tabs hidden) - dark mode */
+[data-md-color-scheme="slate"] .md-header--shadow {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: none !important;
+}
+
+/* ========================================
+   Footer Styling - Light Mode
+   ======================================== */
+[data-md-color-scheme="default"] .md-footer {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* ========================================
+   Footer Styling - Dark Mode
+   ======================================== */
+[data-md-color-scheme="slate"] .md-footer {
+    background-color: rgba(11, 12, 15, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* [data-md-color-scheme="slate"] .md-header {                    
+      border-bottom: 1px solid #333333;                          
+      background-color: #0b0c0f8a;
+      }  */
+
+/* Header logo */
+.md-header__button.md-logo {
+    padding: 0 0.4rem !important;
+    margin: 0 !important;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+    height: 30px;
+    width: auto;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Site title "optimex" - monospace and bold */
+.md-header__topic:first-child {
+    font-family: "Consolas", "Roboto Mono", monospace !important;
+    text-transform: lowercase;
+    font-weight: 700;
+}
+
+/* Page titles on scroll - standard font */
+.md-header__topic:not(:first-child) {
+    font-family: var(--md-text-font-family, "Inter", sans-serif);
+    text-transform: none;
+    font-weight: normal;
+}
+
+/* ========================================
+   Increased border radius throughout
+   ======================================== */
+
+/* Search field */
+.md-search__form {
+    border-radius: 0.5rem;
+}
+
+.md-search__input {
+    border-radius: 0.5rem;
+}
+
+/* Search field background - dark mode */
+[data-md-color-scheme="slate"] .md-search__form {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Expanded search */
+.md-search__inner {
+    border-radius: 0.5rem;
+}
+
+.md-search__output {
+    border-radius: 0 0 0.5rem 0.5rem;
+    overflow: hidden;
+}
+
+.md-search__scrollwrap {
+    border-radius: 0 0 0.5rem 0.5rem;
+}
+
+[data-md-toggle="search"]:checked ~ .md-header .md-search__form {
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+
+[data-md-toggle="search"]:checked ~ .md-header .md-search__inner {
+    border-radius: 0.5rem;
+}
+
+/* Search overlay - darken and blur background */
+[data-md-toggle="search"]:checked ~ .md-container,
+[data-md-toggle="search"]:checked ~ .md-main {
+    filter: blur(6px);
+    transition: filter 0.2s ease;
+}
+
+/* Blur header elements except search */
+[data-md-toggle="search"]:checked ~ .md-header .md-header__button.md-logo,
+[data-md-toggle="search"]:checked ~ .md-header .md-header__title,
+[data-md-toggle="search"]:checked ~ .md-header .md-header__option,
+[data-md-toggle="search"]:checked ~ .md-header .md-header__source {
+    filter: blur(6px);
+    transition: filter 0.2s ease;
+}
+
+.md-search__overlay {
+    background-color: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+/* Code blocks */
+.md-typeset pre > code,
+.md-typeset code {
+    border-radius: 0.4rem;
+}
+
+.md-typeset pre {
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.highlight {
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+/* Code block colors - dark mode */
+[data-md-color-scheme="slate"] .highlight {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-md-color-scheme="slate"] .highlight code {
+    background-color: transparent !important;
+}
+
+/* Code block colors - light mode */
+[data-md-color-scheme="default"] .highlight {
+    background-color: rgba(0, 0, 0, 0.03) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-md-color-scheme="default"] .highlight code {
+    background-color: transparent !important;
+}
+
+/* Admonitions */
+.md-typeset .admonition,
+.md-typeset details {
+    border-radius: 0.5rem;
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+
+/* Tables */
+.md-typeset table:not([class]) {
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.md-typeset table:not([class]) th:first-child {
+    border-top-left-radius: 0.5rem;
+}
+
+.md-typeset table:not([class]) th:last-child {
+    border-top-right-radius: 0.5rem;
+}
+
+.md-typeset table:not([class]) tr:last-child td:first-child {
+    border-bottom-left-radius: 0.5rem;
+}
+
+.md-typeset table:not([class]) tr:last-child td:last-child {
+    border-bottom-right-radius: 0.5rem;
+}
+
+/* Cards and content tabs */
+.md-typeset .tabbed-block {
+    border-radius: 0.5rem;
+}
+
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid.cards > ol > li {
+    border-radius: 0.5rem;
+}
+
+/* Buttons */
+.md-typeset .md-button {
+    border-radius: 0.4rem;
+}
+
+/* Back to top button - dark mode */
+[data-md-color-scheme="slate"] .md-top {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Navigation tabs */
+.md-tabs__link {
+    border-radius: 0.4rem 0.4rem 0 0;
+}
+
+/* Tooltips */
+.md-tooltip {
+    border-radius: 0.4rem;
+}
+
+/* Annotations */
+.md-annotation__index {
+    border-radius: 0.3rem;
+}
+
+/* Search results */
+.md-search-result__article {
+    border-radius: 0.4rem;
+}
+
+/* Tabs styling */
+.tabbed-set {
+    border-radius: 0.5rem;
+}
+
+.tabbed-set > input:checked + label {
+    border-bottom-color: var(--md-accent-fg-color);
+}
+
+/* Additional spacing for better readability */
+.md-typeset h1 {
+    margin-top: 0;
+}
+
+.md-content__inner {
+    padding-bottom: 3rem;
+}
+
+/* ========================================
+   Jupyter Notebook Styling
+   ======================================== */
+
+/* Hide input/output prompts (In[1]:, Out[1]:) for cleaner look */
+.jp-InputPrompt,
+.jp-OutputPrompt {
+    display: none !important;
+}
+
+/* Input area (code) */
+.jp-InputArea {
+    border-radius: 0.5rem !important;
+    overflow-x: scroll !important;
+}
+
+.jp-InputArea-editor {
+    border-radius: 0.5rem !important;
+    overflow-x: scroll !important;
+}
+
+.jp-CodeMirrorEditor pre {
+    overflow-x: scroll !important;
+}
+
+/* Notebook code cells - dark mode (match regular code blocks) */
+[data-md-color-scheme="slate"] .jp-CodeMirrorEditor {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-md-color-scheme="slate"] .jp-CodeMirrorEditor-editor,
+[data-md-color-scheme="slate"] .jp-CodeMirrorEditor .highlight-ipynb {
+    background-color: transparent !important;
+    border: none !important;
+}
+
+/* Notebook code cells - light mode (match regular code blocks) */
+[data-md-color-scheme="default"] .jp-CodeMirrorEditor {
+    background-color: rgba(0, 0, 0, 0.03) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-md-color-scheme="default"] .jp-CodeMirrorEditor-editor,
+[data-md-color-scheme="default"] .jp-CodeMirrorEditor .highlight-ipynb {
+    background-color: transparent !important;
+    border: none !important;
+}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block styles %}
+  {{ super() }}
+  <style>
+    /* Logo switching based on theme */
+    /* In light mode, hide the dark version (which has light-colored text) */
+    [data-md-color-scheme="dark"] .md-header__button.md-logo img[src*="dark"] {
+      display: none;
+    }
+    /* In dark mode, hide the light version (which has dark-colored text) */
+    [data-md-color-scheme="light"] .md-header__button.md-logo img[src*="light"] {
+      display: none;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  {% if page.nb_url %}
+    <a href="{{ page.nb_url }}" title="Download this notebook" class="md-content__button md-icon" download>
+      {% include ".icons/material/download.svg" %}
+    </a>
+  {% endif %}
+  {{ super() }}
+{% endblock %}
+
+{% block site_name %}
+  <a href="{{ config.site_url | default(nav.homepage.url, true) | url }}" title="{{ config.site_name | e }}" class="md-header__button md-logo" aria-label="{{ config.site_name }}" data-md-component="logo">
+    <!-- Light logo (dark text) for light mode -->
+    <img src="{{ base_url }}/_static/optimex_light_nomargins.svg" alt="logo" class="light-mode-logo" />
+    <!-- Dark logo (light text) for dark mode -->
+    <img src="{{ base_url }}/_static/optimex_dark_nomargins.svg" alt="logo" class="dark-mode-logo" />
+  </a>
+{% endblock %}
