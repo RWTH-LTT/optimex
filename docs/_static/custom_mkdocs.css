@@ -252,12 +252,6 @@
 [data-md-color-scheme="slate"] .md-top {
     border: 1px solid rgba(255, 255, 255, 0.15);
 }
-
-/* Navigation tabs */
-.md-tabs__link {
-    border-radius: 0.4rem 0.4rem 0 0;
-}
-
 /* Tooltips */
 .md-tooltip {
     border-radius: 0.4rem;
@@ -338,4 +332,73 @@
 [data-md-color-scheme="default"] .jp-CodeMirrorEditor .highlight-ipynb {
     background-color: transparent !important;
     border: none !important;
+}
+
+.md-tabs__item {
+    height: 1.7rem; /* Prevents gap between active border and tab bar */
+    padding: 0;
+    margin: 0 0.2rem;
+}
+
+/* 1. Reset container to allow links to touch the bottom */
+.md-tabs__list {
+    display: flex;
+    align-items: stretch; /* Makes links fill the full height of the bar */
+}
+
+.md-tabs__item {
+    display: flex; /* Ensures the anchor inside fills the LI */
+}
+
+.md-tabs__link {
+    display: flex;
+    align-items: center;
+    padding: 0 0.5rem;   /* Adjusted horizontal spacing */
+    margin: 0 0.1rem;    /* Very tight spacing between elements */
+    height: 100%;        /* Forces link to bottom of the nav bar */
+    position: relative;
+    transition: all 0.25s ease;
+    border-radius: 0.5rem;; /* Rounded only at the top */
+}
+
+/* 2. Hover Background */
+[data-md-color-scheme="slate"] .md-tabs__link:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-md-color-scheme="default"] .md-tabs__link:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 3. Active State: Bold without shifting layout */
+.md-tabs__item--active .md-tabs__link {
+    /* font-weight: 700; */
+    /* Alternative to prevent "jumping": */
+    text-shadow: 0.5px 0 0 currentColor; font-weight: 400;
+}
+
+/* 4. The Bottom Border (Active Indicator) */
+.md-tabs__item--active .md-tabs__link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;           /* Pin to the absolute bottom */
+    height: 2px;         /* Thicker border */
+    background-color: var(--md-accent-fg-color);
+    transition: all 0.3s ease;
+    z-index: 2;
+}
+
+/* 5. Theme Border Alignment (Ensuring no gap) */
+.md-tabs {
+    border-bottom: 1px solid;
+}
+
+[data-md-color-scheme="default"] .md-tabs {
+    border-color: rgba(0, 0, 0, 0.07);
+}
+
+[data-md-color-scheme="slate"] .md-tabs {
+    border-color: rgba(255, 255, 255, 0.1);
 }
