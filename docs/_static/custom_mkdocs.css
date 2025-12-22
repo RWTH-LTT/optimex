@@ -257,23 +257,40 @@
 .md-tabs__link {
     border-radius: 0.4rem 0.4rem 0 0;
     position: relative;
-    transition: background-color 0.3s ease, border-bottom-color 0.3s ease;
-    padding: 0.6rem 1rem;
-    border-bottom: 3px solid transparent;
 }
 
-/* Active tab indicator - bottom border */
-.md-tabs__item--active .md-tabs__link {
-    border-bottom: 3px solid var(--md-accent-fg-color, #2196f3);
+/* Active tab indicator - bottom border using ::after pseudo-element */
+.md-tabs__item--active .md-tabs__link::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background-color: var(--md-accent-fg-color, #2196f3);
 }
 
-/* Hover state - background highlight with rounded borders */
-.md-tabs__link:hover {
+/* Hover state - background highlight using ::before pseudo-element */
+.md-tabs__link::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 0.4rem 0.4rem 0 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: -1;
+}
+
+.md-tabs__link:hover::before {
+    opacity: 1;
 }
 
 /* Dark mode hover state */
-[data-md-color-scheme="slate"] .md-tabs__link:hover {
+[data-md-color-scheme="slate"] .md-tabs__link::before {
     background-color: rgba(255, 255, 255, 0.08);
 }
 
