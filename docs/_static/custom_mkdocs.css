@@ -366,6 +366,12 @@
     border-radius: 0.5rem;
 }
 
+/* Card heading icons - add right margin */
+.md-typeset .grid.cards > ul > li > p:first-child .twemoji,
+.md-typeset .grid.cards > ol > li > p:first-child .twemoji {
+    margin-right: 0.4rem;
+}
+
 .tabbed-set > input:checked + label {
     border-bottom-color: var(--md-accent-fg-color);
 }

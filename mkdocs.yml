@@ -120,7 +120,7 @@ plugins:
           paths: [optimex]
           options:
             docstring_style: numpy
-            docstring_section_style: table
+            docstring_section_style: table #table
             show_root_heading: true
             show_root_toc_entry: true
             show_root_full_path: false
@@ -160,7 +160,11 @@ nav:
     - Basic Example: content/examples/basic_optimex_example.ipynb
     - Mini Hydrogen Case: content/examples/mini_hydrogen_case.ipynb
   - API Reference:
-    - optimex: api/index.md
+    - api/index.md
+    - LCA Processor: api/lca_processor.md
+    - Converter: api/converter.md
+    - Optimizer: api/optimizer.md
+    - Postprocessing: api/postprocessing.md
 
 extra_javascript:
   - https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.0/es5/tex-mml-chtml.min.js
