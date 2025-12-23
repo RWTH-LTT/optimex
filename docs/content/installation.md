@@ -98,7 +98,7 @@ If you just want to get started quickly:
     Or with mamba:
 
     ```bash
-    mamba create -n optimex -c conda-forge -c diepers optimex
+    mamba create -n optimex -c conda-forge -c cmutel -c diepers optimex
     mamba activate optimex
     ```
 
@@ -108,7 +108,7 @@ If you just want to get started quickly:
 
     ```bash
     conda activate myenv
-    conda install -c conda-forge -c diepers optimex
+    conda install -c conda-forge -c cmutel -c diepers optimex
     ```
 
 ---
@@ -175,7 +175,7 @@ Brightway and `optimex` run natively on Apple Silicon. However, the standard `py
     Conda is the most robust method for Apple Silicon because it handles the complex C-libraries (`SuiteSparse`) automatically without requiring [Homebrew](https://brew.sh).
 
     ```bash
-    conda create -n optimex -c conda-forge -c diepers \
+    conda create -n optimex -c conda-forge -c cmutel -c diepers \
         optimex \
         "scikit-umfpack>=0.4.2" \
         "numpy>=2"
