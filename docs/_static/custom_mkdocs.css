@@ -376,6 +376,14 @@
     border-bottom-color: var(--md-accent-fg-color);
 }
 
+/* Add top margin to code blocks directly under tabs */
+.tabbed-block > .highlight:first-child,
+.tabbed-set .tabbed-content > .highlight:first-child,
+.md-typeset .tabbed-block > pre:first-child,
+.md-typeset .tabbed-block > .highlight:first-child {
+    margin-top: 1em !important;
+}
+
 /* Buttons */
 .md-typeset .md-button {
     border-radius: 0.4rem;
