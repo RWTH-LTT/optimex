@@ -1,3 +1,7 @@
+---
+icon: lucide/database
+---
+
 # LCA Processor
 
 Time-explicit LCA data processing for optimization.

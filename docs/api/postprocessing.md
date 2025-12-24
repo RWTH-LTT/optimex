@@ -1,3 +1,7 @@
+---
+icon: lucide/bar-chart-3
+---
+
 # Postprocessing
 
 Post-processing and visualization of optimization results.

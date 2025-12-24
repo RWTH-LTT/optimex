@@ -1,3 +1,7 @@
+---
+icon: lucide/refresh-cw
+---
+
 # Optimizer
 
 Optimization model construction and solving for temporal LCA-based pathway optimization.

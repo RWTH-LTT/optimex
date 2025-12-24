@@ -10,7 +10,7 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
 
 <div class="grid cards" markdown>
 
--   :material-clock-time-four-outline:{ .lg .middle style="color: #4dabf7" } **Life Cycle Timing**
+-   :lucide-hourglass:{ style="color: #4dabf7" } **Life Cycle Timing**
 
     ---
 
@@ -18,7 +18,7 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
 
     `optimex` captures this by distributing process inputs and outputs over time.
 
--   :material-cog-outline:{ .lg .middle style="color: #69db7c" } **Technology Evolution**
+-   :lucide-settings:{ style="color: #69db7c" } **Technology Evolution**
 
     ---
 
@@ -26,7 +26,7 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
 
     `optimex` reflects this by allowing process inventories to change over time.
 
--   :material-chart-line:{ .lg .middle style="color: #ffa94d" } **Emission Accumulation**
+-   :lucide-trending-up:{ style="color: #ffa94d" } **Emission Accumulation**
 
     ---
 

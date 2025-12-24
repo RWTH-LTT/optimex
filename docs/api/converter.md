@@ -1,3 +1,7 @@
+---
+icon: lucide/arrow-right-left
+---
+
 # Converter
 
 Model input conversion and validation for optimization.

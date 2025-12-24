@@ -221,6 +221,14 @@
     z-index: 10;
 }
 
+/* Mobile navigation backgrounds */
+.md-nav__title,
+.md-nav__source,
+.md-nav--primary .md-nav__title,
+.md-nav--primary .md-nav__title[for="__drawer"] {
+    background-color: var(--md-default-bg-color) !important;
+}
+
 /* ============================================================================
    5. SEARCH
    ============================================================================ */
@@ -518,4 +526,29 @@
 .md-top {
     padding: 4px 8px;
     border-radius: 0.5rem;
+}
+
+/* ============================================================================
+   11. LUCIDE ICONS FIX
+   ============================================================================ */
+
+/* Lucide icons are stroke-based - only target SVGs with lucide class */
+svg[class*="lucide"] {
+    fill: none !important;
+    stroke: currentColor !important;
+}
+
+svg[class*="lucide"] path,
+svg[class*="lucide"] circle,
+svg[class*="lucide"] rect,
+svg[class*="lucide"] line,
+svg[class*="lucide"] polyline {
+    fill: none !important;
+}
+
+/* Navigation sidebar icons - only those with stroke attribute */
+.md-nav__link svg[stroke="currentColor"],
+.md-nav__link svg[stroke="currentColor"] path,
+.md-nav__link svg[stroke="currentColor"] circle {
+    fill: none !important;
 }
