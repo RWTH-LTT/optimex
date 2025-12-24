@@ -41,11 +41,12 @@ theme:
     - content.action.view
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
     - navigation.expand
     - navigation.footer
     - navigation.indexes
     - navigation.instant
-    - navigation.instant.progress
     - navigation.sections
     - navigation.tabs
     # - navigation.path
@@ -76,6 +77,12 @@ markdown_extensions:
   - def_list
   - footnotes
   - md_in_html
+  # - material.extensions.preview:
+  #     configurations:
+  #       - targets:
+  #           include:
+  #             - api/*
+  #             - content/examples/*
   - toc:
       permalink: true
   - pymdownx.arithmatex:

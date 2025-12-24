@@ -1,6 +1,6 @@
 # Installation
 
-`optimex` is available on [PyPI](https://pypi.org/project/optimex/) and [conda](https://anaconda.org/channels/diepers/packages/optimex/overview). Choose your preferred package manager below. In case you have an Apple Silicon Chip, you can directly jump to the [platform-specific notes](#apple-silicon-m1m2m3).
+`optimex` is available on [PyPI](https://pypi.org/project/optimex/) and [conda](https://anaconda.org/channels/diepers/packages/optimex/overview). Choose your preferred package manager below. In case you have an Apple Silicon Chip, you can directly jump to the [platform-specific notes](#apple-silicon-m1m2m3m4).
 
 ## Quick Install
 
@@ -56,7 +56,7 @@ If you just want to get started quickly:
 
     By default, `juypter lab` will start the server at [http://localhost:8888/lab](http://localhost:8888/lab).
 
-=== "New Virtual Environment"
+=== "New Environment"
 
     Create and activate a new virtual environment:
 
@@ -117,7 +117,7 @@ If you just want to get started quickly:
 
 The standard Python package manager.
 
-=== "New Virtual Environment"
+=== "New Environment"
 
     Create and activate a virtual environment:
 
@@ -170,19 +170,6 @@ Brightway and `optimex` run natively on Apple Silicon. However, the standard `py
     uv run --with jupyter jupyter lab
     ```
 
-=== "conda / mamba"
-
-    Conda is the most robust method for Apple Silicon because it handles the complex C-libraries (`SuiteSparse`) automatically without requiring [Homebrew](https://brew.sh).
-
-    ```bash
-    conda create -n optimex -c conda-forge -c cmutel -c diepers \
-        optimex \
-        "scikit-umfpack>=0.4.2" \
-        "numpy>=2"
-    
-    conda activate optimex
-    ```
-
 === "pip"
 
     When using `pip`, you must first install the system-level `SuiteSparse` dependencies via [Homebrew](https://brew.sh).
@@ -198,6 +185,18 @@ Brightway and `optimex` run natively on Apple Silicon. However, the standard `py
     pip install optimex scikit-umfpack
     ```
 
+=== "conda / mamba"
+
+    Conda is the most robust method for Apple Silicon because it handles the complex C-libraries (`SuiteSparse`) automatically without requiring [Homebrew](https://brew.sh).
+
+    ```bash
+    conda create -n optimex -c conda-forge -c cmutel -c diepers \
+        optimex \
+        "scikit-umfpack>=0.4.2" \
+        "numpy>=2"
+    
+    conda activate optimex
+    ```
 ---
 
 ## Optional Dependencies
@@ -218,7 +217,7 @@ For interactive notebooks:
     pip install jupyterlab
     ```
 
-=== "conda"
+=== "conda / mamba"
 
     ```bash
     conda install -c conda-forge jupyterlab
