@@ -29,9 +29,9 @@ During the transition pathway optimization, `optimex` simultaneously accounts fo
   
 ## First Steps
 
-- [Installation Guide](https://optimex.readthedocs.io/en/latest/content/installation.html)
-- [Getting Started Tutorial](https://optimex.readthedocs.io/en/latest/content/getting_started.html)
-- [Example Collection](https://optimex.readthedocs.io/en/latest/content/examples/index.html)
+- [Installation Guide](https://optimex.readthedocs.io/en/latest/content/installation/)
+- [Getting Started Tutorial](https://optimex.readthedocs.io/en/latest/content/examples/basic_optimex_example/)
+- [Example Collection](https://optimex.readthedocs.io/en/latest/content/examples/)
 
 ## Support
 
@@ -55,4 +55,5 @@ Distributed under the terms of the [BSD 3 Clause license][License], `optimex` is
 [License]: https://github.com/TimoDiepers/optimex/blob/main/LICENSE
 [Contributor Guide]: https://github.com/TimoDiepers/optimex/blob/main/CONTRIBUTING.md
 [Issue Tracker]: https://github.com/TimoDiepers/optimex/issues
+
 
