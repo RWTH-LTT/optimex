@@ -4,7 +4,7 @@ This is a Python package for time-explicit Life Cycle Optimization for transitio
 
 `optimex` builds on top of the optimization framework [pyomo](https://github.com/Pyomo/pyomo) and the LCA framework [Brightway](https://docs.brightway.dev/en/latest). If you are looking for a time-explicit LCA rather than an optimization tool, make sure to check out [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
 
-## ✨ Features
+## Features
 
 Like other transition pathway optimization tools, `optimex` identifies the optimal timing and scale of process deployments to minimize environmental impacts over a transition period. What sets `optimex` apart is its integration of three additional, temporal considerations for environmental impacts:
 
@@ -38,7 +38,7 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
 
 During the transition pathway optimization, `optimex` simultaneously accounts for these temporal considerations, identifying the environmentally optimal process deployment over the transition period.
 
-## 💬 Support
+## Support
 
 If you have any questions or need help, do not hesitate to contact us:
 
