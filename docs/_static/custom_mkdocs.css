@@ -239,43 +239,7 @@ html {
 
 /* Only apply on mobile (when drawer is used) */
 @media screen and (max-width: 76.1875em) {
-    /* ===== REMOVE ALL BORDERS & SEPARATORS ===== */
-    .md-nav--primary,
-    .md-nav--primary *,
-    .md-nav--primary .md-nav__title,
-    .md-nav--primary .md-nav__list,
-    .md-nav--primary .md-nav__item,
-    .md-nav--primary .md-nav__link,
-    .md-nav--primary .md-nav {
-        border: none !important;
-        border-top: none !important;
-        border-bottom: none !important;
-        border-left: none !important;
-        border-right: none !important;
-        box-shadow: none !important;
-        outline: none !important;
-    }
-
-    /* Keep only the top border on the main drawer title to separate from header */
-    .md-nav--primary > .md-nav__title[for="__drawer"] {
-        border-bottom: 1px solid rgba(128, 128, 128, 0.2) !important;
-    }
-
-    /* ===== HIDE ALL DEFAULT ARROW ICONS ===== */
-    .md-nav--primary .md-nav__icon,
-    .md-nav--primary .md-nav__icon.md-icon,
-    .md-nav--primary .md-nav__link .md-nav__icon,
-    .md-nav--primary .md-icon,
-    .md-nav--primary label .md-nav__icon,
-    .md-nav--primary .md-nav__item--nested .md-nav__icon {
-        display: none !important;
-        visibility: hidden !important;
-        width: 0 !important;
-        height: 0 !important;
-        opacity: 0 !important;
-    }
-
-    /* ===== PREVENT DRILL-DOWN BEHAVIOR ===== */
+    /* Prevent the drill-down sliding effect */
     .md-nav--primary .md-nav__list {
         transform: none !important;
         transition: none !important;
@@ -309,13 +273,17 @@ html {
         display: flex !important;
     }
 
-    /* Indent nested items */
+    /* Indent nested items - no border */
     .md-nav--primary .md-nav__item--nested > .md-nav > .md-nav__list {
         padding-left: 1rem;
         margin-left: 0.8rem;
     }
 
-    /* ===== CUSTOM EXPAND ARROW ===== */
+    /* Hide the default Material theme arrow icon */
+    .md-nav--primary .md-nav__icon {
+        display: none !important;
+    }
+
     /* Style the toggle label as arrow container */
     .md-nav--primary label.md-nav__link {
         display: flex;
@@ -329,10 +297,8 @@ html {
         display: inline-block;
         width: 0.45rem;
         height: 0.45rem;
-        border-right: 2px solid currentColor !important;
-        border-bottom: 2px solid currentColor !important;
-        border-top: none !important;
-        border-left: none !important;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
         transform: rotate(-45deg);
         transition: transform 0.2s ease;
         flex-shrink: 0;
@@ -346,12 +312,20 @@ html {
         transform: rotate(45deg);
     }
 
-    /* ===== PREVENT LIFTED STATE FROM HIDING SIBLINGS ===== */
+    /* Remove borders/box-shadows from nav items */
+    .md-nav--primary .md-nav__item,
+    .md-nav--primary .md-nav__link {
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Remove transforms from the primary nav that cause drill-down */
     .md-nav--primary,
     .md-nav--primary .md-nav {
         transform: none !important;
     }
 
+    /* Prevent the "lifted" state from hiding siblings */
     .md-nav--lifted > .md-nav__list > .md-nav__item--active ~ .md-nav__item,
     .md-nav--lifted > .md-nav__list > .md-nav__item:not(.md-nav__item--active) {
         display: block !important;
@@ -359,6 +333,7 @@ html {
         transform: none !important;
     }
 
+    /* Keep all items visible when any is active */
     .md-nav--lifted > .md-nav__list {
         transform: none !important;
     }
@@ -368,6 +343,7 @@ html {
         transform: none !important;
     }
 
+    /* Override the lifted nav title behavior */
     .md-nav--lifted > .md-nav__title {
         display: none !important;
     }
