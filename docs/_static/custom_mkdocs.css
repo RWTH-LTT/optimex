@@ -273,43 +273,50 @@ html {
         display: flex !important;
     }
 
-    /* Style the expand arrow on parent items */
-    .md-nav--primary .md-nav__item--nested > .md-nav__link {
+    /* Indent nested items - no border */
+    .md-nav--primary .md-nav__item--nested > .md-nav > .md-nav__list {
+        padding-left: 1rem;
+        margin-left: 0.8rem;
+    }
+
+    /* Hide the default Material theme arrow icon */
+    .md-nav--primary .md-nav__icon {
+        display: none !important;
+    }
+
+    /* Style the toggle label as arrow container */
+    .md-nav--primary label.md-nav__link {
         display: flex;
         align-items: center;
         justify-content: space-between;
     }
 
-    /* Add expand/collapse arrow indicator */
-    .md-nav--primary .md-nav__item--nested > .md-nav__link::after {
+    /* Add single expand/collapse arrow on the right */
+    .md-nav--primary label.md-nav__link::after {
         content: "";
         display: inline-block;
-        width: 0.5rem;
-        height: 0.5rem;
+        width: 0.45rem;
+        height: 0.45rem;
         border-right: 2px solid currentColor;
         border-bottom: 2px solid currentColor;
         transform: rotate(-45deg);
         transition: transform 0.2s ease;
         flex-shrink: 0;
-        margin-left: 0.5rem;
-        opacity: 0.6;
+        margin-left: auto;
+        margin-right: 0.2rem;
+        opacity: 0.5;
     }
 
     /* Rotate arrow when expanded */
-    .md-nav--primary .md-nav__toggle:checked ~ .md-nav__link::after {
+    .md-nav--primary .md-nav__toggle:checked ~ label.md-nav__link::after {
         transform: rotate(45deg);
     }
 
-    /* Indent nested items */
-    .md-nav--primary .md-nav__item--nested > .md-nav > .md-nav__list {
-        padding-left: 0.8rem;
-        border-left: 1px solid rgba(128, 128, 128, 0.2);
-        margin-left: 0.8rem;
-    }
-
-    /* Ensure nested links don't have the arrow */
-    .md-nav--primary .md-nav__item:not(.md-nav__item--nested) > .md-nav__link::after {
-        display: none;
+    /* Remove borders/box-shadows from nav items */
+    .md-nav--primary .md-nav__item,
+    .md-nav--primary .md-nav__link {
+        border: none !important;
+        box-shadow: none !important;
     }
 
     /* Remove transforms from the primary nav that cause drill-down */
