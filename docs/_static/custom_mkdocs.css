@@ -234,6 +234,119 @@ html {
 }
 
 /* ============================================================================
+   4b. MOBILE NAVIGATION - INLINE EXPAND (Override drill-down behavior)
+   ============================================================================ */
+
+/* Only apply on mobile (when drawer is used) */
+@media screen and (max-width: 76.1875em) {
+    /* Prevent the drill-down sliding effect */
+    .md-nav--primary .md-nav__list {
+        transform: none !important;
+        transition: none !important;
+    }
+
+    /* Keep all navigation levels visible in the DOM flow */
+    .md-nav--primary .md-nav--secondary,
+    .md-nav--primary .md-nav__item--nested > .md-nav {
+        position: static !important;
+        transform: none !important;
+        opacity: 1 !important;
+        overflow: hidden;
+        max-height: 0;
+        transition: max-height 0.25s ease-out;
+    }
+
+    /* When a nested nav is toggled open, expand it */
+    .md-nav--primary .md-nav__toggle:checked ~ .md-nav {
+        max-height: 1000px;
+        transition: max-height 0.35s ease-in;
+    }
+
+    /* Hide the back button / drill-down title for nested sections */
+    .md-nav--primary .md-nav--secondary > .md-nav__title,
+    .md-nav--primary .md-nav__item--nested > .md-nav > .md-nav__title {
+        display: none !important;
+    }
+
+    /* Keep the main drawer title visible */
+    .md-nav--primary > .md-nav__title[for="__drawer"] {
+        display: flex !important;
+    }
+
+    /* Style the expand arrow on parent items */
+    .md-nav--primary .md-nav__item--nested > .md-nav__link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    /* Add expand/collapse arrow indicator */
+    .md-nav--primary .md-nav__item--nested > .md-nav__link::after {
+        content: "";
+        display: inline-block;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: rotate(-45deg);
+        transition: transform 0.2s ease;
+        flex-shrink: 0;
+        margin-left: 0.5rem;
+        opacity: 0.6;
+    }
+
+    /* Rotate arrow when expanded */
+    .md-nav--primary .md-nav__toggle:checked ~ .md-nav__link::after {
+        transform: rotate(45deg);
+    }
+
+    /* Indent nested items */
+    .md-nav--primary .md-nav__item--nested > .md-nav > .md-nav__list {
+        padding-left: 0.8rem;
+        border-left: 1px solid rgba(128, 128, 128, 0.2);
+        margin-left: 0.8rem;
+    }
+
+    /* Ensure nested links don't have the arrow */
+    .md-nav--primary .md-nav__item:not(.md-nav__item--nested) > .md-nav__link::after {
+        display: none;
+    }
+
+    /* Remove transforms from the primary nav that cause drill-down */
+    .md-nav--primary,
+    .md-nav--primary .md-nav {
+        transform: none !important;
+    }
+
+    /* Prevent the "lifted" state from hiding siblings */
+    .md-nav--lifted > .md-nav__list > .md-nav__item--active ~ .md-nav__item,
+    .md-nav--lifted > .md-nav__list > .md-nav__item:not(.md-nav__item--active) {
+        display: block !important;
+        opacity: 1 !important;
+        transform: none !important;
+    }
+
+    /* Keep all items visible when any is active */
+    .md-nav--lifted > .md-nav__list {
+        transform: none !important;
+    }
+
+    .md-nav--lifted > .md-nav__list > .md-nav__item {
+        opacity: 1 !important;
+        transform: none !important;
+    }
+
+    /* Override the lifted nav title behavior */
+    .md-nav--lifted > .md-nav__title {
+        display: none !important;
+    }
+
+    .md-nav--lifted[data-md-level="0"] > .md-nav__title {
+        display: flex !important;
+    }
+}
+
+/* ============================================================================
    5. SEARCH
    ============================================================================ */
 
