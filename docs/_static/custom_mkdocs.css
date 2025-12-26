@@ -323,6 +323,24 @@ html {
 }
 
 /* ============================================================================
+   6.1. MOBILE DRAWER OVERLAY & BLUR EFFECTS
+   ============================================================================ */
+
+/* Blur background content when mobile drawer is open */
+[data-md-toggle="__drawer"]:checked ~ .md-container,
+[data-md-toggle="__drawer"]:checked ~ .md-main {
+    filter: blur(6px);
+    transition: filter 0.2s ease;
+}
+
+/* Mobile drawer overlay */
+.md-overlay {
+    background-color: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+/* ============================================================================
    7. BORDER RADIUS - GLOBAL
    ============================================================================ */
 
