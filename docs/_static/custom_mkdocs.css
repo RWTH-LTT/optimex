@@ -300,31 +300,34 @@ html {
         display: none !important;
     }
 
-    /* Style the toggle label as arrow container */
-    .md-nav--primary label.md-nav__link {
-        display: flex;
+    /* Style the toggle label - larger touch target */
+    .md-nav--primary .md-nav__item--nested > label {
+        display: flex !important;
         align-items: center;
         justify-content: space-between;
+        padding: 0.6rem 0.8rem;
+        min-height: 2.5rem;
+        cursor: pointer;
     }
 
-    /* Add single expand/collapse arrow on the right */
-    .md-nav--primary label.md-nav__link::after {
+    /* Add expand/collapse arrow on the right */
+    .md-nav--primary .md-nav__item--nested > label::after {
         content: "";
         display: block;
         width: 0.4rem;
         height: 0.4rem;
         border-right: 2px solid currentColor;
         border-bottom: 2px solid currentColor;
-        transform: rotate(-45deg) translateY(-1px);
+        transform: rotate(-45deg);
         transition: transform 0.2s ease;
         flex-shrink: 0;
-        margin-left: auto;
+        margin-left: 0.5rem;
         opacity: 0.5;
     }
 
     /* Rotate arrow when expanded */
-    .md-nav--primary .md-nav__toggle:checked ~ label.md-nav__link::after {
-        transform: rotate(45deg) translateY(0);
+    .md-nav--primary .md-nav__item--nested > .md-nav__toggle:checked + label::after {
+        transform: rotate(45deg);
     }
 
     /* Remove ALL borders/box-shadows from nav elements */
