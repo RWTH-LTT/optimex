@@ -233,6 +233,26 @@ html {
     background-color: var(--md-default-bg-color) !important;
 }
 
+/* Override mobile navigation to use expand instead of drill down */
+/* Hide navigation toggle buttons on mobile to disable drill-down */
+@media screen and (max-width: 76.1875em) {
+    .md-nav__toggle ~ .md-nav {
+        display: block !important;
+        visibility: visible !important;
+        max-height: none !important;
+    }
+    
+    .md-nav__toggle:checked ~ .md-nav,
+    .md-nav__item--nested .md-nav {
+        display: block !important;
+    }
+    
+    /* Hide the toggle icons */
+    .md-nav__icon {
+        display: none !important;
+    }
+}
+
 /* ============================================================================
    5. SEARCH
    ============================================================================ */
