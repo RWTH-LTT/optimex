@@ -250,8 +250,12 @@ html {
         display: none !important;
     }
     
-    /* Rotate chevrons to show expanded state */
-    .md-nav__item--nested .md-nav__link .md-nav__icon::after {
+    /* Show chevrons in expanded state and make them more visible */
+    .md-nav__item--nested > .md-nav__link .md-nav__icon {
+        display: inline-block !important;
+    }
+    
+    .md-nav__item--nested > .md-nav__link .md-nav__icon::after {
         transform: rotate(90deg);
     }
 }
