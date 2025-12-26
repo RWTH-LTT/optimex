@@ -310,16 +310,13 @@ html {
         cursor: pointer;
     }
 
-    /* Add expand/collapse arrow on the right */
+    /* Add expand/collapse arrow using chevron character */
     .md-nav--primary .md-nav__item--nested > label.md-nav__link::after {
-        content: "" !important;
-        display: block !important;
-        width: 0.4rem;
-        height: 0.4rem;
-        border: none !important;
-        border-right: 2px solid currentColor !important;
-        border-bottom: 2px solid currentColor !important;
-        transform: rotate(-45deg);
+        content: "›" !important;
+        display: inline-block !important;
+        font-size: 1.2rem;
+        line-height: 1;
+        transform: rotate(0deg);
         transition: transform 0.2s ease;
         flex-shrink: 0;
         margin-left: 0.5rem;
@@ -328,7 +325,7 @@ html {
 
     /* Rotate arrow when expanded */
     .md-nav--primary .md-nav__item--nested > .md-nav__toggle:checked + label.md-nav__link::after {
-        transform: rotate(45deg);
+        transform: rotate(90deg);
     }
 
     /* Remove ALL borders/box-shadows from nav elements */
