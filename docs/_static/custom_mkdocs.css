@@ -279,6 +279,22 @@ html {
         margin-left: 0.8rem;
     }
 
+    /* Smaller font size for nested nav items */
+    .md-nav--primary .md-nav__item--nested .md-nav__link {
+        font-size: 0.75rem;
+    }
+
+    /* Enable scrolling on the nav drawer */
+    .md-nav--primary {
+        overflow-y: auto !important;
+        max-height: 100vh !important;
+    }
+
+    /* Make the nav list scrollable */
+    .md-nav--primary > .md-nav__list {
+        overflow-y: auto !important;
+    }
+
     /* Hide the default Material theme arrow icon */
     .md-nav--primary .md-nav__icon {
         display: none !important;
