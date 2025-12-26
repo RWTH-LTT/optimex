@@ -294,27 +294,35 @@ html {
     /* Add single expand/collapse arrow on the right */
     .md-nav--primary label.md-nav__link::after {
         content: "";
-        display: inline-block;
-        width: 0.45rem;
-        height: 0.45rem;
+        display: block;
+        width: 0.4rem;
+        height: 0.4rem;
         border-right: 2px solid currentColor;
         border-bottom: 2px solid currentColor;
-        transform: rotate(-45deg);
+        transform: rotate(-45deg) translateY(-1px);
         transition: transform 0.2s ease;
         flex-shrink: 0;
         margin-left: auto;
-        margin-right: 0.2rem;
         opacity: 0.5;
     }
 
     /* Rotate arrow when expanded */
     .md-nav--primary .md-nav__toggle:checked ~ label.md-nav__link::after {
-        transform: rotate(45deg);
+        transform: rotate(45deg) translateY(0);
     }
 
-    /* Remove borders/box-shadows from nav items */
+    /* Remove ALL borders/box-shadows from nav elements */
     .md-nav--primary .md-nav__item,
-    .md-nav--primary .md-nav__link {
+    .md-nav--primary .md-nav__link,
+    .md-nav--primary .md-nav__list,
+    .md-nav--primary .md-nav,
+    .md-nav--primary .md-nav__title {
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Also target the nested nav container */
+    .md-nav--primary .md-nav__item--nested > .md-nav {
         border: none !important;
         box-shadow: none !important;
     }
