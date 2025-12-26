@@ -245,9 +245,14 @@ html {
         max-height: none !important;
     }
     
-    /* Hide the toggle icons that would enable drill-down behavior */
-    .md-nav__icon {
+    /* Hide the drill-down title labels for subsections (the back button) */
+    .md-nav__item--nested > .md-nav > .md-nav__title {
         display: none !important;
+    }
+    
+    /* Rotate chevrons to show expanded state */
+    .md-nav__item--nested .md-nav__link .md-nav__icon::after {
+        transform: rotate(90deg);
     }
 }
 
