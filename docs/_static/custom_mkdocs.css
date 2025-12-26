@@ -301,7 +301,7 @@ html {
     }
 
     /* Style the toggle label - larger touch target */
-    .md-nav--primary .md-nav__item--nested > label {
+    .md-nav--primary .md-nav__item--nested > label.md-nav__link {
         display: flex !important;
         align-items: center;
         justify-content: space-between;
@@ -311,13 +311,14 @@ html {
     }
 
     /* Add expand/collapse arrow on the right */
-    .md-nav--primary .md-nav__item--nested > label::after {
-        content: "";
-        display: block;
+    .md-nav--primary .md-nav__item--nested > label.md-nav__link::after {
+        content: "" !important;
+        display: block !important;
         width: 0.4rem;
         height: 0.4rem;
-        border-right: 2px solid currentColor;
-        border-bottom: 2px solid currentColor;
+        border: none !important;
+        border-right: 2px solid currentColor !important;
+        border-bottom: 2px solid currentColor !important;
         transform: rotate(-45deg);
         transition: transform 0.2s ease;
         flex-shrink: 0;
@@ -326,7 +327,7 @@ html {
     }
 
     /* Rotate arrow when expanded */
-    .md-nav--primary .md-nav__item--nested > .md-nav__toggle:checked + label::after {
+    .md-nav--primary .md-nav__item--nested > .md-nav__toggle:checked + label.md-nav__link::after {
         transform: rotate(45deg);
     }
 
