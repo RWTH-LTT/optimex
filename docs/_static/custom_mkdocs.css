@@ -489,21 +489,6 @@ html {
    9. JUPYTER NOTEBOOKS
    ============================================================================ */
 
-/* Fix heading width issue caused by action buttons */
-.jp-RenderedHTMLCommon h1,
-.jp-RenderedHTMLCommon h2,
-.jp-RenderedHTMLCommon h3 {
-    clear: both;
-    width: 100% !important;
-    max-width: 100% !important;
-}
-
-/* Ensure notebook content uses full width */
-.jp-Notebook {
-    width: 100% !important;
-    max-width: 100% !important;
-}
-
 /* Hide prompts */
 .jp-InputPrompt,
 .jp-OutputPrompt {
@@ -618,4 +603,50 @@ svg[class*="lucide"] polyline {
 
 [data-md-color-scheme="default"] .md-search__icon svg {
     stroke: rgba(0, 0, 0, 0.87) !important;
+}
+
+/* ============================================================================
+   12. NOTEBOOK DOWNLOAD LINK (ToC Sidebar)
+   ============================================================================ */
+
+.toc-download-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+    border-radius: 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+}
+
+[data-md-color-scheme="slate"] .toc-download-link {
+    color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-md-color-scheme="slate"] .toc-download-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+[data-md-color-scheme="default"] .toc-download-link {
+    color: rgba(0, 0, 0, 0.6);
+    background-color: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-md-color-scheme="default"] .toc-download-link:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+    color: rgba(0, 0, 0, 0.8);
+}
+
+.toc-download-link svg {
+    width: 0.9rem;
+    height: 0.9rem;
+    fill: none !important;
+    stroke: currentColor !important;
 }

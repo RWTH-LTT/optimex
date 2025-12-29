@@ -39,8 +39,8 @@ theme:
         name: Switch to light mode
   features:
     - announce.dismiss
-    - content.action.edit
-    - content.action.view
+    # - content.action.edit
+    # - content.action.view
     - content.code.copy
     - content.code.annotate
     - content.tabs.link

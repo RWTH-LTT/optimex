@@ -15,15 +15,6 @@
   </style>
 {% endblock %}
 
-{% block content %}
-  {% if page.nb_url %}
-    <a href="{{ page.nb_url }}" title="Download this notebook" class="md-content__button md-icon" download>
-      {% include ".icons/lucide/download.svg" %}
-    </a>
-  {% endif %}
-  {{ super() }}
-{% endblock %}
-
 {% block site_name %}
   <a href="{{ config.site_url | default(nav.homepage.url, true) | url }}" title="{{ config.site_name | e }}" class="md-header__button md-logo" aria-label="{{ config.site_name }}" data-md-component="logo">
     <!-- Light logo (dark text) for light mode -->
