@@ -502,7 +502,8 @@ html {
 
 /* Input area */
 .jp-InputArea,
-.jp-InputArea-editor {
+.jp-InputArea-editor,
+.jp-OutputArea * {
     border-radius: 0.5rem !important;
     overflow-x: scroll !important;
 }
