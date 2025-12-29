@@ -12,6 +12,8 @@ copyright: Copyright &copy; 2025 Institute of Technical Thermodynamics, RWTH Aac
 theme:
   name: material
   custom_dir: docs/overrides
+  icon:
+    search: lucide/search
   font:
     text: Inter
     code: Consolas

@@ -126,6 +126,10 @@ html {
     color: rgba(0, 0, 0, 0.87);
 }
 
+.md-header__button.md-icon svg {
+    height: 1rem !important;
+}
+
 /* ============================================================================
    4. NAVIGATION TABS
    ============================================================================ */
@@ -587,4 +591,30 @@ svg[class*="lucide"] polyline {
 .md-nav__link svg[stroke="currentColor"] path,
 .md-nav__link svg[stroke="currentColor"] circle {
     fill: none !important;
+}
+
+/* Search icon */
+.md-search__icon {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.md-search__icon svg {
+    fill: none !important;
+    width: 1rem !important;
+    height: 1rem !important;
+}
+
+.md-search__icon svg path,
+.md-search__icon svg circle {
+    fill: none !important;
+}
+
+[data-md-color-scheme="slate"] .md-search__icon svg {
+    stroke: rgba(255, 255, 255, 0.7) !important;
+}
+
+[data-md-color-scheme="default"] .md-search__icon svg {
+    stroke: rgba(0, 0, 0, 0.87) !important;
 }
