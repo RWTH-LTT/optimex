@@ -550,8 +550,10 @@ html {
    ============================================================================ */
 
 /* Spacing */
-.md-typeset h1 {
-    margin-top: 0;
+h1, h1 *, h2, h2 *, h3, h3 *, h4, h4 *, h5, h5 *, h6, h6 * {
+    color: var(--md-primary-bg-color) !important;
+    letter-spacing: -0.025em !important;
+    font-weight: 700 !important;
 }
 
 .md-content__inner {
@@ -606,8 +608,7 @@ svg[class*="lucide"] polyline {
     height: 1rem !important;
 }
 
-.md-search__icon svg path,
-.md-search__icon svg circle {
+.md-header__button.md-icon[for="__search"] svg {
     fill: none !important;
 }
 
