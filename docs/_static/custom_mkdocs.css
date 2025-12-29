@@ -489,6 +489,11 @@ html {
    9. JUPYTER NOTEBOOKS
    ============================================================================ */
 
+.jp-Notebook, .jp-Cell {
+    padding: 0 !important;
+}
+
+
 /* Hide prompts */
 .jp-InputPrompt,
 .jp-OutputPrompt {
