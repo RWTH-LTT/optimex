@@ -441,6 +441,7 @@ html {
 /* Tooltips and annotations */
 .md-tooltip {
     border-radius: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .md-annotation__index {
@@ -542,9 +543,16 @@ html {
 
 /* Spacing */
 h1, h1 *, h2, h2 *, h3, h3 *, h4, h4 *, h5, h5 *, h6, h6 * {
-    color: var(--md-primary-bg-color) !important;
     letter-spacing: -0.025em !important;
     font-weight: 700 !important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--md-primary-bg-color) !important;
+}
+
+h1 *, h2 * {
+    color: var(--md-primary-bg-color) !important;
 }
 
 .md-content__inner {
