@@ -1,13 +1,16 @@
 """
-Test serialization and deserialization of OptimizationModelInputs with tuple keys.
+Test serialization and deserialization of OptimizationModelInputs with tuple keys,
+and saving/loading of solved Pyomo models.
 """
 import json
 import tempfile
 from pathlib import Path
 
+import pyomo.environ as pyo
 import pytest
 
-from optimex import converter
+from optimex import converter, optimizer
+from optimex.postprocessing import PostProcessor
 
 
 def test_json_serialization_round_trip(abstract_system_model_inputs):
@@ -178,3 +181,77 @@ def test_invalid_file_extension():
 
         with pytest.raises(ValueError, match="Unsupported file extension"):
             manager.load(str(invalid_path))
+
+
+def test_solved_model_save_and_load(solved_system_model):
+    """Test that saving and loading a solved Pyomo model preserves its state."""
+    model, objective_value, solver_results = solved_system_model
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        model_path = Path(tmpdir) / "solved_model.pkl"
+
+        # Save the model
+        optimizer.save_solved_model(
+            model,
+            model_path,
+            objective_value=objective_value,
+        )
+
+        # Verify file was created
+        assert model_path.exists()
+
+        # Load the model back
+        loaded_model, loaded_obj = optimizer.load_solved_model(model_path)
+
+        # Verify objective value is preserved
+        assert loaded_obj == objective_value
+
+        # Verify model structure is preserved
+        assert list(loaded_model.PROCESS) == list(model.PROCESS)
+        assert list(loaded_model.PRODUCT) == list(model.PRODUCT)
+        assert list(loaded_model.SYSTEM_TIME) == list(model.SYSTEM_TIME)
+
+        # Verify variable values are preserved
+        for p in model.PROCESS:
+            for t in model.SYSTEM_TIME:
+                original_install = pyo.value(model.var_installation[p, t])
+                loaded_install = pyo.value(loaded_model.var_installation[p, t])
+                assert abs(original_install - loaded_install) < 1e-9, (
+                    f"Installation value mismatch for ({p}, {t})"
+                )
+
+                original_op = pyo.value(model.var_operation[p, t])
+                loaded_op = pyo.value(loaded_model.var_operation[p, t])
+                assert abs(original_op - loaded_op) < 1e-9, (
+                    f"Operation value mismatch for ({p}, {t})"
+                )
+
+        # Verify the loaded model works with PostProcessor
+        pp = PostProcessor(loaded_model)
+        impacts_df = pp.get_impacts()
+        assert not impacts_df.empty
+        assert "climate_change" in impacts_df.columns
+
+
+def test_solved_model_save_without_metadata(solved_system_model):
+    """Test that saving a model without objective_value works."""
+    model, _, _ = solved_system_model
+
+    # Clear any previously saved metadata from other tests
+    if hasattr(model, "_saved_objective_value"):
+        delattr(model, "_saved_objective_value")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        model_path = Path(tmpdir) / "model_no_metadata.pkl"
+
+        # Save without metadata
+        optimizer.save_solved_model(model, model_path)
+
+        # Load back
+        loaded_model, loaded_obj = optimizer.load_solved_model(model_path)
+
+        # Metadata should be None
+        assert loaded_obj is None
+
+        # Model should still work
+        assert list(loaded_model.PROCESS) == list(model.PROCESS)

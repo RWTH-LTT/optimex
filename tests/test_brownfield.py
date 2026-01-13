@@ -203,7 +203,7 @@ class TestBrownfieldOptimization:
             inputs=model_inputs,
             objective_category="climate_change",
             name="test_brownfield_meets_demand",
-            flexible_operation=True,
+
         )
 
         solved_model, objective, results = optimizer.solve_model(
@@ -282,7 +282,7 @@ class TestBrownfieldOptimization:
             inputs=greenfield_inputs,
             objective_category="climate_change",
             name="greenfield",
-            flexible_operation=True,
+
         )
         _, greenfield_obj, _ = optimizer.solve_model(
             greenfield_model, solver_name="glpk", tee=False
@@ -298,7 +298,7 @@ class TestBrownfieldOptimization:
             inputs=brownfield_inputs,
             objective_category="climate_change",
             name="brownfield",
-            flexible_operation=True,
+
         )
         _, brownfield_obj, _ = optimizer.solve_model(
             brownfield_model, solver_name="glpk", tee=False
@@ -377,7 +377,7 @@ class TestBrownfieldOptimization:
             inputs=model_inputs,
             objective_category="climate_change",
             name="test_retirement",
-            flexible_operation=True,
+
         )
 
         solved_model, objective, results = optimizer.solve_model(
@@ -457,7 +457,7 @@ class TestBrownfieldPostprocessing:
             inputs=model_inputs,
             objective_category="climate_change",
             name="test_postprocessing",
-            flexible_operation=True,
+
         )
 
         solved_model, _, _ = optimizer.solve_model(
@@ -537,7 +537,7 @@ class TestBrownfieldPostprocessing:
             inputs=model_inputs,
             objective_category="climate_change",
             name="test_capacity",
-            flexible_operation=True,
+
         )
 
         solved_model, _, _ = optimizer.solve_model(

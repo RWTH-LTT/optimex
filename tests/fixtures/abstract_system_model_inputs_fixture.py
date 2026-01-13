@@ -127,14 +127,14 @@ def abstract_system_model_inputs():
     }
 
 
-# Fixture to create the abstract system model (fixed or flexible)
+# Fixture to create the abstract system model
 @pytest.fixture(
     scope="module",
-    params=["flex", "constrained"], # "fixed",
-    ids=["flexible_operation", "constrained_process_limit"], # "fixed_operation", 
+    params=["flex", "constrained"],
+    ids=["flexible_operation", "constrained_process_limit"],
 )
 def abstract_system_model(request, abstract_system_model_inputs):
-    model_type = request.param  # This will be 'fixed' or 'flex'
+    model_type = request.param
     model_inputs = converter.OptimizationModelInputs(**abstract_system_model_inputs)
     if model_type == "constrained":
         # Limit P1 process to force use of less optimal P2
@@ -142,13 +142,10 @@ def abstract_system_model(request, abstract_system_model_inputs):
         model_inputs.cumulative_process_limits_max = {
             "P1": 10.0,  # Limit P1 to 10 installations (optimal uses 20 of each)
         }
-    # Create the model based on the flag passed in the parameterization
     model = optimizer.create_model(
         inputs=model_inputs,
         objective_category="climate_change",
         name=f"abstract_system_model_{model_type}",
-        flexible_operation=True , # (model_type != "fixed")
-        # debug_path=f"tests/fixtures/model_debug_{model_type}.lp",
     )
     return model
 

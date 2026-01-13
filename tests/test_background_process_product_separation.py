@@ -184,7 +184,7 @@ def test_separated_background_matches_standard_lca(setup_separated_background_sy
         optimization_model_inputs,
         name="test_separated_background",
         objective_category="climate_change",
-        flexible_operation=True,
+
     )
 
     _, obj_real, results = optimizer.solve_model(model, solver_name="glpk")

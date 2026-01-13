@@ -84,8 +84,8 @@ class PostProcessor:
         # Create consistent color mapping for all processes and products
         self._color_map = self._create_color_map()
 
-        # Cache for code -> name lookups
-        self._name_cache = {}
+        # Pre-populate cache for code -> name lookups (batch load for performance)
+        self._name_cache = self._build_name_cache()
 
     def _create_color_map(self):
         """
@@ -105,24 +105,31 @@ class PostProcessor:
         color_map = {item: colors[i % len(colors)] for i, item in enumerate(all_items)}
         return color_map
 
+    def _build_name_cache(self) -> dict:
+        """
+        Build a cache of code -> name mappings by batch loading from the database.
+        This is much faster than querying one node at a time.
+        """
+        cache = {}
+        try:
+            # Batch load all activities from the foreground database
+            foreground_db = bd.Database("foreground")
+            for activity in foreground_db:
+                code = activity.get("code", "")
+                name = activity.get("name", code)
+                if code:
+                    cache[code] = name
+        except Exception:
+            # If database access fails, start with empty cache
+            pass
+        return cache
+
     def _get_name(self, code: str) -> str:
         """
-        Get the human-readable name for a code with caching.
-        Tries foreground database first, then falls back to code if not found.
+        Get the human-readable name for a code.
+        Uses pre-populated cache, falls back to code if not found.
         """
-        if code in self._name_cache:
-            return self._name_cache[code]
-
-        try:
-            # Try to get from foreground database
-            node = bd.get_node(database="foreground", code=code)
-            name = node.get("name", code)
-        except Exception:
-            # If not found or error, use code as name
-            name = code
-
-        self._name_cache[code] = name
-        return name
+        return self._name_cache.get(code, code)
 
     def _annotate_dataframe(self, df, annotated: bool):
         """
@@ -286,6 +293,9 @@ class PostProcessor:
             (Category, Process) combinations. Values represent environmental
             impacts in the units of the characterization method.
         """
+        if hasattr(self, "df_impacts"):
+            return self.df_impacts
+        
         impacts = {}
         cat_scales = getattr(self.m, "scales", {}).get("characterization", 1.0)
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
@@ -308,22 +318,26 @@ class PostProcessor:
         self.df_impacts = df_pivot
         return self.df_impacts
 
-    def get_radiative_forcing(self) -> pd.DataFrame:
+    def get_dynamic_inventory(self, biosphere_database: str = "ecoinvent-3.12-biosphere") -> pd.DataFrame:
         """
-        Extract radiative forcing time series from model results.
+        Extract the dynamic inventory from the solved model.
 
-        This method is currently not implemented. It will extract the scaled inventory
-        and compute radiative forcing profiles over time for climate impact assessment.
+        Returns a DataFrame with elementary flows over time, formatted for use
+        with dynamic_characterization.
+
+        Parameters
+        ----------
+        biosphere_database : str, default="ecoinvent-3.12-biosphere"
+            Name of the biosphere database to look up flow IDs.
 
         Returns
         -------
         pd.DataFrame
-            DataFrame with radiative forcing values over time.
-
-        Raises
-        ------
-        NotImplementedError
-            This method is not yet implemented.
+            DataFrame with columns: activity, flow, date, amount.
+            - activity: process code (str)
+            - flow: biosphere flow ID (int)
+            - date: datetime of emission
+            - amount: flow amount (float)
         """
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
         inventory = {
@@ -332,10 +346,147 @@ class PostProcessor:
             for e in self.m.ELEMENTARY_FLOW
             for t in self.m.SYSTEM_TIME
         }
-        # do something with inventory
-        return NotImplementedError(
-            "Radiative forcing extraction is not implemented yet."
+
+        df = pd.DataFrame.from_records(
+            [(p, e, t, v) for (p, e, t), v in inventory.items()],
+            columns=["activity", "flow", "date", "amount"]
+        ).astype({
+            "activity": "str",
+            "flow": "str",
+            "amount": "float64"
+        })
+
+        # Convert year integers to datetime
+        df["date"] = pd.to_datetime(df["date"].astype(int), format="%Y")
+
+        # Convert flow codes to database IDs
+        biosphere_db = bd.Database(biosphere_database)
+        df["flow"] = df["flow"].apply(
+            lambda x: biosphere_db.get(code=x).id
         )
+
+        self.df_dynamic_inventory = df
+        return self.df_dynamic_inventory
+
+    def get_characterized_dynamic_inventory(
+        self,
+        base_lcia_method: tuple,
+        metric: str = "radiative_forcing",
+        time_horizon: int = 100,
+        fixed_time_horizon: bool = True,
+        biosphere_database: str = "ecoinvent-3.12-biosphere",
+        df_inventory: pd.DataFrame = None,
+    ) -> pd.DataFrame:
+        """
+        Characterize the dynamic inventory using dynamic_characterization.
+
+        Parameters
+        ----------
+        base_lcia_method : tuple
+            The LCIA method tuple for characterization (e.g., ('IPCC', 'GWP100')).
+        metric : str, default="radiative_forcing"
+            Characterization metric. Options: "radiative_forcing", "GWP".
+        time_horizon : int, default=100
+            Time horizon for characterization in years.
+        fixed_time_horizon : bool, default=True
+            If True, use fixed time horizon; if False, use dynamic time horizon.
+        biosphere_database : str, default="ecoinvent-3.12-biosphere"
+            Name of the biosphere database (used if df_inventory not provided).
+        df_inventory : pd.DataFrame, optional
+            Pre-computed inventory DataFrame. If not provided, calls get_dynamic_inventory().
+
+        Returns
+        -------
+        pd.DataFrame
+            Characterized inventory DataFrame with columns: date, amount.
+        """
+        from dynamic_characterization import characterize
+
+        if df_inventory is None:
+            df_inventory = self.get_dynamic_inventory(biosphere_database=biosphere_database)
+
+        df_characterized = characterize(
+            df_inventory,
+            metric=metric,
+            base_lcia_method=base_lcia_method,
+            time_horizon=time_horizon,
+            fixed_time_horizon=fixed_time_horizon,
+        )
+
+        self.df_characterized_inventory = df_characterized
+        return self.df_characterized_inventory
+
+    def plot_characterized_dynamic_inventory(
+        self,
+        base_lcia_method: tuple = None,
+        metric: str = "radiative_forcing",
+        time_horizon: int = 100,
+        fixed_time_horizon: bool = True,
+        biosphere_database: str = "ecoinvent-3.12-biosphere",
+        df_characterized: pd.DataFrame = None,
+    ):
+        """
+        Plot the characterized dynamic inventory aggregated by year.
+
+        Parameters
+        ----------
+        base_lcia_method : tuple, optional
+            The LCIA method tuple for characterization. Required if df_characterized
+            is not provided.
+        metric : str, default="radiative_forcing"
+            Characterization metric (used if df_characterized not provided).
+        time_horizon : int, default=100
+            Time horizon for characterization (used if df_characterized not provided).
+        fixed_time_horizon : bool, default=True
+            If True, use fixed time horizon (used if df_characterized not provided).
+        biosphere_database : str, default="ecoinvent-3.12-biosphere"
+            Name of the biosphere database (used if df_characterized not provided).
+        df_characterized : pd.DataFrame, optional
+            Pre-computed characterized inventory. If not provided, calls
+            get_characterized_dynamic_inventory().
+        """
+        if df_characterized is None:
+            if base_lcia_method is None:
+                raise ValueError("base_lcia_method is required when df_characterized is not provided")
+            df_characterized = self.get_characterized_dynamic_inventory(
+                base_lcia_method=base_lcia_method,
+                metric=metric,
+                time_horizon=time_horizon,
+                fixed_time_horizon=fixed_time_horizon,
+                biosphere_database=biosphere_database,
+            )
+
+        # Ensure date column is datetime
+        df_plot = df_characterized.copy()
+        df_plot["date"] = pd.to_datetime(df_plot["date"])
+
+        # Round to nearest year and aggregate
+        df_grouped = (
+            df_plot
+            .assign(date_rounded=(df_plot["date"] + pd.offsets.MonthBegin(6)).dt.to_period("Y").dt.to_timestamp())
+            .groupby("date_rounded")["amount"]
+            .sum()
+            .reset_index()
+        )
+
+        # Create plot
+        fig, axes = self._create_clean_axes()
+        ax = axes[0]
+
+        ax.plot(
+            df_grouped["date_rounded"],
+            df_grouped["amount"],
+            marker=self._plot_config["line_marker"],
+            linewidth=self._plot_config["line_width"],
+            color=self._plot_config["line_color"],
+        )
+
+        ax.set_xlabel("Year", fontsize=self._plot_config["fontsize"])
+        ax.set_ylabel(f"{metric.replace('_', ' ').title()}", fontsize=self._plot_config["fontsize"])
+        ax.set_title(f"Dynamic {metric.replace('_', ' ').title()}", fontsize=self._plot_config["fontsize"] + 2)
+
+        fig.tight_layout()
+        plt.show()
 
     def get_installation(self) -> pd.DataFrame:
         """
@@ -393,27 +544,19 @@ class PostProcessor:
         for p in self.m.PROCESS:
             for f in self.m.PRODUCT:
                 for t in self.m.SYSTEM_TIME:
-                    if not self.m.flexible_operation:
-                        total_production = sum(
-                            self.m.foreground_production[p, f, tau]
-                            * pyo.value(self.m.var_installation[p, t - tau])
-                            for tau in self.m.PROCESS_TIME
-                            if (t - tau in self.m.SYSTEM_TIME)
-                        )
-                    else:
-                        # Flexible operation: total_production_per_installation × o_t
-                        # Sum of production across operation phase × operation level
-                        total_production_per_installation = sum(
-                            self.m.foreground_production[p, f, tau]
-                            for tau in self.m.PROCESS_TIME
-                            if self.m.process_operation_start[p] <= tau <= self.m.process_operation_end[p]
-                        )
+                    # Total production per installation × operation level
+                    # Sum of production across operation phase × operation level
+                    total_production_per_installation = sum(
+                        self.m.foreground_production[p, f, tau]
+                        for tau in self.m.PROCESS_TIME
+                        if self.m.process_operation_start[p] <= tau <= self.m.process_operation_end[p]
+                    )
 
-                        # Production = total_production × o_t
-                        total_production = (
-                            total_production_per_installation
-                            * pyo.value(self.m.var_operation[p, t])
-                        )
+                    # Production = total_production × o_t
+                    total_production = (
+                        total_production_per_installation
+                        * pyo.value(self.m.var_operation[p, t])
+                    )
                     production_tensor[(p, f, t)] = total_production * fg_scale
 
         df = pd.DataFrame.from_dict(
@@ -469,7 +612,10 @@ class PostProcessor:
             of process codes.
         """
         if df_impacts is None:
-            df_impacts = self.get_impacts()
+            if self.df_impacts is not None:
+                df_impacts = self.df_impacts
+            else:
+                df_impacts = self.get_impacts()
 
         categories = df_impacts.columns.get_level_values(0).unique()
         ncols = 2
@@ -774,7 +920,418 @@ class PostProcessor:
 
         return df_pivot
 
-    def plot_production_vs_capacity(self, product=None, prod_df=None, capacity_df=None, demand_df=None, annotated=True, show_grouped_bars=False):
+    def _extract_product_data(self, product, prod_df, capacity_df):
+        """
+        Extract production and capacity series for a single product.
+
+        Parameters
+        ----------
+        product : str
+            Product code to extract.
+        prod_df : pd.DataFrame
+            Production DataFrame from get_production().
+        capacity_df : pd.DataFrame
+            Capacity DataFrame from get_production_capacity().
+
+        Returns
+        -------
+        tuple[pd.Series, pd.Series]
+            (actual_production, max_capacity) series with string indices.
+        """
+        # Production: sum across all processes for this product
+        if isinstance(prod_df.columns, pd.MultiIndex):
+            production_cols = [col for col in prod_df.columns if col[1] == product]
+            actual_production = prod_df[production_cols].sum(axis=1)
+        else:
+            actual_production = prod_df[product] if product in prod_df.columns else pd.Series(0, index=prod_df.index)
+
+        # Capacity for this product
+        max_capacity = capacity_df[product] if product in capacity_df.columns else pd.Series(0, index=capacity_df.index)
+
+        # Convert indices to strings for consistent plotting
+        actual_production = actual_production.copy()
+        max_capacity = max_capacity.copy()
+        actual_production.index = actual_production.index.astype(str)
+        max_capacity.index = max_capacity.index.astype(str)
+
+        return actual_production, max_capacity
+
+    def _plot_capacity_balance_on_ax(
+        self,
+        ax,
+        product,
+        prod_df,
+        capacity_df,
+        annotated=True,
+        show_legend=True,
+        show_fill=True,
+        show_title=True,
+    ):
+        """
+        Plot production vs capacity lines on a given axis.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axis to plot on.
+        product : str
+            Product code to plot.
+        prod_df : pd.DataFrame
+            Production DataFrame from get_production().
+        capacity_df : pd.DataFrame
+            Capacity DataFrame from get_production_capacity().
+        annotated : bool, default=True
+            If True, show human-readable names instead of codes.
+        show_legend : bool, default=True
+            If True, show legend on the axis.
+        show_fill : bool, default=True
+            If True, fill area between production and capacity.
+        show_title : bool, default=True
+            If True, show title with product name.
+        """
+        actual_production, max_capacity = self._extract_product_data(product, prod_df, capacity_df)
+        product_name = self._get_name(product) if annotated else product
+
+        x_positions = np.arange(len(actual_production.index))
+
+        # Plot production line
+        ax.plot(
+            x_positions,
+            actual_production.values,
+            marker='o',
+            linewidth=self._plot_config["line_width"],
+            label='Production / Demand',
+            color='#2E86AB',
+            linestyle='-',
+            zorder=3
+        )
+
+        # Plot capacity line
+        ax.plot(
+            x_positions,
+            max_capacity.values,
+            marker='s',
+            linewidth=self._plot_config["line_width"],
+            label='Max Capacity',
+            color='#A23B72',
+            linestyle='--',
+            zorder=3
+        )
+
+        # Fill area between production and capacity
+        if show_fill:
+            ax.fill_between(
+                x_positions,
+                actual_production.values,
+                max_capacity.values,
+                alpha=0.2,
+                color='#A23B72',
+                label='Unused Capacity',
+                zorder=2
+            )
+
+        # Set labels and title
+        self._set_smart_xticks(ax, actual_production.index)
+        ax.set_ylabel(f"Quantity", fontsize=self._plot_config["fontsize"])
+
+        if show_title:
+            ax.set_title(
+                f"{product_name}",
+                fontsize=self._plot_config["fontsize"] + 2,
+                pad=10
+            )
+
+        # Add grid
+        ax.grid(
+            True,
+            alpha=self._plot_config["grid_alpha"],
+            linestyle=self._plot_config["grid_linestyle"]
+        )
+
+        if show_legend:
+            ax.legend(
+                loc='upper center',
+                bbox_to_anchor=(0.5, -0.15),
+                ncol=3,
+                fontsize=self._plot_config["fontsize"] - 2,
+                frameon=False
+            )
+
+    def _compute_capacity_breakdown(self, product):
+        """
+        Compute capacity additions, removals, and operation breakdown by process.
+
+        Parameters
+        ----------
+        product : str
+            Product code to compute breakdown for.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys: capacity_additions_df, capacity_removals_df,
+            existing_additions_df, existing_removals_df, operation_df.
+            All DataFrames have process columns and time index.
+        """
+        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
+        existing_cap_dict = getattr(self.m, "_existing_capacity_dict", {})
+
+        capacity_additions = {p: {} for p in self.m.PROCESS}
+        capacity_removals = {p: {} for p in self.m.PROCESS}
+        existing_additions = {p: {} for p in self.m.PROCESS}
+        existing_removals = {p: {} for p in self.m.PROCESS}
+        operation = {p: {} for p in self.m.PROCESS}
+
+        for t in self.m.SYSTEM_TIME:
+            for p in self.m.PROCESS:
+                prod_per_inst = sum(
+                    self.m.foreground_production[p, product, tau]
+                    for tau in self.m.PROCESS_TIME
+                    if pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
+                )
+
+                if prod_per_inst == 0:
+                    capacity_additions[p][t] = 0
+                    capacity_removals[p][t] = 0
+                    existing_additions[p][t] = 0
+                    existing_removals[p][t] = 0
+                    operation[p][t] = 0
+                    continue
+
+                op_start = pyo.value(self.m.process_operation_start[p])
+                op_end = pyo.value(self.m.process_operation_end[p])
+
+                # New capacity entering operation
+                t_entering = t - op_start
+                if t_entering in self.m.SYSTEM_TIME:
+                    installation_entering = pyo.value(self.m.var_installation[p, t_entering])
+                    capacity_additions[p][t] = installation_entering * prod_per_inst * fg_scale
+                else:
+                    capacity_additions[p][t] = 0
+
+                # Capacity exiting operation
+                t_exiting = t - op_end - 1
+                if t_exiting in self.m.SYSTEM_TIME:
+                    installation_exiting = pyo.value(self.m.var_installation[p, t_exiting])
+                    capacity_removals[p][t] = installation_exiting * prod_per_inst * fg_scale
+                else:
+                    capacity_removals[p][t] = 0
+
+                # Existing capacity changes
+                existing_add = 0
+                existing_rem = 0
+                for (proc, inst_year), capacity in existing_cap_dict.items():
+                    if proc == p:
+                        tau_existing = t - inst_year
+                        tau_existing_prev = (t - 1) - inst_year
+                        if op_start <= tau_existing <= op_end:
+                            if tau_existing_prev < op_start:
+                                existing_add += capacity * prod_per_inst * fg_scale
+                        if tau_existing > op_end:
+                            if op_start <= tau_existing_prev <= op_end:
+                                existing_rem += capacity * prod_per_inst * fg_scale
+                existing_additions[p][t] = existing_add
+                existing_removals[p][t] = existing_rem
+
+                # Operation level
+                var_op = pyo.value(self.m.var_operation[p, t])
+                operation[p][t] = var_op * prod_per_inst * fg_scale
+
+        # Convert to DataFrames
+        capacity_additions_df = pd.DataFrame(capacity_additions)
+        capacity_additions_df.index = capacity_additions_df.index.astype(str)
+
+        capacity_removals_df = pd.DataFrame(capacity_removals)
+        capacity_removals_df.index = capacity_removals_df.index.astype(str)
+
+        existing_additions_df = pd.DataFrame(existing_additions)
+        existing_additions_df.index = existing_additions_df.index.astype(str)
+
+        existing_removals_df = pd.DataFrame(existing_removals)
+        existing_removals_df.index = existing_removals_df.index.astype(str)
+
+        operation_df = pd.DataFrame(operation)
+        operation_df.index = operation_df.index.astype(str)
+
+        # Filter to only processes with non-zero values
+        has_values = ((capacity_additions_df != 0).any(axis=0) |
+                     (capacity_removals_df != 0).any(axis=0) |
+                     (existing_additions_df != 0).any(axis=0) |
+                     (existing_removals_df != 0).any(axis=0) |
+                     (operation_df != 0).any(axis=0))
+        capacity_additions_df = capacity_additions_df.loc[:, has_values]
+        capacity_removals_df = capacity_removals_df.loc[:, has_values]
+        existing_additions_df = existing_additions_df.loc[:, has_values]
+        existing_removals_df = existing_removals_df.loc[:, has_values]
+        operation_df = operation_df.loc[:, has_values]
+
+        return {
+            "capacity_additions_df": capacity_additions_df,
+            "capacity_removals_df": capacity_removals_df,
+            "existing_additions_df": existing_additions_df,
+            "existing_removals_df": existing_removals_df,
+            "operation_df": operation_df,
+        }
+
+    def _plot_capacity_balance_detailed_on_ax(
+        self,
+        ax,
+        product,
+        prod_df,
+        capacity_df,
+        annotated=True,
+        show_legend=True,
+        show_title=True,
+    ):
+        """
+        Plot detailed capacity balance with grouped bars on a given axis.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axis to plot on.
+        product : str
+            Product code to plot.
+        prod_df : pd.DataFrame
+            Production DataFrame.
+        capacity_df : pd.DataFrame
+            Capacity DataFrame.
+        annotated : bool, default=True
+            If True, show human-readable names.
+        show_legend : bool, default=True
+            If True, show legend.
+        show_title : bool, default=True
+            If True, show title.
+
+        Returns
+        -------
+        tuple
+            (process_legend, type_legend) for creating shared legends.
+        """
+        from matplotlib.patches import Patch
+
+        actual_production, max_capacity = self._extract_product_data(product, prod_df, capacity_df)
+        product_name = self._get_name(product) if annotated else product
+
+        # Compute breakdown data
+        breakdown = self._compute_capacity_breakdown(product)
+        capacity_additions_df = breakdown["capacity_additions_df"]
+        capacity_removals_df = breakdown["capacity_removals_df"]
+        existing_additions_df = breakdown["existing_additions_df"]
+        existing_removals_df = breakdown["existing_removals_df"]
+        operation_df = breakdown["operation_df"]
+
+        # Color palette
+        distinct_colors = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+        ]
+        bar_colors = [distinct_colors[i % len(distinct_colors)] for i in range(len(capacity_additions_df.columns))]
+
+        # Annotate DataFrames
+        capacity_additions_df = self._annotate_dataframe(capacity_additions_df.copy(), annotated)
+        capacity_removals_df = self._annotate_dataframe(capacity_removals_df.copy(), annotated)
+        existing_additions_df = self._annotate_dataframe(existing_additions_df.copy(), annotated)
+        existing_removals_df = self._annotate_dataframe(existing_removals_df.copy(), annotated)
+        operation_df = self._annotate_dataframe(operation_df.copy(), annotated)
+
+        x_positions = np.arange(len(actual_production.index))
+
+        process_legend = []
+        type_legend = []
+
+        if not capacity_additions_df.empty:
+            bar_width = 0.35
+            offset = 0.20
+            cap_positions = x_positions - offset
+            op_positions = x_positions + offset
+
+            # Plot capacity additions (positive, dark green border)
+            bottom_additions = np.zeros(len(x_positions))
+            for i, col in enumerate(capacity_additions_df.columns):
+                add_values = capacity_additions_df[col].values
+                clr = bar_colors[i] if i < len(bar_colors) else 'black'
+                ax.bar(cap_positions, add_values, width=bar_width, bottom=bottom_additions,
+                       color=clr, hatch="///", edgecolor="#30A834FF", linewidth=1.5, zorder=1)
+                bottom_additions += add_values
+
+            # Plot existing capacity additions (light green border)
+            for i, col in enumerate(existing_additions_df.columns):
+                add_values = existing_additions_df[col].values
+                clr = bar_colors[i] if i < len(bar_colors) else 'black'
+                ax.bar(cap_positions, add_values, width=bar_width, bottom=bottom_additions,
+                       color=clr, hatch="///", edgecolor="#81C784", linewidth=1.5, zorder=1)
+                bottom_additions += add_values
+
+            # Plot capacity removals (negative, dark red border)
+            bottom_removals = np.zeros(len(x_positions))
+            for i, col in enumerate(capacity_removals_df.columns):
+                rem_values = capacity_removals_df[col].values
+                clr = bar_colors[i] if i < len(bar_colors) else 'black'
+                ax.bar(cap_positions, -rem_values, width=bar_width, bottom=bottom_removals,
+                       color=clr, hatch="///", edgecolor="#CD221FFF", linewidth=1.5, zorder=1)
+                bottom_removals -= rem_values
+
+            # Plot existing capacity removals (light red border)
+            for i, col in enumerate(existing_removals_df.columns):
+                rem_values = existing_removals_df[col].values
+                clr = bar_colors[i] if i < len(bar_colors) else 'black'
+                ax.bar(cap_positions, -rem_values, width=bar_width, bottom=bottom_removals,
+                       color=clr, hatch="///", edgecolor="#E57373", linewidth=1.5, zorder=1)
+                bottom_removals -= rem_values
+
+            # Plot operation (solid bars)
+            bottom_operation = np.zeros(len(x_positions))
+            for i, col in enumerate(operation_df.columns):
+                operation_values = operation_df[col].values
+                color = bar_colors[i] if i < len(bar_colors) else f'C{i}'
+                ax.bar(op_positions, operation_values, width=bar_width, bottom=bottom_operation,
+                       alpha=0.9, color=color, edgecolor='black', linewidth=1, zorder=2)
+                bottom_operation += operation_values
+
+            ax.axhline(0, color='gray', linewidth=0.5, zorder=0)
+
+            # Bar group labels
+            ax.text(cap_positions[0], -0.08, 'Δ Cap', transform=ax.get_xaxis_transform(),
+                   ha='center', va='top', fontsize=self._plot_config["fontsize"] - 3, color='gray')
+            ax.text(op_positions[0], -0.08, 'Op', transform=ax.get_xaxis_transform(),
+                   ha='center', va='top', fontsize=self._plot_config["fontsize"] - 3, color='gray')
+
+            # Build legend handles
+            process_legend = [Patch(facecolor=bar_colors[i], edgecolor='black', linewidth=0.5, label=col)
+                            for i, col in enumerate(capacity_additions_df.columns)]
+            type_legend = [
+                Patch(facecolor="white", edgecolor='#30A834', linewidth=2, label='+ New Cap'),
+                Patch(facecolor="white", edgecolor='#81C784', linewidth=2, label='+ Existing Cap'),
+                Patch(facecolor="white", edgecolor='#CD221F', linewidth=2, label='− New Cap'),
+                Patch(facecolor="white", edgecolor='#E57373', linewidth=2, label='− Existing Cap'),
+            ]
+
+        # Plot production and capacity lines
+        ax.plot(x_positions, actual_production.values, marker='o',
+                linewidth=self._plot_config["line_width"], label='Production / Demand',
+                color='#2E86AB', linestyle='-', zorder=3)
+        ax.plot(x_positions, max_capacity.values, marker='s',
+                linewidth=self._plot_config["line_width"], label='Max Capacity',
+                color='#A23B72', linestyle='--', zorder=3)
+
+        self._set_smart_xticks(ax, actual_production.index)
+        ax.set_ylabel(f"Quantity", fontsize=self._plot_config["fontsize"])
+
+        if show_title:
+            ax.set_title(f"{product_name}", fontsize=self._plot_config["fontsize"] + 2, pad=10)
+
+        ax.grid(True, alpha=self._plot_config["grid_alpha"], linestyle=self._plot_config["grid_linestyle"])
+
+        if show_legend and process_legend:
+            all_handles = process_legend + type_legend
+            ncol = min(6, len(all_handles))
+            ax.legend(handles=all_handles, loc='upper center', bbox_to_anchor=(0.5, -0.15),
+                     ncol=ncol, fontsize=self._plot_config["fontsize"] - 2, frameon=False)
+
+        return process_legend, type_legend
+
+    def plot_capacity_balance(self, product=None, prod_df=None, capacity_df=None, demand_df=None, annotated=True, detailed=False):
         """
         Plot actual production vs maximum available capacity for a specific product.
 
@@ -782,8 +1339,8 @@ class PostProcessor:
         - Production (demand is assumed equal and overlaid)
         - Maximum available capacity (dashed line)
 
-        Optionally shows grouped bars per time step:
-        - Left bar: New capacity installations (stacked by process)
+        When detailed=True, also shows grouped bars per time step:
+        - Left bar: Capacity changes (additions/removals stacked by process)
         - Right bar: Operation level (stacked by process)
 
         Parameters
@@ -798,8 +1355,8 @@ class PostProcessor:
             Demand DataFrame from get_demand()
         annotated : bool, default=True
             If True, show human-readable names instead of codes
-        show_grouped_bars : bool, default=False
-            If True, show grouped bars for capacity installations and operation
+        detailed : bool, default=False
+            If True, show grouped bars for capacity changes and operation by process
         """
         # Get data if not provided
         if prod_df is None:
@@ -811,300 +1368,174 @@ class PostProcessor:
 
         # Determine which product to plot
         if product is None:
-            # Find first product with non-zero demand
             products_with_demand = demand_df.columns[(demand_df != 0).any(axis=0)]
             if len(products_with_demand) == 0:
                 raise ValueError("No products with non-zero demand found")
             product = products_with_demand[0]
 
-        # Extract data for the selected product
-        # Production: sum across all processes for this product
-        if isinstance(prod_df.columns, pd.MultiIndex):
-            # Production has MultiIndex (Process, Product)
-            production_cols = [col for col in prod_df.columns if col[1] == product]
-            actual_production = prod_df[production_cols].sum(axis=1)
-        else:
-            # Single product case
-            actual_production = prod_df[product] if product in prod_df.columns else pd.Series(0, index=prod_df.index)
-
-        # Capacity for this product
-        max_capacity = capacity_df[product] if product in capacity_df.columns else pd.Series(0, index=capacity_df.index)
-
-        # Convert indices to strings for consistent plotting
-        actual_production.index = actual_production.index.astype(str)
-        max_capacity.index = max_capacity.index.astype(str)
-
-        # Build distinct color palette - use widely spaced colors for better distinction
-        distinct_colors = [
-            '#1f77b4',  # blue
-            '#ff7f0e',  # orange
-            '#2ca02c',  # green
-            '#d62728',  # red
-            '#9467bd',  # purple
-            '#8c564b',  # brown
-            '#e377c2',  # pink
-            '#7f7f7f',  # gray
-            '#bcbd22',  # olive
-            '#17becf',  # cyan
-        ]
-
-        # Calculate grouped bar data if requested
-        capacity_additions_df = None
-        capacity_removals_df = None
-        operation_df = None
-        bar_colors = None
-        if show_grouped_bars:
-            fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
-
-            # Calculate capacity additions, removals, and operation for each process
-            capacity_additions = {p: {} for p in self.m.PROCESS}
-            capacity_removals = {p: {} for p in self.m.PROCESS}
-            operation = {p: {} for p in self.m.PROCESS}
-
-            for t in self.m.SYSTEM_TIME:
-                for p in self.m.PROCESS:
-                    # Production capacity per installation for this product
-                    prod_per_inst = sum(
-                        self.m.foreground_production[p, product, tau]
-                        for tau in self.m.PROCESS_TIME
-                        if pyo.value(self.m.process_operation_start[p]) <= tau <= pyo.value(self.m.process_operation_end[p])
-                    )
-
-                    # Skip processes that don't produce this product
-                    if prod_per_inst == 0:
-                        capacity_additions[p][t] = 0
-                        capacity_removals[p][t] = 0
-                        operation[p][t] = 0
-                        continue
-
-                    # New capacity added at time t (new installations entering operation)
-                    # This happens when installation from (t - operation_start) enters operation phase
-                    op_start = pyo.value(self.m.process_operation_start[p])
-                    t_entering = t - op_start
-                    if t_entering in self.m.SYSTEM_TIME:
-                        installation_entering = pyo.value(self.m.var_installation[p, t_entering])
-                        capacity_additions[p][t] = installation_entering * prod_per_inst * fg_scale
-                    else:
-                        capacity_additions[p][t] = 0
-
-                    # Capacity removed at time t (installations leaving operation phase)
-                    # This happens when installation from (t - operation_end - 1) exits operation
-                    op_end = pyo.value(self.m.process_operation_end[p])
-                    t_exiting = t - op_end - 1
-                    if t_exiting in self.m.SYSTEM_TIME:
-                        installation_exiting = pyo.value(self.m.var_installation[p, t_exiting])
-                        capacity_removals[p][t] = installation_exiting * prod_per_inst * fg_scale
-                    else:
-                        capacity_removals[p][t] = 0
-
-                    # Operation = var_operation × production per installation
-                    var_op = pyo.value(self.m.var_operation[p, t])
-                    operation[p][t] = var_op * prod_per_inst * fg_scale
-
-            # Convert to DataFrames
-            capacity_additions_df = pd.DataFrame(capacity_additions)
-            capacity_additions_df.index = capacity_additions_df.index.astype(str)
-
-            capacity_removals_df = pd.DataFrame(capacity_removals)
-            capacity_removals_df.index = capacity_removals_df.index.astype(str)
-
-            operation_df = pd.DataFrame(operation)
-            operation_df.index = operation_df.index.astype(str)
-
-            # Filter to only processes with non-zero values at some point
-            has_values = ((capacity_additions_df != 0).any(axis=0) |
-                         (capacity_removals_df != 0).any(axis=0) |
-                         (operation_df != 0).any(axis=0))
-            capacity_additions_df = capacity_additions_df.loc[:, has_values]
-            capacity_removals_df = capacity_removals_df.loc[:, has_values]
-            operation_df = operation_df.loc[:, has_values]
-
-            # Distinct palette for per-process bars
-            bar_colors = [distinct_colors[i % len(distinct_colors)] for i in range(len(capacity_additions_df.columns))]
-
-            # Annotate if requested
-            capacity_additions_df = self._annotate_dataframe(capacity_additions_df, annotated)
-            capacity_removals_df = self._annotate_dataframe(capacity_removals_df, annotated)
-            operation_df = self._annotate_dataframe(operation_df, annotated)
-
-        # Get product name for annotation
-        product_name = self._get_name(product) if annotated else product
-
-        # Create figure
         fig, axes = self._create_clean_axes(nrows=1, ncols=1)
         ax = axes[0]
 
-        # Define x positions
-        x_positions = np.arange(len(actual_production.index))
-
-        # Plot grouped bars if requested
-        if show_grouped_bars and capacity_additions_df is not None and not capacity_additions_df.empty:
-            bar_width = 0.35  # width for each grouped bar
-            offset = 0.20     # separation between bars
-
-            # Grouped bars: capacity changes on left, operation on right
-            cap_positions = x_positions - offset
-            op_positions = x_positions + offset
-
-            # Plot capacity additions as positive stacked bars (green fill, process color border)
-            bottom_additions = np.zeros(len(x_positions))
-            for i, col in enumerate(capacity_additions_df.columns):
-                add_values = capacity_additions_df[col].values
-                clr = bar_colors[i] if i < len(bar_colors) else 'black'
-
-                ax.bar(
-                    cap_positions,
-                    add_values,
-                    width=bar_width,
-                    bottom=bottom_additions,
-                    # alpha=0.7,
-                    color=clr,  # Green fill for additions
-                    hatch="///",
-                    edgecolor="#30A834FF",  # Process color as border
-                    linewidth=1.5,
-                    zorder=1
-                )
-                bottom_additions += add_values
-
-            # Plot capacity removals as negative stacked bars (red fill, process color border)
-            bottom_removals = np.zeros(len(x_positions))
-            for i, col in enumerate(capacity_removals_df.columns):
-                rem_values = capacity_removals_df[col].values
-                clr = bar_colors[i] if i < len(bar_colors) else 'black'
-
-                ax.bar(
-                    cap_positions,
-                    -rem_values,  # Negative for removals
-                    width=bar_width,
-                    bottom=bottom_removals,
-                    # alpha=0.7,
-                    color=clr,  # Red fill for removals
-                    hatch="///",
-                    edgecolor="#CD221FFF",  # Process color as border
-                    linewidth=1.5,
-                    zorder=1
-                )
-                bottom_removals -= rem_values
-
-            # Plot operation as stacked bars (grouped right) - same colors, solid
-            bottom_operation = np.zeros(len(x_positions))
-            for i, col in enumerate(operation_df.columns):
-                operation_values = operation_df[col].values
-                color = bar_colors[i] if i < len(bar_colors) else f'C{i}'
-
-                ax.bar(
-                    op_positions,
-                    operation_values,
-                    width=bar_width,
-                    bottom=bottom_operation,
-                    alpha=0.9,
-                    color=color,
-                    edgecolor='black',
-                    linewidth=1,
-                    zorder=2
-                )
-                bottom_operation += operation_values
-
-            # Add horizontal line at zero for capacity changes
-            ax.axhline(0, color='gray', linewidth=0.5, zorder=0)
-
-            # Add bar group labels at bottom
-            ax.text(cap_positions[0], -0.08, 'Δ Cap', transform=ax.get_xaxis_transform(),
-                   ha='center', va='top', fontsize=self._plot_config["fontsize"] - 3, color='gray')
-            ax.text(op_positions[0], -0.08, 'Op', transform=ax.get_xaxis_transform(),
-                   ha='center', va='top', fontsize=self._plot_config["fontsize"] - 3, color='gray')
-
-            # Create custom legend: process colors (as borders) + bar type distinction
-            from matplotlib.patches import Patch
-            # Process legend shows border color to identify process
-            process_legend = [Patch(facecolor=bar_colors[i], edgecolor='black', linewidth=0.5, label=col)
-                            for i, col in enumerate(capacity_additions_df.columns)]
-            # Type legend shows fill color meaning
-            type_legend = [
-                Patch(facecolor="white", edgecolor='#4CAF50', linewidth=2, label='+ Capacity'),
-                Patch(facecolor="white", edgecolor='#E53935', linewidth=2, label='− Capacity'),
-            ]
-
-        # Plot production (demand assumed equal)
-        ax.plot(
-            x_positions,
-            actual_production.values,
-            marker='o',
-            linewidth=self._plot_config["line_width"],
-            label='Production / Demand',
-            color='#2E86AB',
-            linestyle='-',
-            zorder=3
-        )
-
-        # Plot maximum capacity
-        ax.plot(
-            x_positions,
-            max_capacity.values,
-            marker='s',
-            linewidth=self._plot_config["line_width"],
-            label='Max Capacity',
-            color='#A23B72',
-            linestyle='--',
-            zorder=3
-        )
-
-        # Fill area between production and capacity (only if not showing grouped bars)
-        if not show_grouped_bars:
-            ax.fill_between(
-                x_positions,
-                actual_production.values,
-                max_capacity.values,
-                alpha=0.2,
-                color='#A23B72',
-                label='Unused Capacity',
-                zorder=2
+        if detailed:
+            self._plot_capacity_balance_detailed_on_ax(
+                ax, product, prod_df, capacity_df,
+                annotated=annotated, show_legend=True, show_title=True
+            )
+        else:
+            self._plot_capacity_balance_on_ax(
+                ax, product, prod_df, capacity_df,
+                annotated=annotated, show_legend=True, show_fill=True, show_title=True
             )
 
-        # Set labels and title
-        self._set_smart_xticks(ax, actual_production.index)
-        ax.set_ylabel(f"Quantity of {product_name}", fontsize=self._plot_config["fontsize"])
+        fig.tight_layout()
+        fig.subplots_adjust(bottom=0.25)
+        plt.show()
 
-        # Update title based on mode
-        title = f"Production vs Capacity: {product_name}"
-        ax.set_title(
-            title,
-            fontsize=self._plot_config["fontsize"] + 2,
-            pad=10
+    # Alias for backward compatibility
+    plot_production_vs_capacity = plot_capacity_balance
+
+    def plot_capacity_balance_all(self, prod_df=None, capacity_df=None, demand_df=None, annotated=True, detailed=False):
+        """
+        Plot production vs capacity for all products in the foreground system.
+
+        Creates a grid of subplots, one for each product with non-zero production
+        or capacity. Each subplot shows the production line and capacity line
+        over time.
+
+        When detailed=True, also shows grouped bars per time step for each product:
+        - Left bar: Capacity changes (additions/removals stacked by process)
+        - Right bar: Operation level (stacked by process)
+
+        Parameters
+        ----------
+        prod_df : pd.DataFrame, optional
+            Production DataFrame from get_production()
+        capacity_df : pd.DataFrame, optional
+            Capacity DataFrame from get_production_capacity()
+        demand_df : pd.DataFrame, optional
+            Demand DataFrame from get_demand()
+        annotated : bool, default=True
+            If True, show human-readable names instead of codes
+        detailed : bool, default=False
+            If True, show grouped bars for capacity changes and operation by process
+        """
+        # Get data if not provided
+        if prod_df is None:
+            prod_df = self.get_production()
+        if capacity_df is None:
+            capacity_df = self.get_production_capacity()
+        if demand_df is None:
+            demand_df = self.get_demand()
+
+        # Collect all products that have either production or capacity
+        all_products = set()
+
+        # Products from production (MultiIndex columns)
+        if isinstance(prod_df.columns, pd.MultiIndex):
+            prod_products = set(col[1] for col in prod_df.columns)
+            # Filter to products with non-zero production
+            for product in prod_products:
+                production_cols = [col for col in prod_df.columns if col[1] == product]
+                if (prod_df[production_cols].sum(axis=1) != 0).any():
+                    all_products.add(product)
+        else:
+            for product in prod_df.columns:
+                if (prod_df[product] != 0).any():
+                    all_products.add(product)
+
+        # Products from capacity
+        for product in capacity_df.columns:
+            if (capacity_df[product] != 0).any():
+                all_products.add(product)
+
+        if not all_products:
+            raise ValueError("No products with production or capacity found")
+
+        # Sort products for consistent ordering
+        products = sorted(all_products)
+
+        # Determine grid dimensions
+        n_products = len(products)
+        ncols = min(2, n_products)
+        nrows = math.ceil(n_products / ncols)
+
+        # Calculate figure size
+        base_w, base_h = self._plot_config["figsize"]
+        fig_w = base_w * ncols
+        fig_h = base_h * max(1, nrows * 0.8)
+
+        fig, axes = plt.subplots(
+            nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h), sharex=True
         )
 
-        # Add grid
-        ax.grid(
-            True,
-            alpha=self._plot_config["grid_alpha"],
-            linestyle=self._plot_config["grid_linestyle"]
-        )
+        # Handle single subplot case
+        if n_products == 1:
+            axes = np.array([axes])
+        axes = axes.flatten() if isinstance(axes, np.ndarray) else [axes]
 
-        # Add legend below the plot
-        if show_grouped_bars and capacity_additions_df is not None and not capacity_additions_df.empty:
-            # Custom legend for grouped bars: show processes + bar type distinction
+        # Plot each product
+        process_legend = []
+        type_legend = []
+        for i, product in enumerate(products):
+            ax = axes[i]
+            if detailed:
+                proc_leg, type_leg = self._plot_capacity_balance_detailed_on_ax(
+                    ax, product, prod_df, capacity_df,
+                    annotated=annotated,
+                    show_legend=False,  # We'll add a shared legend
+                    show_title=True
+                )
+                # Keep the first non-empty legend handles for shared legend
+                if not process_legend and proc_leg:
+                    process_legend = proc_leg
+                    type_legend = type_leg
+            else:
+                self._plot_capacity_balance_on_ax(
+                    ax, product, prod_df, capacity_df,
+                    annotated=annotated,
+                    show_legend=False,  # We'll add a shared legend
+                    show_fill=True,
+                    show_title=True
+                )
+
+        # Hide unused axes
+        for j in range(len(products), len(axes)):
+            fig.delaxes(axes[j])
+
+        # Add shared legend at the bottom
+        if detailed and process_legend:
+            # For detailed mode, combine process and type legends
+            from matplotlib.patches import Patch
             all_handles = process_legend + type_legend
             ncol = min(6, len(all_handles))
-            ax.legend(
+            fig.legend(
                 handles=all_handles,
                 loc='upper center',
-                bbox_to_anchor=(0.5, -0.15),
+                bbox_to_anchor=(0.5, 0.02),
                 ncol=ncol,
                 fontsize=self._plot_config["fontsize"] - 2,
                 frameon=False
             )
         else:
-            handles, labels = ax.get_legend_handles_labels()
-            ax.legend(
+            # For simple mode, get handles from the first axis
+            handles, labels = axes[0].get_legend_handles_labels()
+            fig.legend(
+                handles, labels,
                 loc='upper center',
-                bbox_to_anchor=(0.5, -0.15),
+                bbox_to_anchor=(0.5, 0.02),
                 ncol=3,
                 fontsize=self._plot_config["fontsize"] - 2,
                 frameon=False
             )
 
+        fig.suptitle(
+            "Production vs Capacity by Product",
+            fontsize=self._plot_config["fontsize"] + 4,
+            y=1.02
+        )
+
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.25)
+        fig.subplots_adjust(bottom=0.15 if detailed else 0.12)
         plt.show()
 
     def plot_utilization_heatmap(self, product=None, annotated=True, show_values=True):

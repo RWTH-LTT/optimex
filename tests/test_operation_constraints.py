@@ -68,7 +68,6 @@ def test_operation_capacity_single_installation():
         inputs=model_inputs,
         objective_category="climate_change",
         name="test_single_installation",
-        flexible_operation=True,
     )
 
     solved_model, objective, results = optimizer.solve_model(
@@ -147,7 +146,6 @@ def test_operation_capacity_multiple_installations():
         inputs=model_inputs,
         objective_category="climate_change",
         name="test_multiple_installations",
-        flexible_operation=True,
     )
 
     solved_model, objective, results = optimizer.solve_model(
@@ -232,7 +230,6 @@ def test_operation_capacity_with_varying_demand():
         inputs=model_inputs,
         objective_category="climate_change",
         name="test_varying_demand",
-        flexible_operation=True,
     )
 
     solved_model, objective, results = optimizer.solve_model(
@@ -327,7 +324,6 @@ def test_operation_capacity_constraint_violation_prevented():
         inputs=model_inputs,
         objective_category="climate_change",
         name="test_capacity_limit",
-        flexible_operation=True,
     )
 
     solved_model, objective, results = optimizer.solve_model(
@@ -415,7 +411,6 @@ def test_operation_capacity_edge_case_zero_installation():
         inputs=model_inputs,
         objective_category="climate_change",
         name="test_zero_installation",
-        flexible_operation=True,
     )
 
     solved_model, objective, results = optimizer.solve_model(
@@ -476,7 +471,6 @@ def test_operation_bounds_validation_function():
         inputs=model_inputs,
         objective_category="climate_change",
         name="test_validation",
-        flexible_operation=True,
     )
 
     solved_model, objective, results = optimizer.solve_model(

@@ -159,6 +159,40 @@ class OptimizationModelInputs(BaseModel):
             "and production but their installation impacts are excluded (sunk costs)."
         ),
     )
+
+    flow_limits_max: Optional[Dict[Tuple[str, int], float]] = Field(
+        None,
+        description=(
+            "Time-specific upper bounds on flows. Maps (flow, system_time) to maximum "
+            "allowed flow amount at that time. Flows can be from PRODUCT, INTERMEDIATE_FLOW, "
+            "or ELEMENTARY_FLOW sets."
+        ),
+    )
+    flow_limits_min: Optional[Dict[Tuple[str, int], float]] = Field(
+        None,
+        description=(
+            "Time-specific lower bounds on flows. Maps (flow, system_time) to minimum "
+            "required flow amount at that time. Flows can be from PRODUCT, INTERMEDIATE_FLOW, "
+            "or ELEMENTARY_FLOW sets."
+        ),
+    )
+    cumulative_flow_limits_max: Optional[Dict[str, float]] = Field(
+        None,
+        description=(
+            "Cumulative upper bounds on flows across all system times. Maps flow identifier "
+            "to maximum total flow amount. Flows can be from PRODUCT, INTERMEDIATE_FLOW, "
+            "or ELEMENTARY_FLOW sets."
+        ),
+    )
+    cumulative_flow_limits_min: Optional[Dict[str, float]] = Field(
+        None,
+        description=(
+            "Cumulative lower bounds on flows across all system times. Maps flow identifier "
+            "to minimum total flow amount. Flows can be from PRODUCT, INTERMEDIATE_FLOW, "
+            "or ELEMENTARY_FLOW sets."
+        ),
+    )
+
     process_names: Optional[Dict[str, str]] = Field(
         None, description="Maps process identifiers to human-readable names."
     )
@@ -373,6 +407,27 @@ class OptimizationModelInputs(BaseModel):
                         f"non-negative, got {capacity}"
                     )
 
+        # Flow limits validation - flows can be from PRODUCT, INTERMEDIATE_FLOW, or ELEMENTARY_FLOW
+        all_flows = products | intermediate_flows | elementary_flows
+
+        if data.get("flow_limits_max") is not None:
+            for key in data["flow_limits_max"].keys():
+                validate_keys([key[0]], all_flows, "flow_limits_max flows")
+                validate_keys([key[1]], system_times, "flow_limits_max system times")
+
+        if data.get("flow_limits_min") is not None:
+            for key in data["flow_limits_min"].keys():
+                validate_keys([key[0]], all_flows, "flow_limits_min flows")
+                validate_keys([key[1]], system_times, "flow_limits_min system times")
+
+        if data.get("cumulative_flow_limits_max") is not None:
+            for key in data["cumulative_flow_limits_max"].keys():
+                validate_keys([key], all_flows, "cumulative_flow_limits_max flows")
+
+        if data.get("cumulative_flow_limits_min") is not None:
+            for key in data["cumulative_flow_limits_min"].keys():
+                validate_keys([key], all_flows, "cumulative_flow_limits_min flows")
+
         return data
 
     # For flexible operation: all non-zero flow values must remain constant over time
@@ -519,6 +574,61 @@ class OptimizationModelInputs(BaseModel):
                 "Constraints would be infeasible."
             )
 
+        # Check per-period flow limits
+        if self.flow_limits_min and self.flow_limits_max:
+            for key in self.flow_limits_min:
+                if key in self.flow_limits_max:
+                    min_val = self.flow_limits_min[key]
+                    max_val = self.flow_limits_max[key]
+                    if min_val > max_val:
+                        raise ValueError(
+                            f"Flow limit min ({min_val}) > max ({max_val}) for {key}. "
+                            "Constraints would be infeasible."
+                        )
+
+        # Check cumulative flow limits
+        if self.cumulative_flow_limits_min and self.cumulative_flow_limits_max:
+            for flow in self.cumulative_flow_limits_min:
+                if flow in self.cumulative_flow_limits_max:
+                    min_val = self.cumulative_flow_limits_min[flow]
+                    max_val = self.cumulative_flow_limits_max[flow]
+                    if min_val > max_val:
+                        raise ValueError(
+                            f"Cumulative flow limit min ({min_val}) > max ({max_val}) "
+                            f"for {flow}. Constraints would be infeasible."
+                        )
+
+        # Cross-check cumulative vs. per-period flow limits
+        if self.flow_limits_max and self.cumulative_flow_limits_min:
+            for flow in self.cumulative_flow_limits_min:
+                total_max = sum(
+                    self.flow_limits_max.get((flow, t), float("inf"))
+                    for t in self.SYSTEM_TIME
+                )
+                min_cum = self.cumulative_flow_limits_min[flow]
+                # Only check if there are actual per-period limits for this flow
+                has_period_limits = any(
+                    (flow, t) in self.flow_limits_max for t in self.SYSTEM_TIME
+                )
+                if has_period_limits and min_cum > total_max:
+                    raise ValueError(
+                        f"Cumulative flow limit min ({min_cum}) > sum of per-period "
+                        f"max ({total_max}) for {flow}. Constraints would be infeasible."
+                    )
+
+        if self.flow_limits_min and self.cumulative_flow_limits_max:
+            for flow in self.cumulative_flow_limits_max:
+                total_min = sum(
+                    self.flow_limits_min.get((flow, t), 0.0)
+                    for t in self.SYSTEM_TIME
+                )
+                max_cum = self.cumulative_flow_limits_max[flow]
+                if total_min > max_cum:
+                    raise ValueError(
+                        f"Sum of per-period flow limit min ({total_min}) > cumulative "
+                        f"flow limit max ({max_cum}) for {flow}. Constraints would be infeasible."
+                    )
+
         return self
 
     @model_validator(mode="after")
@@ -634,9 +744,12 @@ class OptimizationModelInputs(BaseModel):
             scaled.demand = {k: v / fg_scale for k, v in self.demand.items()}
 
         # 4. Scale category impact limits (if provided)
+        # Impact is computed as: (biosphere/fg_scale) * (characterization/cat_scale) * installation
+        # So scaled_impact = real_impact / (fg_scale * cat_scale)
+        # Therefore, the limit must also be divided by both scales
         if self.category_impact_limit is not None:
             scaled.category_impact_limit = {
-                cat: lim / cat_scales.get(cat, 1.0)
+                cat: lim / (fg_scale * cat_scales.get(cat, 1.0))
                 for cat, lim in self.category_impact_limit.items()
             }
 
@@ -743,6 +856,10 @@ class ModelInputManager:
             "cumulative_process_limits_min": None,
             "process_coupling": None,
             "existing_capacity": None,
+            "flow_limits_max": None,
+            "flow_limits_min": None,
+            "cumulative_flow_limits_max": None,
+            "cumulative_flow_limits_min": None,
         }
         self.model_inputs = OptimizationModelInputs(**data)
         return self.model_inputs
@@ -758,6 +875,85 @@ class ModelInputManager:
         data.update(overrides)
         self.model_inputs = OptimizationModelInputs(**data)
         return self.model_inputs
+
+    def extend_demand(self, years: int) -> OptimizationModelInputs:
+        """
+        Extend demand beyond the current horizon by repeating last known values.
+
+        This addresses the "end-of-horizon" effect where the optimizer doesn't
+        build capacity near the end because there's no future demand. By extending
+        demand, the model accounts for ongoing production requirements.
+
+        Also extends all time-indexed tensors (foreground_technosphere,
+        foreground_biosphere, background_inventory, characterization) by copying
+        the last year's values to the extended years.
+
+        Parameters
+        ----------
+        years : int
+            Number of additional years to extend beyond current SYSTEM_TIME.
+
+        Returns
+        -------
+        OptimizationModelInputs
+            Updated model inputs with extended time horizon and demand.
+        """
+        if self.model_inputs is None:
+            raise ValueError("No OptimizationModelInputs to extend.")
+
+        if years <= 0:
+            return self.model_inputs
+
+        # Determine time extension
+        current_times = list(self.model_inputs.SYSTEM_TIME)
+        last_year = max(current_times)
+        extended_times = list(range(last_year + 1, last_year + 1 + years))
+        new_system_time = current_times + extended_times
+
+        # Extend demand: repeat last value per product
+        extended_demand = dict(self.model_inputs.demand)
+        for product in self.model_inputs.PRODUCT:
+            last_demand = self.model_inputs.demand.get((product, last_year), 0)
+            for t in extended_times:
+                extended_demand[(product, t)] = last_demand
+
+        # Extend foreground_technosphere: (process, flow, tau, system_time)
+        extended_fg_tech = dict(self.model_inputs.foreground_technosphere)
+        for key, value in self.model_inputs.foreground_technosphere.items():
+            if key[3] == last_year:  # key = (p, f, tau, t)
+                for t in extended_times:
+                    extended_fg_tech[(key[0], key[1], key[2], t)] = value
+
+        # Extend foreground_biosphere: (process, elem_flow, tau, system_time)
+        extended_fg_bio = dict(self.model_inputs.foreground_biosphere)
+        for key, value in self.model_inputs.foreground_biosphere.items():
+            if key[3] == last_year:  # key = (p, e, tau, t)
+                for t in extended_times:
+                    extended_fg_bio[(key[0], key[1], key[2], t)] = value
+
+        # Extend background_inventory: (process, elem_flow, tau, system_time)
+        extended_bg_inv = dict(self.model_inputs.background_inventory)
+        for key, value in self.model_inputs.background_inventory.items():
+            if key[3] == last_year:  # key = (p, e, tau, t)
+                for t in extended_times:
+                    extended_bg_inv[(key[0], key[1], key[2], t)] = value
+
+        # Extend characterization: (category, elem_flow, system_time)
+        extended_char = dict(self.model_inputs.characterization)
+        for key, value in self.model_inputs.characterization.items():
+            if key[2] == last_year:  # key = (c, e, t)
+                for t in extended_times:
+                    extended_char[(key[0], key[1], t)] = value
+
+        # Use override to create new model inputs with extended data
+        return self.override(
+            SYSTEM_TIME=new_system_time,
+            demand=extended_demand,
+            foreground_technosphere=extended_fg_tech,
+            foreground_biosphere=extended_fg_bio,
+            background_inventory=extended_bg_inv,
+            characterization=extended_char,
+        )
 
     @staticmethod
     def _tuple_key_to_str(key: Tuple) -> str:
@@ -783,10 +979,26 @@ class ModelInputManager:
             return None
         return {ModelInputManager._str_to_tuple_key(k): v for k, v in d.items()}
 
-    def save(self, path: str) -> None:
+    def save_inputs(self, path: str) -> None:
         """
-        Save the current OptimizationModelInputs to a JSON or pickle file based on extension.
-        Supports .json and .pkl extensions.
+        Save the current OptimizationModelInputs to a JSON or pickle file.
+
+        Use this to save model inputs so you can recreate the optimization model
+        without re-running LCA processing.
+
+        Parameters
+        ----------
+        path : str
+            File path with .json or .pkl extension.
+            - .json: Human-readable, good for inspection and version control
+            - .pkl: Faster, preserves exact Python types
+
+        Examples
+        --------
+        >>> manager.save_inputs("model_inputs.json")
+        >>> # Later:
+        >>> manager.load_inputs("model_inputs.json")
+        >>> model = optimizer.create_model(manager.model_inputs, ...)
         """
         if self.model_inputs is None:
             raise ValueError("No OptimizationModelInputs to save.")
@@ -811,6 +1023,8 @@ class ModelInputManager:
                 "process_operation_limits_min",
                 "process_coupling",
                 "existing_capacity",
+                "flow_limits_max",
+                "flow_limits_min",
             ]
 
             for field in tuple_key_fields:
@@ -831,9 +1045,31 @@ class ModelInputManager:
         else:
             raise ValueError("Unsupported file extension; use .json or .pkl")
 
-    def load(self, path: str) -> OptimizationModelInputs:
+    # Alias for backward compatibility
+    save = save_inputs
+
+    def load_inputs(self, path: str) -> OptimizationModelInputs:
         """
         Load OptimizationModelInputs from a JSON or pickle file.
+
+        Use this to load previously saved model inputs, allowing you to
+        recreate the optimization model without re-running LCA processing.
+
+        Parameters
+        ----------
+        path : str
+            File path with .json or .pkl extension.
+
+        Returns
+        -------
+        OptimizationModelInputs
+            The loaded model inputs, also stored in self.model_inputs.
+
+        Examples
+        --------
+        >>> manager = ModelInputManager()
+        >>> manager.load_inputs("model_inputs.json")
+        >>> model = optimizer.create_model(manager.model_inputs, ...)
         """
         if path.endswith(".json"):
             with open(path, "r") as f:
@@ -856,6 +1092,8 @@ class ModelInputManager:
                 "process_operation_limits_min",
                 "process_coupling",
                 "existing_capacity",
+                "flow_limits_max",
+                "flow_limits_min",
             ]
 
             for field in tuple_key_fields:
@@ -875,3 +1113,6 @@ class ModelInputManager:
         else:
             raise ValueError("Unsupported file extension; use .json or .pkl")
         return self.model_inputs
+
+    # Alias for backward compatibility
+    load = load_inputs

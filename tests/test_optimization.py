@@ -45,7 +45,6 @@ def test_all_params_scaled(abstract_system_model_inputs):
         inputs=raw,
         objective_category="climate_change",
         name="test_model",
-        flexible_operation=True,
     )
 
     # 3) Now assert model.param == scaled_inputs.param
@@ -234,7 +233,6 @@ def test_cumulative_process_limits_respected():
         inputs=model_inputs,
         objective_category="climate_change",
         name="test_cumulative_limits",
-        flexible_operation=True,
     )
 
     solved_model, objective, results = optimizer.solve_model(
@@ -326,7 +324,6 @@ def test_capacity_constraint_with_high_production():
         inputs=model_inputs,
         objective_category="climate_change",
         name="test_high_production",
-        flexible_operation=True,
     )
 
     solved_model, objective, results = optimizer.solve_model(
@@ -430,7 +427,6 @@ def test_operation_limits_respected():
         inputs=model_inputs_baseline,
         objective_category="climate_change",
         name="test_operation_limits_baseline",
-        flexible_operation=True,
     )
     solved_baseline, obj_baseline, _ = optimizer.solve_model(
         model_baseline, solver_name="glpk", tee=False
@@ -466,7 +462,6 @@ def test_operation_limits_respected():
         inputs=model_inputs_limited,
         objective_category="climate_change",
         name="test_operation_limits_constrained",
-        flexible_operation=True,
     )
     solved_limited, obj_limited, results = optimizer.solve_model(
         model_limited, solver_name="glpk", tee=False
@@ -504,4 +499,547 @@ def test_operation_limits_respected():
     )
     assert pytest.approx(1650, rel=0.01) == obj_limited, (
         f"Limited objective should be 1650 kg CO2, got {obj_limited}"
+    )
+
+
+def test_category_impact_limit_respected():
+    """
+    Test that category impact limits are correctly applied and respected.
+
+    Creates a model with two processes:
+    - P1 (low CO2, high land use): preferred for climate, bad for land
+    - P2 (high CO2, low land use): worse for climate, better for land
+
+    Optimizes for climate_change but limits land_use.
+    Verifies that the land_use limit forces P2 usage even though it has higher CO2.
+    """
+    model_inputs_dict = {
+        "PROCESS": ["P1_low_co2", "P2_high_co2"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": [],
+        "ELEMENTARY_FLOW": ["CO2", "land"],
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020, 2021, 2022, 2023, 2024],
+        "CATEGORY": ["climate_change", "land_use"],
+        "operation_time_limits": {
+            "P1_low_co2": (0, 0),
+            "P2_high_co2": (0, 0),
+        },
+        "demand": {
+            ("product", 2020): 10,
+            ("product", 2021): 10,
+            ("product", 2022): 10,
+            ("product", 2023): 10,
+            ("product", 2024): 10,
+        },
+        "foreground_technosphere": {},
+        "internal_demand_technosphere": {},
+        # P1: low CO2 (1), high land use (10)
+        # P2: high CO2 (5), low land use (1)
+        "foreground_biosphere": {
+            ("P1_low_co2", "CO2", 0): 1,
+            ("P1_low_co2", "land", 0): 10,
+            ("P2_high_co2", "CO2", 0): 5,
+            ("P2_high_co2", "land", 0): 1,
+        },
+        "foreground_production": {
+            ("P1_low_co2", "product", 0): 1.0,
+            ("P2_high_co2", "product", 0): 1.0,
+        },
+        "operation_flow": {
+            ("P1_low_co2", "product"): True,
+            ("P1_low_co2", "CO2"): True,
+            ("P1_low_co2", "land"): True,
+            ("P2_high_co2", "product"): True,
+            ("P2_high_co2", "CO2"): True,
+            ("P2_high_co2", "land"): True,
+        },
+        "background_inventory": {},
+        "mapping": {
+            ("db_2020", 2020): 1.0,
+            ("db_2020", 2021): 1.0,
+            ("db_2020", 2022): 1.0,
+            ("db_2020", 2023): 1.0,
+            ("db_2020", 2024): 1.0,
+        },
+        "characterization": {
+            ("climate_change", "CO2", 2020): 1.0,
+            ("climate_change", "CO2", 2021): 1.0,
+            ("climate_change", "CO2", 2022): 1.0,
+            ("climate_change", "CO2", 2023): 1.0,
+            ("climate_change", "CO2", 2024): 1.0,
+            ("climate_change", "land", 2020): 0.0,
+            ("climate_change", "land", 2021): 0.0,
+            ("climate_change", "land", 2022): 0.0,
+            ("climate_change", "land", 2023): 0.0,
+            ("climate_change", "land", 2024): 0.0,
+            ("land_use", "CO2", 2020): 0.0,
+            ("land_use", "CO2", 2021): 0.0,
+            ("land_use", "CO2", 2022): 0.0,
+            ("land_use", "CO2", 2023): 0.0,
+            ("land_use", "CO2", 2024): 0.0,
+            ("land_use", "land", 2020): 1.0,
+            ("land_use", "land", 2021): 1.0,
+            ("land_use", "land", 2022): 1.0,
+            ("land_use", "land", 2023): 1.0,
+            ("land_use", "land", 2024): 1.0,
+        },
+    }
+
+    # First solve WITHOUT category limit to establish baseline
+    model_inputs_baseline = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_baseline = optimizer.create_model(
+        inputs=model_inputs_baseline,
+        objective_category="climate_change",
+        name="test_category_limit_baseline",
+    )
+    solved_baseline, obj_baseline, _ = optimizer.solve_model(
+        model_baseline, solver_name="glpk", tee=False
+    )
+
+    # Without limits, P1 should handle all demand (lowest CO2)
+    # Total demand = 50, all from P1 -> CO2 = 50, land_use = 500
+    p1_op_baseline = sum(
+        pyo.value(solved_baseline.var_operation["P1_low_co2", t])
+        for t in solved_baseline.SYSTEM_TIME
+    )
+    assert pytest.approx(50, rel=0.01) == p1_op_baseline, (
+        f"Without limits, P1 should handle all demand (50), got {p1_op_baseline}"
+    )
+    assert pytest.approx(50, rel=0.01) == obj_baseline, (
+        f"Baseline climate impact should be 50, got {obj_baseline}"
+    )
+
+    # Calculate baseline land_use impact
+    baseline_land_use = (
+        pyo.value(solved_baseline.total_impact["land_use"])
+        * solved_baseline.scales["foreground"]
+        * solved_baseline.scales["characterization"]["land_use"]
+    )
+    assert pytest.approx(500, rel=0.01) == baseline_land_use, (
+        f"Baseline land_use should be 500, got {baseline_land_use}"
+    )
+
+    # Now solve WITH category impact limit on land_use
+    # Limit land_use to 200 (requires 30 units from P2)
+    # P1 produces 10 land per unit, P2 produces 1 land per unit
+    # If P1 handles x units and P2 handles (50-x) units:
+    # land_use = 10*x + 1*(50-x) = 9x + 50 <= 200
+    # => x <= 150/9 = 16.67
+    # So P1 max ~16.67 units, P2 handles ~33.33 units
+    land_use_limit = 200.0
+
+    model_inputs_limited = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_inputs_limited.category_impact_limit = {"land_use": land_use_limit}
+
+    model_limited = optimizer.create_model(
+        inputs=model_inputs_limited,
+        objective_category="climate_change",
+        name="test_category_limit_constrained",
+    )
+    solved_limited, obj_limited, results = optimizer.solve_model(
+        model_limited, solver_name="glpk", tee=False
+    )
+
+    # Verify solution is optimal
+    assert results.solver.status == pyo.SolverStatus.ok
+    assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+    # Calculate actual land_use impact (denormalize)
+    actual_land_use = (
+        pyo.value(solved_limited.total_impact["land_use"])
+        * solved_limited.scales["foreground"]
+        * solved_limited.scales["characterization"]["land_use"]
+    )
+
+    # Verify land_use respects the limit (within 1% tolerance)
+    assert actual_land_use <= land_use_limit * 1.01, (
+        f"Actual land_use ({actual_land_use:.2f}) exceeds limit ({land_use_limit})"
+    )
+
+    # Verify land_use is at or near the limit (constraint should be binding)
+    assert actual_land_use >= land_use_limit * 0.99, (
+        f"Actual land_use ({actual_land_use:.2f}) is significantly below "
+        f"limit ({land_use_limit}), suggesting constraint is not binding"
+    )
+
+    # Verify the limited solution has higher climate impact (forced to use P2)
+    assert obj_limited > obj_baseline, (
+        f"Limited objective ({obj_limited}) should be higher than baseline ({obj_baseline})"
+    )
+
+    # Expected: P1 uses ~16.67, P2 uses ~33.33
+    # With land_use constraint: 10*x + 1*(50-x) <= 200  =>  x <= 150/9 = 16.67
+    # Climate impact = 1*x + 5*(50-x) = 250 - 4x = 250 - 4*(150/9) = 183.33
+    expected_climate = 250 - 4 * (150 / 9)  # ~183.33
+    assert pytest.approx(expected_climate, rel=0.01) == obj_limited, (
+        f"Limited climate impact should be ~{expected_climate:.1f}, got {obj_limited}"
+    )
+
+
+def test_time_specific_flow_limits_respected():
+    """
+    Test that time-specific flow limits correctly constrain flows at each time step.
+
+    Tests both max and min flow limits to verify constraints are properly enforced.
+    """
+    model_inputs_dict = {
+        "PROCESS": ["P1_low_emission", "P2_high_emission"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": [],
+        "ELEMENTARY_FLOW": ["CO2"],
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020, 2021, 2022],
+        "CATEGORY": ["climate_change"],
+        "operation_time_limits": {
+            "P1_low_emission": (0, 0),
+            "P2_high_emission": (0, 0),
+        },
+        "demand": {
+            ("product", 2020): 10,
+            ("product", 2021): 10,
+            ("product", 2022): 10,
+        },
+        "foreground_technosphere": {},
+        "internal_demand_technosphere": {},
+        # P1 has low emissions (1 kg CO2 per unit), P2 has high emissions (5 kg CO2)
+        "foreground_biosphere": {
+            ("P1_low_emission", "CO2", 0): 1,
+            ("P2_high_emission", "CO2", 0): 5,
+        },
+        "foreground_production": {
+            ("P1_low_emission", "product", 0): 1.0,
+            ("P2_high_emission", "product", 0): 1.0,
+        },
+        "operation_flow": {
+            ("P1_low_emission", "product"): True,
+            ("P1_low_emission", "CO2"): True,
+            ("P2_high_emission", "product"): True,
+            ("P2_high_emission", "CO2"): True,
+        },
+        "background_inventory": {},
+        "mapping": {
+            ("db_2020", 2020): 1.0,
+            ("db_2020", 2021): 1.0,
+            ("db_2020", 2022): 1.0,
+        },
+        "characterization": {
+            ("climate_change", "CO2", 2020): 1.0,
+            ("climate_change", "CO2", 2021): 1.0,
+            ("climate_change", "CO2", 2022): 1.0,
+        },
+    }
+
+    # First solve WITHOUT flow limits to establish baseline
+    model_inputs_baseline = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_baseline = optimizer.create_model(
+        inputs=model_inputs_baseline,
+        objective_category="climate_change",
+        name="test_flow_limit_baseline",
+    )
+    solved_baseline, obj_baseline, _ = optimizer.solve_model(
+        model_baseline, solver_name="glpk", tee=False
+    )
+
+    # Without limits, P1 should handle all demand (lowest emissions)
+    # Total CO2 = 30 * 1 = 30 kg
+    assert pytest.approx(30, rel=0.01) == obj_baseline, (
+        f"Baseline emissions should be 30, got {obj_baseline}"
+    )
+
+    # Test 1: MINIMUM flow limit - force higher emissions in 2022
+    # Require CO2 >= 20 in 2022 (higher than optimal of 10)
+    # With demand of 10, this requires some P2 usage:
+    # x + y = 10 (demand), x + 5y >= 20 (min emission)
+    # y = 10 - x, so x + 5(10-x) >= 20 => -4x >= -30 => x <= 7.5
+    # So P1 max 7.5 units, P2 min 2.5 units
+    # Optimal: P1=7.5, P2=2.5 => CO2 = 7.5 + 12.5 = 20 (binding)
+    co2_min_2022 = 20.0
+
+    model_inputs_min = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_inputs_min.flow_limits_min = {
+        ("CO2", 2022): co2_min_2022,
+    }
+
+    model_min = optimizer.create_model(
+        inputs=model_inputs_min,
+        objective_category="climate_change",
+        name="test_flow_limit_min",
+    )
+    solved_min, obj_min, results_min = optimizer.solve_model(
+        model_min, solver_name="glpk", tee=False
+    )
+
+    # Verify solution is optimal
+    assert results_min.solver.status == pyo.SolverStatus.ok
+    assert results_min.solver.termination_condition == pyo.TerminationCondition.optimal
+
+    # Calculate actual CO2 emissions in 2022 (denormalize)
+    fg_scale = solved_min.scales["foreground"]
+    actual_co2_2022 = pyo.value(solved_min.total_elementary_flow["CO2", 2022]) * fg_scale
+
+    # Verify CO2 meets the minimum limit
+    assert actual_co2_2022 >= co2_min_2022 * 0.99, (
+        f"Actual CO2 in 2022 ({actual_co2_2022:.2f}) is below min limit ({co2_min_2022})"
+    )
+
+    # Verify constraint is binding (optimizer should hit exactly the min)
+    assert actual_co2_2022 <= co2_min_2022 * 1.01, (
+        f"Actual CO2 in 2022 ({actual_co2_2022:.2f}) is above min limit ({co2_min_2022}), "
+        "constraint should be binding"
+    )
+
+    # Verify objective is higher than baseline (forced suboptimal in one year)
+    # Expected: 2 years at 10 kg + 1 year at 20 kg = 40 kg
+    expected_obj = 2 * 10 + 20  # 40 kg
+    assert pytest.approx(expected_obj, rel=0.01) == obj_min, (
+        f"Limited objective should be {expected_obj}, got {obj_min}"
+    )
+
+    # Test 2: MAX flow limit below achievable minimum should be infeasible
+    # Optimal CO2 per year is 10 kg (all P1). Limit to 8 kg should be infeasible.
+    model_inputs_infeasible = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_inputs_infeasible.flow_limits_max = {
+        ("CO2", 2022): 8.0,  # Below optimal of 10, forces impossible constraint
+    }
+
+    model_infeasible = optimizer.create_model(
+        inputs=model_inputs_infeasible,
+        objective_category="climate_change",
+        name="test_flow_limit_infeasible",
+    )
+    solver = pyo.SolverFactory("glpk")
+    results_infeasible = solver.solve(model_infeasible, tee=False)
+
+    # Model should be infeasible since min achievable CO2 (10) > limit (8)
+    assert results_infeasible.solver.termination_condition in [
+        pyo.TerminationCondition.infeasible,
+        pyo.TerminationCondition.other,  # GLPK sometimes reports as "other"
+    ], (
+        f"Model should be infeasible when CO2 limit < achievable, "
+        f"got {results_infeasible.solver.termination_condition}"
+    )
+
+
+def test_cumulative_flow_limits_respected():
+    """
+    Test that cumulative flow limits correctly constrain total flows across all years.
+
+    Tests both max and min cumulative flow limits to verify constraints are properly enforced.
+    """
+    model_inputs_dict = {
+        "PROCESS": ["P1_low_emission", "P2_high_emission"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": [],
+        "ELEMENTARY_FLOW": ["CO2"],
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020, 2021, 2022],
+        "CATEGORY": ["climate_change"],
+        "operation_time_limits": {
+            "P1_low_emission": (0, 0),
+            "P2_high_emission": (0, 0),
+        },
+        "demand": {
+            ("product", 2020): 10,
+            ("product", 2021): 10,
+            ("product", 2022): 10,
+        },
+        "foreground_technosphere": {},
+        "internal_demand_technosphere": {},
+        # P1 has low emissions (1 kg CO2 per unit), P2 has high emissions (5 kg CO2)
+        "foreground_biosphere": {
+            ("P1_low_emission", "CO2", 0): 1,
+            ("P2_high_emission", "CO2", 0): 5,
+        },
+        "foreground_production": {
+            ("P1_low_emission", "product", 0): 1.0,
+            ("P2_high_emission", "product", 0): 1.0,
+        },
+        "operation_flow": {
+            ("P1_low_emission", "product"): True,
+            ("P1_low_emission", "CO2"): True,
+            ("P2_high_emission", "product"): True,
+            ("P2_high_emission", "CO2"): True,
+        },
+        "background_inventory": {},
+        "mapping": {
+            ("db_2020", 2020): 1.0,
+            ("db_2020", 2021): 1.0,
+            ("db_2020", 2022): 1.0,
+        },
+        "characterization": {
+            ("climate_change", "CO2", 2020): 1.0,
+            ("climate_change", "CO2", 2021): 1.0,
+            ("climate_change", "CO2", 2022): 1.0,
+        },
+    }
+
+    # Baseline: all from P1, total CO2 = 30 kg
+    model_inputs_baseline = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_baseline = optimizer.create_model(
+        inputs=model_inputs_baseline,
+        objective_category="climate_change",
+        name="test_cumulative_flow_baseline",
+    )
+    solved_baseline, obj_baseline, _ = optimizer.solve_model(
+        model_baseline, solver_name="glpk", tee=False
+    )
+    assert pytest.approx(30, rel=0.01) == obj_baseline
+
+    # Test 1: MINIMUM cumulative flow limit - force higher total emissions
+    # Require total CO2 >= 50 (higher than optimal of 30)
+    # With total demand of 30, this requires some P2 usage:
+    # x + y = 30 (demand), x + 5y >= 50 (min emission)
+    # y = 30 - x, so x + 5(30-x) >= 50 => -4x >= -100 => x <= 25
+    # So P1 max 25 units, P2 min 5 units
+    # Optimal: P1=25, P2=5 => CO2 = 25 + 25 = 50 (binding)
+    cumulative_min = 50.0
+
+    model_inputs_min = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_inputs_min.cumulative_flow_limits_min = {
+        "CO2": cumulative_min,
+    }
+
+    model_min = optimizer.create_model(
+        inputs=model_inputs_min,
+        objective_category="climate_change",
+        name="test_cumulative_flow_min",
+    )
+    solved_min, obj_min, results_min = optimizer.solve_model(
+        model_min, solver_name="glpk", tee=False
+    )
+
+    # Verify solution is optimal
+    assert results_min.solver.status == pyo.SolverStatus.ok
+    assert results_min.solver.termination_condition == pyo.TerminationCondition.optimal
+
+    # Calculate total CO2 emissions (denormalize)
+    fg_scale = solved_min.scales["foreground"]
+    total_co2 = sum(
+        pyo.value(solved_min.total_elementary_flow["CO2", t]) * fg_scale
+        for t in solved_min.SYSTEM_TIME
+    )
+
+    # Verify total CO2 meets the minimum limit
+    assert total_co2 >= cumulative_min * 0.99, (
+        f"Total CO2 ({total_co2:.2f}) is below min limit ({cumulative_min})"
+    )
+
+    # Verify constraint is binding
+    assert total_co2 <= cumulative_min * 1.01, (
+        f"Total CO2 ({total_co2:.2f}) is above min limit ({cumulative_min}), "
+        "constraint should be binding"
+    )
+
+    # Verify objective matches expected (50 kg)
+    assert pytest.approx(cumulative_min, rel=0.01) == obj_min, (
+        f"Limited objective should be {cumulative_min}, got {obj_min}"
+    )
+
+    # Test 2: MAX cumulative flow limit below achievable should be infeasible
+    # Optimal total CO2 is 30 kg. Limit to 25 kg should be infeasible.
+    model_inputs_infeasible = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_inputs_infeasible.cumulative_flow_limits_max = {
+        "CO2": 25.0,  # Below optimal of 30, forces impossible constraint
+    }
+
+    model_infeasible = optimizer.create_model(
+        inputs=model_inputs_infeasible,
+        objective_category="climate_change",
+        name="test_cumulative_flow_infeasible",
+    )
+    solver = pyo.SolverFactory("glpk")
+    results_infeasible = solver.solve(model_infeasible, tee=False)
+
+    # Model should be infeasible since min achievable CO2 (30) > limit (25)
+    assert results_infeasible.solver.termination_condition in [
+        pyo.TerminationCondition.infeasible,
+        pyo.TerminationCondition.other,  # GLPK sometimes reports as "other"
+    ], (
+        f"Model should be infeasible when cumulative CO2 limit < optimal, "
+        f"got {results_infeasible.solver.termination_condition}"
+    )
+
+
+def test_product_flow_limits_respected():
+    """
+    Test that flow limits on products (not just elementary flows) are respected.
+
+    Creates a model where production of a product is limited.
+    """
+    model_inputs_dict = {
+        "PROCESS": ["P1"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": [],
+        "ELEMENTARY_FLOW": ["CO2"],
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020, 2021, 2022],
+        "CATEGORY": ["climate_change"],
+        "operation_time_limits": {"P1": (0, 0)},
+        "demand": {
+            ("product", 2020): 10,
+            ("product", 2021): 10,
+            ("product", 2022): 10,
+        },
+        "foreground_technosphere": {},
+        "internal_demand_technosphere": {},
+        "foreground_biosphere": {("P1", "CO2", 0): 1},
+        "foreground_production": {("P1", "product", 0): 1.0},
+        "operation_flow": {("P1", "product"): True, ("P1", "CO2"): True},
+        "background_inventory": {},
+        "mapping": {
+            ("db_2020", 2020): 1.0,
+            ("db_2020", 2021): 1.0,
+            ("db_2020", 2022): 1.0,
+        },
+        "characterization": {
+            ("climate_change", "CO2", 2020): 1.0,
+            ("climate_change", "CO2", 2021): 1.0,
+            ("climate_change", "CO2", 2022): 1.0,
+        },
+    }
+
+    # Test time-specific product limit - limit product output in 2021 to 5 units
+    # This should make the model infeasible since demand is 10
+    model_inputs_limited = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_inputs_limited.flow_limits_max = {
+        ("product", 2021): 5.0,  # Can only produce 5 units in 2021
+    }
+
+    model_limited = optimizer.create_model(
+        inputs=model_inputs_limited,
+        objective_category="climate_change",
+        name="test_product_flow_limit",
+    )
+    # Use solver directly without relying on solve_model's value extraction
+    solver = pyo.SolverFactory("glpk")
+    results = solver.solve(model_limited, tee=False)
+
+    # Model should be infeasible since demand (10) > production limit (5)
+    assert results.solver.termination_condition == pyo.TerminationCondition.infeasible, (
+        f"Model should be infeasible when product limit < demand, "
+        f"got {results.solver.termination_condition}"
+    )
+
+    # Now test with cumulative limit of 25 (less than total demand of 30)
+    model_inputs_cumulative = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_inputs_cumulative.cumulative_flow_limits_max = {
+        "product": 25.0,  # Total production limited to 25 units
+    }
+
+    model_cumulative = optimizer.create_model(
+        inputs=model_inputs_cumulative,
+        objective_category="climate_change",
+        name="test_cumulative_product_limit",
+    )
+    results_cum = solver.solve(model_cumulative, tee=False)
+
+    # Model should be infeasible since total demand (30) > cumulative limit (25)
+    assert results_cum.solver.termination_condition == pyo.TerminationCondition.infeasible, (
+        f"Model should be infeasible when cumulative product limit < total demand, "
+        f"got {results_cum.solver.termination_condition}"
     )

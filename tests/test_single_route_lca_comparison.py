@@ -153,7 +153,6 @@ def test_single_route_matches_standard_lca(setup_single_route_system):
         optimization_model_inputs,
         name="test_single_route",
         objective_category="climate_change",
-        flexible_operation=True,
     )
 
     _, obj_real, results = optimizer.solve_model(model, solver_name="glpk")

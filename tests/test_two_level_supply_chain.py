@@ -200,7 +200,6 @@ def test_two_level_supply_chain_matches_lca(setup_two_level_system):
         optimization_model_inputs,
         name="test_two_level",
         objective_category="climate_change",
-        flexible_operation=True,
     )
 
     _, obj_real, results = optimizer.solve_model(model, solver_name="glpk")
@@ -297,7 +296,6 @@ def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
         optimization_model_inputs,
         name="test_two_level_multi_temporal",
         objective_category="climate_change",
-        flexible_operation=True,
     )
 
     _, obj_real, results = optimizer.solve_model(model, solver_name="glpk")
