@@ -664,3 +664,80 @@ svg[class*="lucide"] polyline {
     fill: none !important;
     stroke: currentColor !important;
 }
+
+/* ============================================================================
+   13. HOME PAGE LINKS
+   ============================================================================ */
+
+p.home-links {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 1.25rem 0;
+}
+
+p.home-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-decoration: none;
+    padding: 0.4rem 0.65rem;
+    border-radius: 0.4rem;
+    border: 1px solid transparent;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+p.home-links a svg {
+    width: 0.85rem;
+    height: 0.85rem;
+    stroke: currentColor;
+    stroke-width: 2;
+}
+
+/* Dark mode - Primary */
+[data-md-color-scheme="slate"] p.home-links a.primary {
+    background-color: rgba(116, 179, 255, 0.1);
+    border-color: rgba(116, 179, 255, 0.25);
+    color: #74b3ff;
+}
+
+[data-md-color-scheme="slate"] p.home-links a.primary:hover {
+    background-color: rgba(116, 179, 255, 0.15);
+    border-color: rgba(116, 179, 255, 0.4);
+}
+
+/* Dark mode - Secondary */
+[data-md-color-scheme="slate"] p.home-links a:not(.primary) {
+    background-color: transparent;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #74b3ff;
+}
+
+[data-md-color-scheme="slate"] p.home-links a:not(.primary):hover {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Light mode - Primary */
+[data-md-color-scheme="default"] p.home-links a.primary {
+    background-color: rgba(0, 102, 204, 0.08);
+    border-color: rgba(0, 102, 204, 0.25);
+    color: #0066cc;
+}
+
+[data-md-color-scheme="default"] p.home-links a.primary:hover {
+    background-color: rgba(0, 102, 204, 0.12);
+    border-color: rgba(0, 102, 204, 0.4);
+}
+
+/* Light mode - Secondary */
+[data-md-color-scheme="default"] p.home-links a:not(.primary) {
+    background-color: transparent;
+    border-color: rgba(0, 0, 0, 0.1);
+    color: #0066cc;
+}
+
+[data-md-color-scheme="default"] p.home-links a:not(.primary):hover {
+    border-color: rgba(0, 0, 0, 0.2);
+}
