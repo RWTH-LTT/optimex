@@ -162,13 +162,13 @@ plugins:
 nav:
   - Home:
     - index.md
-    - Installation: content/installation.md
     - Changelog: content/changelog.md
     - License: content/license.md
     - Contributing: content/contributing.md
     - Code of Conduct: content/codeofconduct.md
   - How-Tos:
     - Quick Start: content/quickstart.md
+    - Installation: content/installation.md
     - Brightway Setup: content/brightway_setup.md
     - Foreground Modeling: content/foreground_modeling.md
     - Optimization Setup: content/optimization_setup.md

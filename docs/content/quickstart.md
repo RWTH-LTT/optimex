@@ -1,9 +1,16 @@
 # Quick Start
 
-A condensed reference for using `optimex`. For detailed explanations, see the individual How-To guides.
+A condensed reference for using `optimex`. For detailed explanations, see the individual How-To guides, our [examples](examples/index.md) or the [API Reference](../api/index.md).
 
-!!! tip "First time here?"
-    If you haven't installed `optimex` yet, head to the [Installation guide](installation.md) first.
+---
+
+## Install `optimex`
+
+```bash
+pip install optimex
+```
+
+For other installation methods (uv, conda) and platform-specific notes, see the [Installation guide](installation.md).
 
 ---
 
