@@ -170,15 +170,79 @@ def create_model(
         default=0,
         initialize=scaled_inputs.demand,
     )
-    model.foreground_technosphere = pyo.Param(
-        model.PROCESS,
-        model.INTERMEDIATE_FLOW,
-        model.PROCESS_TIME,
-        within=pyo.Reals,
-        doc="time-explicit foreground technosphere tensor A (background flows)",
-        default=0,
-        initialize=scaled_inputs.foreground_technosphere,
+    # Detect vintage mode: if vintage-aware tensors exist, use 4D parameters
+    # Otherwise use 3D parameters for backward compatibility
+    use_vintage_mode = (
+        scaled_inputs.REFERENCE_VINTAGES is not None
+        or scaled_inputs.foreground_technosphere_vintages is not None
+        or scaled_inputs.foreground_biosphere_vintages is not None
+        or scaled_inputs.foreground_production_vintages is not None
+        or scaled_inputs.technology_evolution is not None
     )
+    model._use_vintage_mode = use_vintage_mode
+
+    if use_vintage_mode:
+        # 4D vintage-aware tensors (process, flow, process_time, vintage/installation_year)
+        model.foreground_technosphere = pyo.Param(
+            model.PROCESS,
+            model.INTERMEDIATE_FLOW,
+            model.PROCESS_TIME,
+            model.SYSTEM_TIME,  # vintage/installation year
+            within=pyo.Reals,
+            doc="vintage-aware foreground technosphere tensor A[p,i,tau,vintage]",
+            default=0,
+            initialize=getattr(scaled_inputs, 'foreground_technosphere_effective', {}),
+        )
+        model.foreground_biosphere = pyo.Param(
+            model.PROCESS,
+            model.ELEMENTARY_FLOW,
+            model.PROCESS_TIME,
+            model.SYSTEM_TIME,  # vintage/installation year
+            within=pyo.Reals,
+            doc="vintage-aware foreground biosphere tensor B[p,e,tau,vintage]",
+            default=0,
+            initialize=getattr(scaled_inputs, 'foreground_biosphere_effective', {}),
+        )
+        model.foreground_production = pyo.Param(
+            model.PROCESS,
+            model.PRODUCT,
+            model.PROCESS_TIME,
+            model.SYSTEM_TIME,  # vintage/installation year
+            within=pyo.Reals,
+            doc="vintage-aware foreground production tensor F[p,r,tau,vintage]",
+            default=0,
+            initialize=getattr(scaled_inputs, 'foreground_production_effective', {}),
+        )
+    else:
+        # 3D tensors (backward compatible)
+        model.foreground_technosphere = pyo.Param(
+            model.PROCESS,
+            model.INTERMEDIATE_FLOW,
+            model.PROCESS_TIME,
+            within=pyo.Reals,
+            doc="time-explicit foreground technosphere tensor A (background flows)",
+            default=0,
+            initialize=scaled_inputs.foreground_technosphere,
+        )
+        model.foreground_biosphere = pyo.Param(
+            model.PROCESS,
+            model.ELEMENTARY_FLOW,
+            model.PROCESS_TIME,
+            within=pyo.Reals,
+            doc="time-explicit foreground biosphere tensor B",
+            default=0,
+            initialize=scaled_inputs.foreground_biosphere,
+        )
+        model.foreground_production = pyo.Param(
+            model.PROCESS,
+            model.PRODUCT,
+            model.PROCESS_TIME,
+            within=pyo.Reals,
+            doc="time-explicit foreground production tensor F",
+            default=0,
+            initialize=scaled_inputs.foreground_production,
+        )
+
     model.internal_demand_technosphere = pyo.Param(
         model.PROCESS,
         model.PRODUCT,
@@ -187,24 +251,6 @@ def create_model(
         doc="time-explicit internal demand tensor A^{internal}",
         default=0,
         initialize=scaled_inputs.internal_demand_technosphere,
-    )
-    model.foreground_biosphere = pyo.Param(
-        model.PROCESS,
-        model.ELEMENTARY_FLOW,
-        model.PROCESS_TIME,
-        within=pyo.Reals,
-        doc="time-explicit foreground biosphere tensor B",
-        default=0,
-        initialize=scaled_inputs.foreground_biosphere,
-    )
-    model.foreground_production = pyo.Param(
-        model.PROCESS,
-        model.PRODUCT,
-        model.PROCESS_TIME,
-        within=pyo.Reals,
-        doc="time-explicit foreground production tensor F",
-        default=0,
-        initialize=scaled_inputs.foreground_production,
     )
     model.background_inventory = pyo.Param(
         model.BACKGROUND_ID,
@@ -442,69 +488,92 @@ def create_model(
         rule=lambda m, p, t: m.var_operation[p, t] >= m.process_operation_limits_min[p, t],
     )
 
-    # Expressions builder
-    def scale_tensor_by_installation(tensor: pyo.Param, flow_set):
+    # Expressions builder - supports both 3D (legacy) and 4D (vintage-aware) tensors
+    # tensor[p, x, tau, vintage] where vintage is the installation year (t - tau) for 4D
+    # tensor[p, x, tau] for 3D (legacy)
+    def scale_tensor_by_installation(tensor: pyo.Param, flow_set, is_4d: bool):
         def expr(m, p, x, t):
-            return sum(
-                tensor[p, x, tau] * m.var_installation[p, t - tau]
-                for tau in m.PROCESS_TIME
-                if (t - tau in m.SYSTEM_TIME)
-                and (
-                    not in_operation_phase(p, tau)
-                    or not m.operation_flow[p, x]
+            if is_4d:
+                # 4D tensor: tensor[p, x, tau, vintage] where vintage = t - tau
+                return sum(
+                    tensor[p, x, tau, t - tau] * m.var_installation[p, t - tau]
+                    for tau in m.PROCESS_TIME
+                    if (t - tau in m.SYSTEM_TIME)
+                    and (
+                        not in_operation_phase(p, tau)
+                        or not m.operation_flow[p, x]
+                    )
                 )
-            )
+            else:
+                # 3D tensor (legacy): tensor[p, x, tau]
+                return sum(
+                    tensor[p, x, tau] * m.var_installation[p, t - tau]
+                    for tau in m.PROCESS_TIME
+                    if (t - tau in m.SYSTEM_TIME)
+                    and (
+                        not in_operation_phase(p, tau)
+                        or not m.operation_flow[p, x]
+                    )
+                )
 
         return pyo.Expression(
             model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
         )
 
-    def scale_tensor_by_operation(tensor: pyo.Param, flow_set):
+    def scale_tensor_by_operation(tensor: pyo.Param, flow_set, is_4d: bool):
         def expr(m, p, x, t):
             # Only apply operational scaling to flows marked as operational
             # Check the value explicitly since operation_flow is a Param
             if pyo.value(m.operation_flow[p, x]) == 0:
                 return 0
 
-            # For operational flows: use TOTAL across operation phase
-            # (same treatment as production flows)
-            # o_t represents production amount, so operational flows scale proportionally
-            # This is LINEAR: parameter × variable
-            total_flow_per_installation = sum(
-                tensor[p, x, tau]
-                for tau in m.PROCESS_TIME
-                if m.process_operation_start[p] <= tau <= m.process_operation_end[p]
-            )
-
-            # Total flow = sum(flow[tau]) × o_t
-            return total_flow_per_installation * m.var_operation[p, t]
+            if is_4d:
+                # 4D tensor: Sum flow contributions from all active installations at time t
+                result = 0
+                for tau in m.PROCESS_TIME:
+                    vintage = t - tau
+                    if (vintage in m.SYSTEM_TIME and
+                        m.process_operation_start[p] <= tau <= m.process_operation_end[p]):
+                        flow_per_unit = tensor[p, x, tau, vintage]
+                        result += flow_per_unit * m.var_installation[p, vintage]
+                return result
+            else:
+                # 3D tensor (legacy): use TOTAL across operation phase
+                total_flow_per_installation = sum(
+                    tensor[p, x, tau]
+                    for tau in m.PROCESS_TIME
+                    if m.process_operation_start[p] <= tau <= m.process_operation_end[p]
+                )
+                return total_flow_per_installation * m.var_operation[p, t]
 
         return pyo.Expression(
             model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
         )
 
+    # Create expressions with appropriate dimensionality based on vintage mode
     model.scaled_technosphere_dependent_on_installation = (
         scale_tensor_by_installation(
-            model.foreground_technosphere, "INTERMEDIATE_FLOW"
+            model.foreground_technosphere, "INTERMEDIATE_FLOW", is_4d=use_vintage_mode
         )
     )
     model.scaled_biosphere_dependent_on_installation = scale_tensor_by_installation(
-        model.foreground_biosphere, "ELEMENTARY_FLOW"
+        model.foreground_biosphere, "ELEMENTARY_FLOW", is_4d=use_vintage_mode
     )
     model.scaled_technosphere_dependent_on_operation = scale_tensor_by_operation(
-        model.foreground_technosphere, "INTERMEDIATE_FLOW"
+        model.foreground_technosphere, "INTERMEDIATE_FLOW", is_4d=use_vintage_mode
     )
     model.scaled_biosphere_dependent_on_operation = scale_tensor_by_operation(
-        model.foreground_biosphere, "ELEMENTARY_FLOW"
+        model.foreground_biosphere, "ELEMENTARY_FLOW", is_4d=use_vintage_mode
     )
+    # Internal demand is always 3D (not vintage-aware)
     model.scaled_internal_demand_dependent_on_installation = (
         scale_tensor_by_installation(
-            model.internal_demand_technosphere, "PRODUCT"
+            model.internal_demand_technosphere, "PRODUCT", is_4d=False
         )
     )
     model.scaled_internal_demand_dependent_on_operation = (
         scale_tensor_by_operation(
-            model.internal_demand_technosphere, "PRODUCT"
+            model.internal_demand_technosphere, "PRODUCT", is_4d=False
         )
     )
 
@@ -538,59 +607,79 @@ def create_model(
 
     def operation_capacity_constraint_rule(model, p, r, t):
         """
-        Capacity constraint: o_t ≤ (total production per installation) × (installations in operation)
+        Capacity constraint: o_t ≤ total_capacity_at_time_t
 
         This constraint ensures operation level cannot exceed the total production
-        capacity provided by active installations. The formulation matches the
-        demand constraint which also sums production over the operation phase.
+        capacity provided by active installations.
 
-        Note: foreground_production is SCALED, so we multiply by fg_scale to get
-        real capacity. var_operation is in REAL units (dimensionless activity level).
-
-        Only applied when process p produces product r (total_production > 0).
-
-        Brownfield (existing) capacity:
-        Existing capacity installed before SYSTEM_TIME is included in installations_in_operation
-        if it is still within its operation phase at time t. This allows brownfield capacity
-        to contribute to production without adding installation-phase impacts.
+        In vintage mode: different installation cohorts may have different production rates.
+        In legacy mode: all installations have the same production rate.
         """
         fg_scale = model.scales["foreground"]
-
-        # Total production per installation during operation phase (SCALED)
-        # This matches the demand constraint which also sums over operation phase
-        total_production_scaled = sum(
-            model.foreground_production[p, r, tau]
-            for tau in model.PROCESS_TIME
-            if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
-        )
-
-        # Skip constraint if process doesn't produce this product
-        # (otherwise constraint becomes var_operation <= 0, which is overly restrictive)
-        if total_production_scaled == 0:
-            return pyo.Constraint.Skip
-
-        # Count installations currently in their operation phase (REAL units)
-        # This includes both new installations (var_installation) and existing capacity
-        installations_in_operation = sum(
-            model.var_installation[p, t - tau]
-            for tau in model.PROCESS_TIME
-            if (t - tau in model.SYSTEM_TIME)
-            and model.process_operation_start[p] <= tau <= model.process_operation_end[p]
-        )
-
-        # Add existing (brownfield) capacity that is still in operation phase
-        # For existing capacity installed at inst_year, tau = t - inst_year
-        # It's in operation if: process_operation_start <= tau <= process_operation_end
         op_start = pyo.value(model.process_operation_start[p])
         op_end = pyo.value(model.process_operation_end[p])
-        for (proc, inst_year), capacity in model._existing_capacity_dict.items():
-            if proc == p:
-                tau_existing = t - inst_year
-                if op_start <= tau_existing <= op_end:
-                    installations_in_operation += capacity
 
-        # Capacity = total_production (SCALED) × fg_scale × installations (REAL) = (REAL)
-        capacity = total_production_scaled * fg_scale * installations_in_operation
+        if use_vintage_mode:
+            # 4D vintage-aware capacity calculation
+            first_vintage = min(model.SYSTEM_TIME)
+            has_production = any(
+                pyo.value(model.foreground_production[p, r, tau, first_vintage]) != 0
+                for tau in model.PROCESS_TIME
+                if op_start <= tau <= op_end
+            )
+            if not has_production:
+                return pyo.Constraint.Skip
+
+            # Total capacity from all vintage cohorts
+            total_capacity = 0
+            for tau in model.PROCESS_TIME:
+                vintage = t - tau
+                if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
+                    production_per_unit = sum(
+                        model.foreground_production[p, r, tau_op, vintage]
+                        for tau_op in model.PROCESS_TIME
+                        if op_start <= tau_op <= op_end
+                    )
+                    total_capacity += production_per_unit * model.var_installation[p, vintage]
+
+            # Add brownfield capacity
+            for (proc, inst_year), cap in model._existing_capacity_dict.items():
+                if proc == p:
+                    tau_existing = t - inst_year
+                    if op_start <= tau_existing <= op_end:
+                        nearest_vintage = min(model.SYSTEM_TIME)
+                        production_per_unit = sum(
+                            pyo.value(model.foreground_production[p, r, tau_op, nearest_vintage])
+                            for tau_op in model.PROCESS_TIME
+                            if op_start <= tau_op <= op_end
+                        )
+                        total_capacity += production_per_unit * cap
+
+            capacity = total_capacity * fg_scale
+        else:
+            # 3D legacy capacity calculation
+            total_production_scaled = sum(
+                model.foreground_production[p, r, tau]
+                for tau in model.PROCESS_TIME
+                if op_start <= tau <= op_end
+            )
+            if total_production_scaled == 0:
+                return pyo.Constraint.Skip
+
+            installations_in_operation = sum(
+                model.var_installation[p, t - tau]
+                for tau in model.PROCESS_TIME
+                if (t - tau in model.SYSTEM_TIME) and op_start <= tau <= op_end
+            )
+
+            for (proc, inst_year), cap in model._existing_capacity_dict.items():
+                if proc == p:
+                    tau_existing = t - inst_year
+                    if op_start <= tau_existing <= op_end:
+                        installations_in_operation += cap
+
+            capacity = total_production_scaled * fg_scale * installations_in_operation
+
         return model.var_operation[p, t] <= capacity
 
     model.OperationCapacity = pyo.Constraint(
@@ -602,40 +691,44 @@ def create_model(
 
     def product_demand_fulfillment_rule(model, r, t):
         """
-        Demand constraint: total_production × o_t ≥ f_t
+        Demand constraint: total_production == external_demand + internal_consumption
 
-        For production flows: use total production per installation (sum across operation phase).
-        o_t represents production amount, bounded by installed capacity.
-
-        Total production must meet:
-        - External demand (from demand parameter)
-        - Internal consumption by other foreground processes
-
-        This is LINEAR: parameter × variable
+        In vintage mode: production from each vintage cohort may differ.
+        In legacy mode: all installations have the same production rate.
         """
-        # Total production of product r at time t
-        # Sum of production across operation phase × operation level
-        total_production = sum(
-            sum(
-                model.foreground_production[p, r, tau]
-                for tau in model.PROCESS_TIME
-                if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+        if use_vintage_mode:
+            # 4D vintage-aware production calculation
+            total_production = 0
+            for p in model.PROCESS:
+                op_start = pyo.value(model.process_operation_start[p])
+                op_end = pyo.value(model.process_operation_end[p])
+                for tau in model.PROCESS_TIME:
+                    vintage = t - tau
+                    if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
+                        production_rate = sum(
+                            model.foreground_production[p, r, tau_op, vintage]
+                            for tau_op in model.PROCESS_TIME
+                            if op_start <= tau_op <= op_end
+                        )
+                        total_production += production_rate * model.var_installation[p, vintage]
+        else:
+            # 3D legacy production calculation
+            total_production = sum(
+                sum(
+                    model.foreground_production[p, r, tau]
+                    for tau in model.PROCESS_TIME
+                    if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+                )
+                * model.var_operation[p, t]
+                for p in model.PROCESS
             )
-            * model.var_operation[p, t]
-            for p in model.PROCESS
-        )
 
-        # External demand (from demand parameter)
         external_demand = model.demand[r, t]
-
-        # Internal consumption (sum over all processes consuming product r)
         internal_consumption = sum(
             model.scaled_internal_demand_dependent_on_installation[p, r, t]
             + model.scaled_internal_demand_dependent_on_operation[p, r, t]
             for p in model.PROCESS
         )
-
-        # Exact fulfillment (= constraint)
         return total_production == external_demand + internal_consumption
 
     model.ProductDemandFulfillment = pyo.Constraint(
@@ -700,15 +793,33 @@ def create_model(
 
     # Expression for total product output at time t (in SCALED units)
     def total_product_flow_rule(model, r, t):
-        return sum(
-            sum(
-                model.foreground_production[p, r, tau]
-                for tau in model.PROCESS_TIME
-                if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+        if use_vintage_mode:
+            # 4D vintage-aware: sum over all active vintage cohorts
+            total = 0
+            for p in model.PROCESS:
+                op_start = pyo.value(model.process_operation_start[p])
+                op_end = pyo.value(model.process_operation_end[p])
+                for tau in model.PROCESS_TIME:
+                    vintage = t - tau
+                    if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
+                        production_rate = sum(
+                            model.foreground_production[p, r, tau_op, vintage]
+                            for tau_op in model.PROCESS_TIME
+                            if op_start <= tau_op <= op_end
+                        )
+                        total += production_rate * model.var_installation[p, vintage]
+            return total
+        else:
+            # 3D legacy
+            return sum(
+                sum(
+                    model.foreground_production[p, r, tau]
+                    for tau in model.PROCESS_TIME
+                    if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+                )
+                * model.var_operation[p, t]
+                for p in model.PROCESS
             )
-            * model.var_operation[p, t]
-            for p in model.PROCESS
-        )
 
     model.total_product_flow = pyo.Expression(
         model.PRODUCT, model.SYSTEM_TIME, rule=total_product_flow_rule
@@ -952,45 +1063,69 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
     max_violation = 0.0
     fg_scale = model.scales["foreground"]
 
+    use_vintage_mode = getattr(model, "_use_vintage_mode", False)
+
     for p in model.PROCESS:
         for t in model.SYSTEM_TIME:
             operation_value = pyo.value(model.var_operation[p, t])
+            op_start = pyo.value(model.process_operation_start[p])
+            op_end = pyo.value(model.process_operation_end[p])
 
-            # Calculate capacity for each product this process produces
-            # The binding capacity constraint uses the product with maximum capacity
             max_capacity = 0.0
             for r in model.PRODUCT:
-                # Total production per installation during operation phase (SCALED)
-                total_production_scaled = sum(
-                    pyo.value(model.foreground_production[p, r, tau])
-                    for tau in model.PROCESS_TIME
-                    if pyo.value(model.process_operation_start[p]) <= tau <= pyo.value(model.process_operation_end[p])
-                )
+                if use_vintage_mode:
+                    # 4D vintage-aware capacity calculation
+                    total_capacity = 0.0
+                    for tau in model.PROCESS_TIME:
+                        vintage = t - tau
+                        if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
+                            production_rate = sum(
+                                pyo.value(model.foreground_production[p, r, tau_op, vintage])
+                                for tau_op in model.PROCESS_TIME
+                                if op_start <= tau_op <= op_end
+                            )
+                            installed = pyo.value(model.var_installation[p, vintage])
+                            total_capacity += production_rate * installed
 
-                # Skip if process doesn't produce this product
-                if total_production_scaled == 0:
-                    continue
+                    existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
+                    for (proc, inst_year), cap in existing_cap_dict.items():
+                        if proc == p:
+                            tau_existing = t - inst_year
+                            if op_start <= tau_existing <= op_end:
+                                nearest_vintage = min(model.SYSTEM_TIME)
+                                production_rate = sum(
+                                    pyo.value(model.foreground_production[p, r, tau_op, nearest_vintage])
+                                    for tau_op in model.PROCESS_TIME
+                                    if op_start <= tau_op <= op_end
+                                )
+                                total_capacity += production_rate * cap
 
-                # Calculate installations in operation phase
-                installations_in_operation = sum(
-                    pyo.value(model.var_installation[p, t - tau])
-                    for tau in model.PROCESS_TIME
-                    if (t - tau in model.SYSTEM_TIME)
-                    and pyo.value(model.process_operation_start[p]) <= tau <= pyo.value(model.process_operation_end[p])
-                )
+                    capacity = total_capacity * fg_scale
+                else:
+                    # 3D legacy capacity calculation
+                    total_production_scaled = sum(
+                        pyo.value(model.foreground_production[p, r, tau])
+                        for tau in model.PROCESS_TIME
+                        if op_start <= tau <= op_end
+                    )
+                    if total_production_scaled == 0:
+                        continue
 
-                # Add existing (brownfield) capacity that is still in operation phase
-                op_start = pyo.value(model.process_operation_start[p])
-                op_end = pyo.value(model.process_operation_end[p])
-                existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
-                for (proc, inst_year), cap in existing_cap_dict.items():
-                    if proc == p:
-                        tau_existing = t - inst_year
-                        if op_start <= tau_existing <= op_end:
-                            installations_in_operation += cap
+                    installations_in_operation = sum(
+                        pyo.value(model.var_installation[p, t - tau])
+                        for tau in model.PROCESS_TIME
+                        if (t - tau in model.SYSTEM_TIME) and op_start <= tau <= op_end
+                    )
 
-                # Capacity = total_production (SCALED) × fg_scale × installations (REAL)
-                capacity = total_production_scaled * fg_scale * installations_in_operation
+                    existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
+                    for (proc, inst_year), cap in existing_cap_dict.items():
+                        if proc == p:
+                            tau_existing = t - inst_year
+                            if op_start <= tau_existing <= op_end:
+                                installations_in_operation += cap
+
+                    capacity = total_production_scaled * fg_scale * installations_in_operation
+
                 max_capacity = max(max_capacity, capacity)
 
             # Check if operation exceeds capacity

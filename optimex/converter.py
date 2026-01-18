@@ -59,6 +59,15 @@ class OptimizationModelInputs(BaseModel):
         ..., description="Impact categories for each elementary flow."
     )
 
+    REFERENCE_VINTAGES: Optional[List[int]] = Field(
+        None,
+        description=(
+            "Reference vintage years for technology evolution. When specified, allows "
+            "defining foreground parameters that vary based on installation year. "
+            "Parameters are linearly interpolated between reference vintages."
+        ),
+    )
+
     demand: Dict[Tuple[str, int], float] = Field(
         ..., description=("Maps (product, system_time) to external demand amount.")
     )
@@ -90,6 +99,56 @@ class OptimizationModelInputs(BaseModel):
         description=(
             "Maps (process, product, process_time) to produced amount."
         ),
+    )
+
+    # Vintage-aware foreground tensors (4D: process, flow, process_time, vintage_year)
+    foreground_technosphere_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+        None,
+        description=(
+            "Maps (process, intermediate_flow, process_time, vintage_year) to amount. "
+            "Allows specifying different consumption values for different installation years. "
+            "Requires REFERENCE_VINTAGES to be set. Values are interpolated for years "
+            "between reference vintages."
+        ),
+    )
+    foreground_biosphere_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+        None,
+        description=(
+            "Maps (process, elementary_flow, process_time, vintage_year) to amount. "
+            "Allows specifying different emission values for different installation years. "
+            "Requires REFERENCE_VINTAGES to be set."
+        ),
+    )
+    foreground_production_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+        None,
+        description=(
+            "Maps (process, product, process_time, vintage_year) to produced amount. "
+            "Allows specifying different production values for different installation years. "
+            "Requires REFERENCE_VINTAGES to be set."
+        ),
+    )
+    technology_evolution: Optional[Dict[Tuple[str, str, int], float]] = Field(
+        None,
+        description=(
+            "Maps (process, flow, vintage_year) to scaling factor. "
+            "Multiplicative factors applied to base foreground tensors based on installation year. "
+            "Alternative to vintage-specific tensors. Requires REFERENCE_VINTAGES to be set."
+        ),
+    )
+
+    # Effective 4D tensors (computed from vintage tensors or base tensors)
+    # These are populated by _expand_vintage_parameters() during get_scaled_copy()
+    foreground_technosphere_effective: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+        None,
+        description="Computed 4D effective tensor (process, flow, tau, installation_year).",
+    )
+    foreground_biosphere_effective: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+        None,
+        description="Computed 4D effective tensor (process, flow, tau, installation_year).",
+    )
+    foreground_production_effective: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+        None,
+        description="Computed 4D effective tensor (process, product, tau, installation_year).",
     )
 
     background_inventory: Dict[Tuple[str, str, str], float] = Field(
@@ -428,6 +487,98 @@ class OptimizationModelInputs(BaseModel):
             for key in data["cumulative_flow_limits_min"].keys():
                 validate_keys([key], all_flows, "cumulative_flow_limits_min flows")
 
+        # Vintage-related validation
+        reference_vintages = set(data.get("REFERENCE_VINTAGES") or [])
+        has_vintage_tensors = any(
+            data.get(f) is not None
+            for f in [
+                "foreground_technosphere_vintages",
+                "foreground_biosphere_vintages",
+                "foreground_production_vintages",
+                "technology_evolution",
+            ]
+        )
+
+        # Vintage tensors require REFERENCE_VINTAGES
+        if has_vintage_tensors and not reference_vintages:
+            raise ValueError(
+                "REFERENCE_VINTAGES must be specified when using vintage-aware tensors "
+                "(foreground_technosphere_vintages, foreground_biosphere_vintages, "
+                "foreground_production_vintages, or technology_evolution)."
+            )
+
+        # Validate foreground_technosphere_vintages
+        if data.get("foreground_technosphere_vintages") is not None:
+            for key in data["foreground_technosphere_vintages"].keys():
+                validate_keys(
+                    [key[0]], processes, "foreground_technosphere_vintages processes"
+                )
+                validate_keys(
+                    [key[1]],
+                    intermediate_flows,
+                    "foreground_technosphere_vintages intermediate flows",
+                )
+                validate_keys(
+                    [key[2]], process_times, "foreground_technosphere_vintages process times"
+                )
+                if key[3] not in reference_vintages:
+                    raise ValueError(
+                        f"Invalid vintage year {key[3]} in foreground_technosphere_vintages, "
+                        f"not in REFERENCE_VINTAGES: {sorted(reference_vintages)}"
+                    )
+
+        # Validate foreground_biosphere_vintages
+        if data.get("foreground_biosphere_vintages") is not None:
+            for key in data["foreground_biosphere_vintages"].keys():
+                validate_keys(
+                    [key[0]], processes, "foreground_biosphere_vintages processes"
+                )
+                validate_keys(
+                    [key[1]],
+                    elementary_flows,
+                    "foreground_biosphere_vintages elementary flows",
+                )
+                validate_keys(
+                    [key[2]], process_times, "foreground_biosphere_vintages process times"
+                )
+                if key[3] not in reference_vintages:
+                    raise ValueError(
+                        f"Invalid vintage year {key[3]} in foreground_biosphere_vintages, "
+                        f"not in REFERENCE_VINTAGES: {sorted(reference_vintages)}"
+                    )
+
+        # Validate foreground_production_vintages
+        if data.get("foreground_production_vintages") is not None:
+            for key in data["foreground_production_vintages"].keys():
+                validate_keys(
+                    [key[0]], processes, "foreground_production_vintages processes"
+                )
+                validate_keys(
+                    [key[1]], products, "foreground_production_vintages products"
+                )
+                validate_keys(
+                    [key[2]], process_times, "foreground_production_vintages process times"
+                )
+                if key[3] not in reference_vintages:
+                    raise ValueError(
+                        f"Invalid vintage year {key[3]} in foreground_production_vintages, "
+                        f"not in REFERENCE_VINTAGES: {sorted(reference_vintages)}"
+                    )
+
+        # Validate technology_evolution
+        if data.get("technology_evolution") is not None:
+            for key in data["technology_evolution"].keys():
+                validate_keys([key[0]], processes, "technology_evolution processes")
+                # Flow can be intermediate, elementary, or product
+                validate_keys(
+                    [key[1]], all_flows, "technology_evolution flows"
+                )
+                if key[2] not in reference_vintages:
+                    raise ValueError(
+                        f"Invalid vintage year {key[2]} in technology_evolution, "
+                        f"not in REFERENCE_VINTAGES: {sorted(reference_vintages)}"
+                    )
+
         return data
 
     # For flexible operation: all non-zero flow values must remain constant over time
@@ -678,6 +829,93 @@ class OptimizationModelInputs(BaseModel):
 
         return self
 
+    def _expand_vintage_parameters(self) -> None:
+        """
+        Expand vintage-aware tensors to effective 4D tensors for all installation years.
+
+        If vintage-specific tensors are provided, they are expanded using interpolation
+        for all system time installation years. If only base 3D tensors are provided,
+        they are expanded to 4D with uniform values across all vintages.
+
+        This method populates:
+        - foreground_technosphere_effective: 4D tensor (process, flow, tau, vintage)
+        - foreground_biosphere_effective: 4D tensor (process, flow, tau, vintage)
+        - foreground_production_effective: 4D tensor (process, product, tau, vintage)
+        """
+        # Helper to expand a 3D base tensor to 4D (same value for all vintages)
+        def expand_base_to_4d(
+            base_tensor: Dict[Tuple[str, str, int], float],
+            system_times: List[int],
+        ) -> Dict[Tuple[str, str, int, int], float]:
+            expanded = {}
+            for (proc, flow, tau), value in base_tensor.items():
+                for t in system_times:
+                    expanded[(proc, flow, tau, t)] = value
+            return expanded
+
+        system_times = list(self.SYSTEM_TIME)
+
+        # Handle foreground_technosphere
+        if self.foreground_technosphere_vintages:
+            self.foreground_technosphere_effective = expand_foreground_tensor_with_vintages(
+                self.foreground_technosphere_vintages,
+                self.REFERENCE_VINTAGES,
+                system_times,
+            )
+        elif self.technology_evolution and self.foreground_technosphere:
+            self.foreground_technosphere_effective = expand_foreground_tensor_with_evolution(
+                self.foreground_technosphere,
+                self.technology_evolution,
+                self.REFERENCE_VINTAGES,
+                system_times,
+                "INTERMEDIATE_FLOW",
+            )
+        else:
+            # Expand base 3D to 4D (uniform across vintages)
+            self.foreground_technosphere_effective = expand_base_to_4d(
+                self.foreground_technosphere, system_times
+            )
+
+        # Handle foreground_biosphere
+        if self.foreground_biosphere_vintages:
+            self.foreground_biosphere_effective = expand_foreground_tensor_with_vintages(
+                self.foreground_biosphere_vintages,
+                self.REFERENCE_VINTAGES,
+                system_times,
+            )
+        elif self.technology_evolution and self.foreground_biosphere:
+            self.foreground_biosphere_effective = expand_foreground_tensor_with_evolution(
+                self.foreground_biosphere,
+                self.technology_evolution,
+                self.REFERENCE_VINTAGES,
+                system_times,
+                "ELEMENTARY_FLOW",
+            )
+        else:
+            self.foreground_biosphere_effective = expand_base_to_4d(
+                self.foreground_biosphere, system_times
+            )
+
+        # Handle foreground_production
+        if self.foreground_production_vintages:
+            self.foreground_production_effective = expand_foreground_tensor_with_vintages(
+                self.foreground_production_vintages,
+                self.REFERENCE_VINTAGES,
+                system_times,
+            )
+        elif self.technology_evolution and self.foreground_production:
+            self.foreground_production_effective = expand_foreground_tensor_with_evolution(
+                self.foreground_production,
+                self.technology_evolution,
+                self.REFERENCE_VINTAGES,
+                system_times,
+                "PRODUCT",
+            )
+        else:
+            self.foreground_production_effective = expand_base_to_4d(
+                self.foreground_production, system_times
+            )
+
     def get_scaled_copy(self) -> Tuple["OptimizationModelInputs", Dict[str, Any]]:
         """
         Create a scaled copy of inputs for numerical stability in optimization.
@@ -686,6 +924,9 @@ class OptimizationModelInputs(BaseModel):
         The method scales foreground tensors, characterization factors, demand, and
         limits while preserving the original data structure. Scaling factors are returned
         for denormalizing results.
+
+        If vintage-aware tensors are provided, they are expanded to effective 4D tensors
+        for use by the optimizer.
 
         Returns
         -------
@@ -699,17 +940,27 @@ class OptimizationModelInputs(BaseModel):
         scaled = copy.deepcopy(self)
         scaling_factors: Dict[str, Any] = {}
 
-        # 1. Compute shared foreground scale
+        # Expand vintage parameters to effective 4D tensors
+        scaled._expand_vintage_parameters()
+
+        # 1. Compute shared foreground scale (include both base and effective tensors)
         fg_vals = list(self.foreground_production.values())
         fg_vals += list(self.foreground_biosphere.values())
         fg_vals += list(self.foreground_technosphere.values())
         fg_vals += list(self.internal_demand_technosphere.values())
+        # Also include vintage tensor values if present
+        if self.foreground_technosphere_vintages:
+            fg_vals += list(self.foreground_technosphere_vintages.values())
+        if self.foreground_biosphere_vintages:
+            fg_vals += list(self.foreground_biosphere_vintages.values())
+        if self.foreground_production_vintages:
+            fg_vals += list(self.foreground_production_vintages.values())
         fg_scale = max((abs(v) for v in fg_vals), default=1.0)
         if fg_scale == 0:
             fg_scale = 1.0
         scaling_factors["foreground"] = fg_scale
 
-        # Apply foreground scaling
+        # Apply foreground scaling to base 3D tensors
         for d in (
             "foreground_production",
             "foreground_biosphere",
@@ -719,6 +970,17 @@ class OptimizationModelInputs(BaseModel):
             orig: Dict = getattr(self, d)
             scaled_dict = {k: orig[k] / fg_scale for k in orig}
             setattr(scaled, d, scaled_dict)
+
+        # Apply foreground scaling to effective 4D tensors
+        for d in (
+            "foreground_production_effective",
+            "foreground_biosphere_effective",
+            "foreground_technosphere_effective",
+        ):
+            if hasattr(scaled, d):
+                orig: Dict = getattr(scaled, d)
+                scaled_dict = {k: v / fg_scale for k, v in orig.items()}
+                setattr(scaled, d, scaled_dict)
 
         # 2. Compute per-category characterization scales
         cat_scales: Dict[str, float] = {}
@@ -1116,3 +1378,213 @@ class ModelInputManager:
 
     # Alias for backward compatibility
     load = load_inputs
+
+
+def construct_vintage_mapping(
+    reference_vintages: List[int], system_times: List[int]
+) -> Dict[Tuple[int, int], float]:
+    """
+    Construct a linear interpolation-based mapping matrix between installation years
+    and reference vintages.
+
+    For each year in system_times (potential installation years), this function computes
+    interpolation weights for each reference vintage. The result maps
+    (reference_vintage, installation_year) tuples to interpolation weights.
+
+    The weights sum to 1 for each installation year and are linearly interpolated
+    between the closest two reference vintages. If the installation year is outside
+    the range of reference vintages, all weight is assigned to the nearest boundary
+    vintage.
+
+    Parameters
+    ----------
+    reference_vintages : List[int]
+        List of reference vintage years where parameters are explicitly defined.
+    system_times : List[int]
+        List of system time points (potential installation years).
+
+    Returns
+    -------
+    Dict[Tuple[int, int], float]
+        Mapping from (reference_vintage, installation_year) to interpolation weight.
+        Only non-zero weights are included.
+
+    Examples
+    --------
+    >>> mapping = construct_vintage_mapping([2020, 2030], [2020, 2025, 2030])
+    >>> mapping[(2020, 2020)]  # 100% weight to 2020 vintage for 2020 installation
+    1.0
+    >>> mapping[(2020, 2025)]  # 50% weight to 2020 vintage for 2025 installation
+    0.5
+    >>> mapping[(2030, 2025)]  # 50% weight to 2030 vintage for 2025 installation
+    0.5
+    """
+    if not reference_vintages:
+        return {}
+
+    # Sort reference vintages
+    vintages_sorted = sorted(reference_vintages)
+    mapping: Dict[Tuple[int, int], float] = {}
+
+    for year in system_times:
+        if year <= vintages_sorted[0]:
+            # Before or at first reference: use earliest vintage
+            mapping[(vintages_sorted[0], year)] = 1.0
+        elif year >= vintages_sorted[-1]:
+            # After or at last reference: use latest vintage
+            mapping[(vintages_sorted[-1], year)] = 1.0
+        else:
+            # Find the two surrounding reference vintages
+            for i in range(len(vintages_sorted) - 1):
+                v0, v1 = vintages_sorted[i], vintages_sorted[i + 1]
+                if v0 <= year <= v1:
+                    # Linear interpolation
+                    weight1 = (year - v0) / (v1 - v0)
+                    weight0 = 1.0 - weight1
+                    if weight0 > 0:
+                        mapping[(v0, year)] = weight0
+                    if weight1 > 0:
+                        mapping[(v1, year)] = weight1
+                    break
+
+    return mapping
+
+
+def expand_foreground_tensor_with_vintages(
+    vintage_tensor: Dict[Tuple[str, str, int, int], float],
+    reference_vintages: List[int],
+    system_times: List[int],
+) -> Dict[Tuple[str, str, int, int], float]:
+    """
+    Expand a vintage-specific foreground tensor to all system time installation years.
+
+    Takes a tensor defined at reference vintage years and interpolates values for
+    all system time points (potential installation years).
+
+    Parameters
+    ----------
+    vintage_tensor : Dict[Tuple[str, str, int, int], float]
+        Input tensor mapping (process, flow, process_time, vintage_year) to value.
+        Only defined at reference vintages.
+    reference_vintages : List[int]
+        List of reference vintage years.
+    system_times : List[int]
+        List of system time points to expand to.
+
+    Returns
+    -------
+    Dict[Tuple[str, str, int, int], float]
+        Expanded tensor with values for all system time installation years.
+
+    Examples
+    --------
+    >>> vintage_tensor = {
+    ...     ("EV", "electricity", 1, 2020): 60,
+    ...     ("EV", "electricity", 1, 2030): 40,
+    ... }
+    >>> expanded = expand_foreground_tensor_with_vintages(
+    ...     vintage_tensor, [2020, 2030], [2020, 2025, 2030]
+    ... )
+    >>> expanded[("EV", "electricity", 1, 2025)]  # Interpolated value
+    50.0
+    """
+    if not vintage_tensor or not reference_vintages:
+        return {}
+
+    # Get vintage mapping
+    vintage_mapping = construct_vintage_mapping(reference_vintages, system_times)
+
+    # Group tensor by (process, flow, process_time)
+    grouped: Dict[Tuple[str, str, int], Dict[int, float]] = {}
+    for (proc, flow, tau, vintage), value in vintage_tensor.items():
+        key = (proc, flow, tau)
+        if key not in grouped:
+            grouped[key] = {}
+        grouped[key][vintage] = value
+
+    # Expand to all system times
+    expanded: Dict[Tuple[str, str, int, int], float] = {}
+    for (proc, flow, tau), vintage_values in grouped.items():
+        for install_year in system_times:
+            # Interpolate using vintage mapping
+            interpolated_value = 0.0
+            for vintage in reference_vintages:
+                weight = vintage_mapping.get((vintage, install_year), 0.0)
+                if weight > 0 and vintage in vintage_values:
+                    interpolated_value += weight * vintage_values[vintage]
+            expanded[(proc, flow, tau, install_year)] = interpolated_value
+
+    return expanded
+
+
+def expand_foreground_tensor_with_evolution(
+    base_tensor: Dict[Tuple[str, str, int], float],
+    technology_evolution: Dict[Tuple[str, str, int], float],
+    reference_vintages: List[int],
+    system_times: List[int],
+    flow_type: str,
+) -> Dict[Tuple[str, str, int, int], float]:
+    """
+    Expand a base foreground tensor using technology evolution scaling factors.
+
+    Takes a base 3D tensor and applies vintage-specific scaling factors to produce
+    a 4D tensor with installation year dimension.
+
+    Parameters
+    ----------
+    base_tensor : Dict[Tuple[str, str, int], float]
+        Base tensor mapping (process, flow, process_time) to value.
+    technology_evolution : Dict[Tuple[str, str, int], float]
+        Scaling factors mapping (process, flow, vintage_year) to multiplier.
+    reference_vintages : List[int]
+        List of reference vintage years.
+    system_times : List[int]
+        List of system time points to expand to.
+    flow_type : str
+        Type of flow for filtering (e.g., "INTERMEDIATE_FLOW", "ELEMENTARY_FLOW").
+
+    Returns
+    -------
+    Dict[Tuple[str, str, int, int], float]
+        Expanded tensor with values for all system time installation years.
+
+    Examples
+    --------
+    >>> base = {("EV", "electricity", 1): 60}
+    >>> evolution = {
+    ...     ("EV", "electricity", 2020): 1.0,
+    ...     ("EV", "electricity", 2030): 0.667,
+    ... }
+    >>> expanded = expand_foreground_tensor_with_evolution(
+    ...     base, evolution, [2020, 2030], [2020, 2025, 2030], "INTERMEDIATE_FLOW"
+    ... )
+    >>> expanded[("EV", "electricity", 1, 2020)]  # base * 1.0
+    60.0
+    >>> expanded[("EV", "electricity", 1, 2030)]  # base * 0.667
+    40.02
+    """
+    if not base_tensor:
+        return {}
+
+    # Get vintage mapping for interpolating evolution factors
+    vintage_mapping = construct_vintage_mapping(reference_vintages, system_times)
+
+    expanded: Dict[Tuple[str, str, int, int], float] = {}
+    for (proc, flow, tau), base_value in base_tensor.items():
+        for install_year in system_times:
+            # Get interpolated evolution factor
+            factor = 0.0
+            for vintage in reference_vintages:
+                weight = vintage_mapping.get((vintage, install_year), 0.0)
+                if weight > 0:
+                    evo_key = (proc, flow, vintage)
+                    evo_factor = technology_evolution.get(evo_key, 1.0)
+                    factor += weight * evo_factor
+
+            # If no evolution factors found, use 1.0
+            if factor == 0.0:
+                factor = 1.0
+
+            expanded[(proc, flow, tau, install_year)] = base_value * factor
+
+    return expanded
