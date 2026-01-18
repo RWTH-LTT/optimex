@@ -269,6 +269,176 @@ The optimizer will choose the mix of processes that minimizes environmental impa
 
 ---
 
+## Vintage-Dependent Parameters
+
+Real-world technologies improve over time. An EV manufactured in 2025 will have different characteristics than one manufactured in 2040. `optimex` supports **vintage-dependent parameters** to model how foreground exchanges change based on when a process is installed.
+
+### The Concept
+
+- **Vintage** (or installation year): The system time when a process unit is built
+- **Process time** (τ): The lifecycle stage of that unit (construction, operation, end-of-life)
+
+These are independent dimensions:
+
+| Unit | Installed (Vintage) | Operating in 2035 (τ=10) | Electricity Consumption |
+|------|---------------------|--------------------------|------------------------|
+| EV A | 2025 | τ=10 | 2.0 kWh/km (2025 technology) |
+| EV B | 2030 | τ=5 | 1.5 kWh/km (2030 technology) |
+
+Both are operating in 2035, but have different efficiency based on when they were built.
+
+### Approach 1: Explicit Vintage Values
+
+Specify exact values at reference vintage years. Values are linearly interpolated for installation years between references.
+
+```python
+from optimex import converter
+
+model_inputs = converter.OptimizationModelInputs(
+    # ... standard fields ...
+
+    # Define reference years where parameters are known
+    REFERENCE_VINTAGES=[2020, 2030, 2040],
+
+    # Explicit values per vintage (4D: process, flow, tau, vintage)
+    foreground_technosphere_vintages={
+        # 2020 vintage: 60 MJ electricity per unit at τ=1
+        ("EV", "electricity", 1, 2020): 60,
+        ("EV", "electricity", 2, 2020): 60,
+        # 2030 vintage: improved efficiency
+        ("EV", "electricity", 1, 2030): 45,
+        ("EV", "electricity", 2, 2030): 45,
+        # 2040 vintage: further improvement
+        ("EV", "electricity", 1, 2040): 36,
+        ("EV", "electricity", 2, 2040): 36,
+    },
+)
+```
+
+**Interpolation example:**
+An EV installed in 2025 (halfway between 2020 and 2030) gets:
+`60 + 0.5 × (45 - 60) = 52.5 MJ/unit`
+
+### Approach 2: Technology Evolution Scaling
+
+Apply scaling factors to base foreground tensors. More compact when all exchanges for a process scale uniformly.
+
+```python
+model_inputs = converter.OptimizationModelInputs(
+    # ... standard fields ...
+
+    REFERENCE_VINTAGES=[2020, 2030, 2040],
+
+    # Base values (3D tensor - same as standard)
+    foreground_technosphere={
+        ("EV", "electricity", 1): 60,  # Base value
+        ("EV", "electricity", 2): 60,
+    },
+
+    # Scaling factors per vintage
+    technology_evolution={
+        ("EV", "electricity", 2020): 1.0,   # 100% of base
+        ("EV", "electricity", 2030): 0.75,  # 75% of base (25% improvement)
+        ("EV", "electricity", 2040): 0.6,   # 60% of base (40% improvement)
+    },
+)
+```
+
+**Result:** Same as Approach 1, but more compact specification.
+
+### When to Use Which Approach
+
+| Approach | Best For |
+|----------|----------|
+| **Explicit values** (`*_vintages`) | Different process times need different evolution rates |
+| **Scaling factors** (`technology_evolution`) | Uniform improvement across all exchanges |
+
+**Precedence:** If both are specified for the same `(process, flow)`, explicit values take precedence.
+
+### Available Vintage Fields
+
+| Field | Description |
+|-------|-------------|
+| `foreground_technosphere_vintages` | Vintage-specific background flow consumption |
+| `foreground_biosphere_vintages` | Vintage-specific direct emissions |
+| `foreground_production_vintages` | Vintage-specific production rates |
+| `technology_evolution` | Scaling factors applied to base tensors |
+
+### Complete Example: Improving EV Efficiency
+
+```python
+from optimex import converter, optimizer
+
+# An EV that gets more efficient over time
+inputs = {
+    "PROCESS": ["EV"],
+    "PRODUCT": ["vkm"],  # vehicle-kilometers
+    "INTERMEDIATE_FLOW": ["electricity"],
+    "ELEMENTARY_FLOW": ["CO2"],
+    "BACKGROUND_ID": ["grid_2020", "grid_2030"],
+    "PROCESS_TIME": [0, 1, 2],
+    "SYSTEM_TIME": list(range(2020, 2041)),
+    "CATEGORY": ["climate_change"],
+
+    # Reference vintages for technology evolution
+    "REFERENCE_VINTAGES": [2020, 2030, 2040],
+
+    "operation_time_limits": {"EV": (1, 2)},
+    "demand": {("vkm", t): 1000 for t in range(2025, 2041)},
+
+    # Base production (constant across vintages)
+    "foreground_production": {
+        ("EV", "vkm", 1): 50,
+        ("EV", "vkm", 2): 50,
+    },
+
+    # Vintage-specific electricity consumption
+    "foreground_technosphere_vintages": {
+        # 2020 tech: 60 MJ/vkm (inefficient)
+        ("EV", "electricity", 1, 2020): 30,
+        ("EV", "electricity", 2, 2020): 30,
+        # 2030 tech: 45 MJ/vkm (improved)
+        ("EV", "electricity", 1, 2030): 22.5,
+        ("EV", "electricity", 2, 2030): 22.5,
+        # 2040 tech: 36 MJ/vkm (best)
+        ("EV", "electricity", 1, 2040): 18,
+        ("EV", "electricity", 2, 2040): 18,
+    },
+
+    # Vintage-specific manufacturing emissions
+    "foreground_biosphere_vintages": {
+        ("EV", "CO2", 0, 2020): 8000,  # kg CO2 for manufacturing
+        ("EV", "CO2", 0, 2030): 6000,  # Cleaner manufacturing
+        ("EV", "CO2", 0, 2040): 4000,  # Even cleaner
+    },
+
+    # ... other standard fields ...
+}
+
+model_inputs = converter.OptimizationModelInputs(**inputs)
+model = optimizer.create_model(
+    inputs=model_inputs,
+    objective_category="climate_change",
+    name="ev_transition",
+)
+solved, obj, results = optimizer.solve_model(model)
+```
+
+The optimizer will account for technology improvement and may prefer installing EVs later (when they're more efficient) if the demand timing allows it.
+
+### Optimizer Behavior
+
+With vintage-dependent parameters, the optimizer considers:
+
+1. **Installation timing trade-offs**: Later installations are more efficient, but may have capacity constraints
+2. **Mixed vintages**: Different installation cohorts operating simultaneously with different efficiencies
+3. **Background evolution**: Combined with time-varying background databases for full temporal LCA
+
+!!! tip "Sparse Implementation"
+    Vintage parameters only affect processes/flows where they're specified. Processes without vintage overrides use the standard base tensors efficiently.
+
+---
+
 ## Common Patterns
 
 ### Immediate Production (No Construction Delay)

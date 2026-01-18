@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+* **Vintage-dependent foreground parameters**: Model how process characteristics change based on installation year (vintage). Supports two approaches:
+  - Explicit values per vintage via `foreground_*_vintages` fields
+  - Scaling factors via `technology_evolution` field
+* Linear interpolation between reference vintages for intermediate installation years
+* Full backward compatibility - existing models without vintage parameters work unchanged
+
 ## [0.3.0] - 2025-07-04
 * Fixed an issue with process installation scaling
 
