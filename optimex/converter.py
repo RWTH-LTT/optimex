@@ -101,55 +101,71 @@ class OptimizationModelInputs(BaseModel):
         ),
     )
 
-    # Vintage-aware foreground tensors (4D: process, flow, process_time, vintage_year)
+    # ==================== Vintage-Dependent Parameters ====================
+    # These allow foreground parameters to vary based on installation year (vintage).
+    # Two approaches are available:
+    #
+    # 1. Explicit values (*_vintages): Specify exact values at reference vintages.
+    #    Values are linearly interpolated for years between reference vintages.
+    #
+    # 2. Scaling factors (technology_evolution): Multiply base tensor values by
+    #    vintage-specific factors. More compact for uniform efficiency improvements.
+    #
+    # PRECEDENCE: If both *_vintages and technology_evolution are specified for
+    # the same (process, flow), the explicit *_vintages values take precedence.
+    # ========================================================================
+
     foreground_technosphere_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
         None,
         description=(
-            "Maps (process, intermediate_flow, process_time, vintage_year) to amount. "
-            "Allows specifying different consumption values for different installation years. "
-            "Requires REFERENCE_VINTAGES to be set. Values are interpolated for years "
-            "between reference vintages."
+            "Vintage-specific technosphere values. Maps (process, intermediate_flow, "
+            "process_time, vintage_year) to amount. Requires REFERENCE_VINTAGES. "
+            "Takes precedence over technology_evolution for the same (process, flow)."
         ),
     )
     foreground_biosphere_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
         None,
         description=(
-            "Maps (process, elementary_flow, process_time, vintage_year) to amount. "
-            "Allows specifying different emission values for different installation years. "
-            "Requires REFERENCE_VINTAGES to be set."
+            "Vintage-specific biosphere values. Maps (process, elementary_flow, "
+            "process_time, vintage_year) to amount. Requires REFERENCE_VINTAGES. "
+            "Takes precedence over technology_evolution for the same (process, flow)."
         ),
     )
     foreground_production_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
         None,
         description=(
-            "Maps (process, product, process_time, vintage_year) to produced amount. "
-            "Allows specifying different production values for different installation years. "
-            "Requires REFERENCE_VINTAGES to be set."
+            "Vintage-specific production values. Maps (process, product, process_time, "
+            "vintage_year) to amount. Requires REFERENCE_VINTAGES. "
+            "Takes precedence over technology_evolution for the same (process, product)."
         ),
     )
     technology_evolution: Optional[Dict[Tuple[str, str, int], float]] = Field(
         None,
         description=(
-            "Maps (process, flow, vintage_year) to scaling factor. "
-            "Multiplicative factors applied to base foreground tensors based on installation year. "
-            "Alternative to vintage-specific tensors. Requires REFERENCE_VINTAGES to be set."
+            "Scaling factors for vintage-dependent efficiency. Maps (process, flow, "
+            "vintage_year) to multiplier applied to base foreground tensor. "
+            "Example: {('EV', 'electricity', 2020): 1.0, ('EV', 'electricity', 2030): 0.7} "
+            "means 30% efficiency improvement by 2030. Requires REFERENCE_VINTAGES. "
+            "Ignored for (process, flow) pairs that have explicit *_vintages values."
         ),
     )
 
-    # Sparse vintage overrides (computed from vintage tensors via interpolation)
-    # These contain ONLY the (process, flow, tau, vintage) entries that differ from base 3D tensor
-    # Populated by _expand_vintage_parameters() during get_scaled_copy()
+    # Internal: Computed sparse overrides (populated by _expand_vintage_parameters)
+    # Users should not set these directly - they are derived from the above inputs.
     foreground_technosphere_vintage_overrides: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
         None,
-        description="Sparse 4D overrides for vintage-specific values (only entries that differ from base).",
+        description="[Internal] Computed sparse overrides. Do not set directly.",
+        exclude=True,  # Exclude from serialization
     )
     foreground_biosphere_vintage_overrides: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
         None,
-        description="Sparse 4D overrides for vintage-specific values (only entries that differ from base).",
+        description="[Internal] Computed sparse overrides. Do not set directly.",
+        exclude=True,
     )
     foreground_production_vintage_overrides: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
         None,
-        description="Sparse 4D overrides for vintage-specific values (only entries that differ from base).",
+        description="[Internal] Computed sparse overrides. Do not set directly.",
+        exclude=True,
     )
 
     background_inventory: Dict[Tuple[str, str, str], float] = Field(

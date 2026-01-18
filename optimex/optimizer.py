@@ -211,6 +211,17 @@ def create_model(
         scaled_inputs, 'foreground_production_vintage_overrides', None
     ) or {}
 
+    # Precompute sets of (process, flow) pairs that have overrides for O(1) lookup
+    model._technosphere_overrides_index = frozenset(
+        (k[0], k[1]) for k in model._technosphere_vintage_overrides
+    )
+    model._biosphere_overrides_index = frozenset(
+        (k[0], k[1]) for k in model._biosphere_vintage_overrides
+    )
+    model._production_overrides_index = frozenset(
+        (k[0], k[1]) for k in model._production_vintage_overrides
+    )
+
     model.internal_demand_technosphere = pyo.Param(
         model.PROCESS,
         model.PRODUCT,
@@ -458,7 +469,7 @@ def create_model(
 
     # Expression builders using sparse vintage override lookup
     # Base tensor is always 3D; overrides are checked first for vintage-specific values
-    def scale_tensor_by_installation(tensor: pyo.Param, flow_set: str, overrides: dict):
+    def scale_tensor_by_installation(tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset):
         def expr(m, p, x, t):
             result = 0
             for tau in m.PROCESS_TIME:
@@ -467,8 +478,9 @@ def create_model(
                     not in_operation_phase(p, tau) or not m.operation_flow[p, x]
                 ):
                     # Check sparse override first, fall back to base 3D tensor
-                    if overrides and (p, x, tau, vintage) in overrides:
-                        flow_value = overrides[(p, x, tau, vintage)]
+                    key = (p, x, tau, vintage)
+                    if key in overrides:
+                        flow_value = overrides[key]
                     else:
                         flow_value = tensor[p, x, tau]
                     result += flow_value * m.var_installation[p, vintage]
@@ -478,18 +490,14 @@ def create_model(
             model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
         )
 
-    def scale_tensor_by_operation(tensor: pyo.Param, flow_set: str, overrides: dict):
+    def scale_tensor_by_operation(tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset):
         def expr(m, p, x, t):
             # Only apply operational scaling to flows marked as operational
             if pyo.value(m.operation_flow[p, x]) == 0:
                 return 0
 
-            # Check if ANY overrides exist for this (process, flow) combination
-            has_overrides = overrides and any(
-                k[0] == p and k[1] == x for k in overrides
-            )
-
-            if has_overrides:
+            # O(1) check if overrides exist for this (process, flow) combination
+            if (p, x) in overrides_index:
                 # Vintage-aware: sum flow contributions from all active installations
                 result = 0
                 for tau in m.PROCESS_TIME:
@@ -497,8 +505,9 @@ def create_model(
                     if (vintage in m.SYSTEM_TIME and
                         m.process_operation_start[p] <= tau <= m.process_operation_end[p]):
                         # Check sparse override first, fall back to base 3D tensor
-                        if (p, x, tau, vintage) in overrides:
-                            flow_value = overrides[(p, x, tau, vintage)]
+                        key = (p, x, tau, vintage)
+                        if key in overrides:
+                            flow_value = overrides[key]
                         else:
                             flow_value = tensor[p, x, tau]
                         result += flow_value * m.var_installation[p, vintage]
@@ -522,32 +531,37 @@ def create_model(
             model.foreground_technosphere,
             "INTERMEDIATE_FLOW",
             model._technosphere_vintage_overrides,
+            model._technosphere_overrides_index,
         )
     )
     model.scaled_biosphere_dependent_on_installation = scale_tensor_by_installation(
         model.foreground_biosphere,
         "ELEMENTARY_FLOW",
         model._biosphere_vintage_overrides,
+        model._biosphere_overrides_index,
     )
     model.scaled_technosphere_dependent_on_operation = scale_tensor_by_operation(
         model.foreground_technosphere,
         "INTERMEDIATE_FLOW",
         model._technosphere_vintage_overrides,
+        model._technosphere_overrides_index,
     )
     model.scaled_biosphere_dependent_on_operation = scale_tensor_by_operation(
         model.foreground_biosphere,
         "ELEMENTARY_FLOW",
         model._biosphere_vintage_overrides,
+        model._biosphere_overrides_index,
     )
     # Internal demand has no vintage overrides
+    _empty_index = frozenset()
     model.scaled_internal_demand_dependent_on_installation = (
         scale_tensor_by_installation(
-            model.internal_demand_technosphere, "PRODUCT", {}
+            model.internal_demand_technosphere, "PRODUCT", {}, _empty_index
         )
     )
     model.scaled_internal_demand_dependent_on_operation = (
         scale_tensor_by_operation(
-            model.internal_demand_technosphere, "PRODUCT", {}
+            model.internal_demand_technosphere, "PRODUCT", {}, _empty_index
         )
     )
 
@@ -582,16 +596,15 @@ def create_model(
     # Helper to get production value with sparse override lookup
     def get_production_value(p, r, tau, vintage):
         """Get production value, checking sparse overrides first."""
-        overrides = model._production_vintage_overrides
-        if overrides and (p, r, tau, vintage) in overrides:
-            return overrides[(p, r, tau, vintage)]
+        key = (p, r, tau, vintage)
+        if key in model._production_vintage_overrides:
+            return model._production_vintage_overrides[key]
         return model.foreground_production[p, r, tau]
 
-    # Check if production overrides exist for a given process/product
+    # O(1) check if production overrides exist for a given process/product
     def has_production_overrides(p, r):
         """Check if any vintage overrides exist for this process/product."""
-        overrides = model._production_vintage_overrides
-        return overrides and any(k[0] == p and k[1] == r for k in overrides)
+        return (p, r) in model._production_overrides_index
 
     def operation_capacity_constraint_rule(model, p, r, t):
         """
@@ -1056,18 +1069,20 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
     max_violation = 0.0
     fg_scale = model.scales["foreground"]
 
-    # Get sparse overrides for production
+    # Get sparse overrides for production with precomputed index for O(1) lookup
     production_overrides = getattr(model, "_production_vintage_overrides", {}) or {}
+    production_overrides_index = getattr(model, "_production_overrides_index", frozenset())
 
     def get_prod_value(p, r, tau, vintage):
         """Get production value, checking sparse overrides first."""
-        if production_overrides and (p, r, tau, vintage) in production_overrides:
-            return production_overrides[(p, r, tau, vintage)]
+        key = (p, r, tau, vintage)
+        if key in production_overrides:
+            return production_overrides[key]
         return pyo.value(model.foreground_production[p, r, tau])
 
     def has_prod_overrides(p, r):
-        """Check if any vintage overrides exist for this process/product."""
-        return production_overrides and any(k[0] == p and k[1] == r for k in production_overrides)
+        """O(1) check if any vintage overrides exist for this process/product."""
+        return (p, r) in production_overrides_index
 
     for p in model.PROCESS:
         for t in model.SYSTEM_TIME:

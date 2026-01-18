@@ -507,3 +507,214 @@ class TestOptimizerWithVintages:
         # Both should be non-negative (basic sanity check)
         assert early_installations >= 0
         assert late_installations >= 0
+
+    def test_optimizer_prefers_efficient_vintage(self):
+        """
+        Test that optimizer installs at times that minimize total impact.
+
+        Scenario: Demand only in 2025, two vintages with different efficiency.
+        2020 vintage: 100 electricity/unit
+        2025 vintage: 50 electricity/unit (50% more efficient)
+
+        Optimizer should prefer installing in 2024 (gets 2025-interpolated efficiency)
+        over installing earlier (gets worse efficiency).
+        """
+        from optimex import optimizer
+        import pyomo.environ as pyo
+
+        inputs = {
+            "PROCESS": ["Plant"],
+            "PRODUCT": ["output"],
+            "INTERMEDIATE_FLOW": ["electricity"],
+            "ELEMENTARY_FLOW": ["CO2"],
+            "BACKGROUND_ID": ["grid"],
+            "PROCESS_TIME": [0, 1],
+            "SYSTEM_TIME": [2020, 2021, 2022, 2023, 2024, 2025],
+            "CATEGORY": ["GWP"],
+            "REFERENCE_VINTAGES": [2020, 2025],
+            "operation_time_limits": {"Plant": (1, 1)},
+            # Demand only in 2025 - can be met by installing any year from 2020-2024
+            "demand": {("output", 2025): 100},
+            "foreground_technosphere": {},
+            "foreground_technosphere_vintages": {
+                ("Plant", "electricity", 1, 2020): 100,  # Inefficient
+                ("Plant", "electricity", 1, 2025): 50,   # Efficient
+            },
+            "internal_demand_technosphere": {},
+            "foreground_biosphere": {("Plant", "CO2", 0): 0},
+            "foreground_production": {},
+            "foreground_production_vintages": {
+                ("Plant", "output", 1, 2020): 100,
+                ("Plant", "output", 1, 2025): 100,
+            },
+            "operation_flow": {("Plant", "output"): True, ("Plant", "electricity"): True},
+            "background_inventory": {("grid", "electricity", "CO2"): 1.0},
+            "mapping": {("grid", t): 1.0 for t in range(2020, 2026)},
+            "characterization": {("GWP", "CO2", t): 1.0 for t in range(2020, 2026)},
+        }
+
+        model_inputs = converter.OptimizationModelInputs(**inputs)
+        model = optimizer.create_model(
+            inputs=model_inputs, objective_category="GWP", name="efficiency_test"
+        )
+        solved, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
+        assert results.solver.termination_condition.name == "optimal"
+
+        # Check installation pattern - should prefer later years (more efficient)
+        installations = {
+            t: pyo.value(solved.var_installation["Plant", t])
+            for t in range(2020, 2025)  # Can install 2020-2024 to operate in 2025
+        }
+
+        # 2024 vintage interpolates to 90% of way to 2025 efficiency: 100 - 0.8*(100-50) = 60
+        # Earlier vintages are progressively worse
+        # Optimizer should install as late as possible (2024)
+        assert installations[2024] > 0, "Optimizer should install in 2024 (most efficient vintage)"
+        assert sum(installations[t] for t in [2020, 2021, 2022]) == pytest.approx(0, abs=1e-6), \
+            "Optimizer should avoid early installations (inefficient vintages)"
+
+
+class TestTechnologyEvolutionIntegration:
+    """Integration tests for technology_evolution scaling factors."""
+
+    def test_technology_evolution_affects_optimization(self):
+        """
+        Test that technology_evolution scaling factors affect the optimal solution.
+
+        Same scenario as above but using evolution factors instead of explicit vintages.
+        """
+        from optimex import optimizer
+        import pyomo.environ as pyo
+
+        inputs = {
+            "PROCESS": ["Plant"],
+            "PRODUCT": ["output"],
+            "INTERMEDIATE_FLOW": ["electricity"],
+            "ELEMENTARY_FLOW": ["CO2"],
+            "BACKGROUND_ID": ["grid"],
+            "PROCESS_TIME": [0, 1],
+            "SYSTEM_TIME": [2020, 2021, 2022, 2023, 2024, 2025],
+            "CATEGORY": ["GWP"],
+            "REFERENCE_VINTAGES": [2020, 2025],
+            "operation_time_limits": {"Plant": (1, 1)},
+            "demand": {("output", 2025): 100},
+            # Base consumption - will be scaled by evolution factors
+            "foreground_technosphere": {
+                ("Plant", "electricity", 0): 0,
+                ("Plant", "electricity", 1): 100,
+            },
+            # Evolution: 2020 = 1.0x, 2025 = 0.5x (50% improvement)
+            "technology_evolution": {
+                ("Plant", "electricity", 2020): 1.0,
+                ("Plant", "electricity", 2025): 0.5,
+            },
+            "internal_demand_technosphere": {},
+            "foreground_biosphere": {("Plant", "CO2", 0): 0, ("Plant", "CO2", 1): 0},
+            "foreground_production": {
+                ("Plant", "output", 0): 0,
+                ("Plant", "output", 1): 100,
+            },
+            "operation_flow": {("Plant", "output"): True, ("Plant", "electricity"): True},
+            "background_inventory": {("grid", "electricity", "CO2"): 1.0},
+            "mapping": {("grid", t): 1.0 for t in range(2020, 2026)},
+            "characterization": {("GWP", "CO2", t): 1.0 for t in range(2020, 2026)},
+        }
+
+        model_inputs = converter.OptimizationModelInputs(**inputs)
+        model = optimizer.create_model(
+            inputs=model_inputs, objective_category="GWP", name="evolution_test"
+        )
+        solved, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
+        assert results.solver.termination_condition.name == "optimal"
+
+        # Should prefer later installation (lower electricity consumption via evolution factor)
+        late_install = pyo.value(solved.var_installation["Plant", 2024])
+        early_install = sum(
+            pyo.value(solved.var_installation["Plant", t]) for t in [2020, 2021, 2022]
+        )
+        assert late_install > early_install, "Optimizer should prefer later vintages with evolution factors"
+
+
+class TestMixedVintageScenarios:
+    """Tests for scenarios with partial vintage overrides."""
+
+    def test_mixed_processes_some_with_overrides(self):
+        """
+        Test scenario where only some processes have vintage overrides.
+
+        - ProcessA: Has vintage-dependent electricity consumption
+        - ProcessB: No vintage overrides (constant efficiency)
+
+        Both should work correctly in the same model.
+        """
+        from optimex import optimizer
+        import pyomo.environ as pyo
+
+        inputs = {
+            "PROCESS": ["ProcessA", "ProcessB"],
+            "PRODUCT": ["output"],
+            "INTERMEDIATE_FLOW": ["electricity"],
+            "ELEMENTARY_FLOW": ["CO2"],
+            "BACKGROUND_ID": ["grid"],
+            "PROCESS_TIME": [0, 1],
+            "SYSTEM_TIME": [2020, 2021, 2022, 2023, 2024, 2025],
+            "CATEGORY": ["GWP"],
+            "REFERENCE_VINTAGES": [2020, 2025],
+            "operation_time_limits": {"ProcessA": (1, 1), "ProcessB": (1, 1)},
+            "demand": {("output", 2025): 100},
+            # ProcessB: constant efficiency (3D tensor)
+            "foreground_technosphere": {
+                ("ProcessA", "electricity", 0): 0,
+                ("ProcessA", "electricity", 1): 0,  # Will be overridden
+                ("ProcessB", "electricity", 0): 0,
+                ("ProcessB", "electricity", 1): 75,  # Constant, no vintage override
+            },
+            # ProcessA: vintage-dependent (4D sparse override)
+            "foreground_technosphere_vintages": {
+                ("ProcessA", "electricity", 1, 2020): 100,  # Inefficient
+                ("ProcessA", "electricity", 1, 2025): 50,   # Efficient
+            },
+            "internal_demand_technosphere": {},
+            "foreground_biosphere": {
+                ("ProcessA", "CO2", 0): 0, ("ProcessA", "CO2", 1): 0,
+                ("ProcessB", "CO2", 0): 0, ("ProcessB", "CO2", 1): 0,
+            },
+            "foreground_production": {
+                ("ProcessA", "output", 0): 0, ("ProcessA", "output", 1): 100,
+                ("ProcessB", "output", 0): 0, ("ProcessB", "output", 1): 100,
+            },
+            "operation_flow": {
+                ("ProcessA", "output"): True, ("ProcessA", "electricity"): True,
+                ("ProcessB", "output"): True, ("ProcessB", "electricity"): True,
+            },
+            "background_inventory": {("grid", "electricity", "CO2"): 1.0},
+            "mapping": {("grid", t): 1.0 for t in range(2020, 2026)},
+            "characterization": {("GWP", "CO2", t): 1.0 for t in range(2020, 2026)},
+        }
+
+        model_inputs = converter.OptimizationModelInputs(**inputs)
+        model = optimizer.create_model(
+            inputs=model_inputs, objective_category="GWP", name="mixed_test"
+        )
+        solved, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
+        assert results.solver.termination_condition.name == "optimal"
+
+        # Model should solve and make sensible choices
+        # ProcessA installed in 2024 has efficiency ~60 (interpolated)
+        # ProcessB always has efficiency 75
+        # So ProcessA in 2024 (60) < ProcessB (75) - should prefer ProcessA late
+
+        total_A = sum(
+            pyo.value(solved.var_installation["ProcessA", t]) for t in range(2020, 2025)
+        )
+        total_B = sum(
+            pyo.value(solved.var_installation["ProcessB", t]) for t in range(2020, 2025)
+        )
+
+        # At least one process should be installed to meet demand
+        assert total_A + total_B > 0, "At least one process must be installed"
+
+        # If ProcessA is installed, it should be later (more efficient)
+        if total_A > 0:
+            late_A = pyo.value(solved.var_installation["ProcessA", 2024])
+            assert late_A > 0, "ProcessA installations should be late (more efficient)"
