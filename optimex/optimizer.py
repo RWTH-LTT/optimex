@@ -170,6 +170,7 @@ def create_model(
         default=0,
         initialize=scaled_inputs.demand,
     )
+    # Always use 3D base tensors - vintage overrides are applied via sparse lookup
     model.foreground_technosphere = pyo.Param(
         model.PROCESS,
         model.INTERMEDIATE_FLOW,
@@ -178,15 +179,6 @@ def create_model(
         doc="time-explicit foreground technosphere tensor A (background flows)",
         default=0,
         initialize=scaled_inputs.foreground_technosphere,
-    )
-    model.internal_demand_technosphere = pyo.Param(
-        model.PROCESS,
-        model.PRODUCT,
-        model.PROCESS_TIME,
-        within=pyo.Reals,
-        doc="time-explicit internal demand tensor A^{internal}",
-        default=0,
-        initialize=scaled_inputs.internal_demand_technosphere,
     )
     model.foreground_biosphere = pyo.Param(
         model.PROCESS,
@@ -205,6 +197,39 @@ def create_model(
         doc="time-explicit foreground production tensor F",
         default=0,
         initialize=scaled_inputs.foreground_production,
+    )
+
+    # Store sparse vintage overrides as Python dicts (not Pyomo params)
+    # These are looked up at expression construction time
+    model._technosphere_vintage_overrides = getattr(
+        scaled_inputs, 'foreground_technosphere_vintage_overrides', None
+    ) or {}
+    model._biosphere_vintage_overrides = getattr(
+        scaled_inputs, 'foreground_biosphere_vintage_overrides', None
+    ) or {}
+    model._production_vintage_overrides = getattr(
+        scaled_inputs, 'foreground_production_vintage_overrides', None
+    ) or {}
+
+    # Precompute sets of (process, flow) pairs that have overrides for O(1) lookup
+    model._technosphere_overrides_index = frozenset(
+        (k[0], k[1]) for k in model._technosphere_vintage_overrides
+    )
+    model._biosphere_overrides_index = frozenset(
+        (k[0], k[1]) for k in model._biosphere_vintage_overrides
+    )
+    model._production_overrides_index = frozenset(
+        (k[0], k[1]) for k in model._production_vintage_overrides
+    )
+
+    model.internal_demand_technosphere = pyo.Param(
+        model.PROCESS,
+        model.PRODUCT,
+        model.PROCESS_TIME,
+        within=pyo.Reals,
+        doc="time-explicit internal demand tensor A^{internal}",
+        default=0,
+        initialize=scaled_inputs.internal_demand_technosphere,
     )
     model.background_inventory = pyo.Param(
         model.BACKGROUND_ID,
@@ -442,69 +467,101 @@ def create_model(
         rule=lambda m, p, t: m.var_operation[p, t] >= m.process_operation_limits_min[p, t],
     )
 
-    # Expressions builder
-    def scale_tensor_by_installation(tensor: pyo.Param, flow_set):
+    # Expression builders using sparse vintage override lookup
+    # Base tensor is always 3D; overrides are checked first for vintage-specific values
+    def scale_tensor_by_installation(tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset):
         def expr(m, p, x, t):
-            return sum(
-                tensor[p, x, tau] * m.var_installation[p, t - tau]
-                for tau in m.PROCESS_TIME
-                if (t - tau in m.SYSTEM_TIME)
-                and (
-                    not in_operation_phase(p, tau)
-                    or not m.operation_flow[p, x]
-                )
-            )
+            result = 0
+            for tau in m.PROCESS_TIME:
+                vintage = t - tau
+                if (vintage in m.SYSTEM_TIME) and (
+                    not in_operation_phase(p, tau) or not m.operation_flow[p, x]
+                ):
+                    # Check sparse override first, fall back to base 3D tensor
+                    key = (p, x, tau, vintage)
+                    if key in overrides:
+                        flow_value = overrides[key]
+                    else:
+                        flow_value = tensor[p, x, tau]
+                    result += flow_value * m.var_installation[p, vintage]
+            return result
 
         return pyo.Expression(
             model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
         )
 
-    def scale_tensor_by_operation(tensor: pyo.Param, flow_set):
+    def scale_tensor_by_operation(tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset):
         def expr(m, p, x, t):
             # Only apply operational scaling to flows marked as operational
-            # Check the value explicitly since operation_flow is a Param
             if pyo.value(m.operation_flow[p, x]) == 0:
                 return 0
 
-            # For operational flows: use TOTAL across operation phase
-            # (same treatment as production flows)
-            # o_t represents production amount, so operational flows scale proportionally
-            # This is LINEAR: parameter × variable
-            total_flow_per_installation = sum(
-                tensor[p, x, tau]
-                for tau in m.PROCESS_TIME
-                if m.process_operation_start[p] <= tau <= m.process_operation_end[p]
-            )
-
-            # Total flow = sum(flow[tau]) × o_t
-            return total_flow_per_installation * m.var_operation[p, t]
+            # O(1) check if overrides exist for this (process, flow) combination
+            if (p, x) in overrides_index:
+                # Vintage-aware: sum flow contributions from all active installations
+                result = 0
+                for tau in m.PROCESS_TIME:
+                    vintage = t - tau
+                    if (vintage in m.SYSTEM_TIME and
+                        m.process_operation_start[p] <= tau <= m.process_operation_end[p]):
+                        # Check sparse override first, fall back to base 3D tensor
+                        key = (p, x, tau, vintage)
+                        if key in overrides:
+                            flow_value = overrides[key]
+                        else:
+                            flow_value = tensor[p, x, tau]
+                        result += flow_value * m.var_installation[p, vintage]
+                return result
+            else:
+                # No overrides: use efficient 3D computation with var_operation
+                total_flow_per_installation = sum(
+                    tensor[p, x, tau]
+                    for tau in m.PROCESS_TIME
+                    if m.process_operation_start[p] <= tau <= m.process_operation_end[p]
+                )
+                return total_flow_per_installation * m.var_operation[p, t]
 
         return pyo.Expression(
             model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
         )
 
+    # Create expressions with sparse vintage override lookup
     model.scaled_technosphere_dependent_on_installation = (
         scale_tensor_by_installation(
-            model.foreground_technosphere, "INTERMEDIATE_FLOW"
+            model.foreground_technosphere,
+            "INTERMEDIATE_FLOW",
+            model._technosphere_vintage_overrides,
+            model._technosphere_overrides_index,
         )
     )
     model.scaled_biosphere_dependent_on_installation = scale_tensor_by_installation(
-        model.foreground_biosphere, "ELEMENTARY_FLOW"
+        model.foreground_biosphere,
+        "ELEMENTARY_FLOW",
+        model._biosphere_vintage_overrides,
+        model._biosphere_overrides_index,
     )
     model.scaled_technosphere_dependent_on_operation = scale_tensor_by_operation(
-        model.foreground_technosphere, "INTERMEDIATE_FLOW"
+        model.foreground_technosphere,
+        "INTERMEDIATE_FLOW",
+        model._technosphere_vintage_overrides,
+        model._technosphere_overrides_index,
     )
     model.scaled_biosphere_dependent_on_operation = scale_tensor_by_operation(
-        model.foreground_biosphere, "ELEMENTARY_FLOW"
+        model.foreground_biosphere,
+        "ELEMENTARY_FLOW",
+        model._biosphere_vintage_overrides,
+        model._biosphere_overrides_index,
     )
+    # Internal demand has no vintage overrides
+    _empty_index = frozenset()
     model.scaled_internal_demand_dependent_on_installation = (
         scale_tensor_by_installation(
-            model.internal_demand_technosphere, "PRODUCT"
+            model.internal_demand_technosphere, "PRODUCT", {}, _empty_index
         )
     )
     model.scaled_internal_demand_dependent_on_operation = (
         scale_tensor_by_operation(
-            model.internal_demand_technosphere, "PRODUCT"
+            model.internal_demand_technosphere, "PRODUCT", {}, _empty_index
         )
     )
 
@@ -536,61 +593,93 @@ def create_model(
         rule=scaled_inventory_tensor,
     )
 
+    # Helper to get production value with sparse override lookup
+    def get_production_value(p, r, tau, vintage):
+        """Get production value, checking sparse overrides first."""
+        key = (p, r, tau, vintage)
+        if key in model._production_vintage_overrides:
+            return model._production_vintage_overrides[key]
+        return model.foreground_production[p, r, tau]
+
+    # O(1) check if production overrides exist for a given process/product
+    def has_production_overrides(p, r):
+        """Check if any vintage overrides exist for this process/product."""
+        return (p, r) in model._production_overrides_index
+
     def operation_capacity_constraint_rule(model, p, r, t):
         """
-        Capacity constraint: o_t ≤ (total production per installation) × (installations in operation)
+        Capacity constraint: o_t ≤ total_capacity_at_time_t
 
         This constraint ensures operation level cannot exceed the total production
-        capacity provided by active installations. The formulation matches the
-        demand constraint which also sums production over the operation phase.
+        capacity provided by active installations.
 
-        Note: foreground_production is SCALED, so we multiply by fg_scale to get
-        real capacity. var_operation is in REAL units (dimensionless activity level).
-
-        Only applied when process p produces product r (total_production > 0).
-
-        Brownfield (existing) capacity:
-        Existing capacity installed before SYSTEM_TIME is included in installations_in_operation
-        if it is still within its operation phase at time t. This allows brownfield capacity
-        to contribute to production without adding installation-phase impacts.
+        With vintage overrides: different installation cohorts may have different production rates.
+        Without overrides: all installations have the same production rate (efficient 3D path).
         """
         fg_scale = model.scales["foreground"]
-
-        # Total production per installation during operation phase (SCALED)
-        # This matches the demand constraint which also sums over operation phase
-        total_production_scaled = sum(
-            model.foreground_production[p, r, tau]
-            for tau in model.PROCESS_TIME
-            if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
-        )
-
-        # Skip constraint if process doesn't produce this product
-        # (otherwise constraint becomes var_operation <= 0, which is overly restrictive)
-        if total_production_scaled == 0:
-            return pyo.Constraint.Skip
-
-        # Count installations currently in their operation phase (REAL units)
-        # This includes both new installations (var_installation) and existing capacity
-        installations_in_operation = sum(
-            model.var_installation[p, t - tau]
-            for tau in model.PROCESS_TIME
-            if (t - tau in model.SYSTEM_TIME)
-            and model.process_operation_start[p] <= tau <= model.process_operation_end[p]
-        )
-
-        # Add existing (brownfield) capacity that is still in operation phase
-        # For existing capacity installed at inst_year, tau = t - inst_year
-        # It's in operation if: process_operation_start <= tau <= process_operation_end
         op_start = pyo.value(model.process_operation_start[p])
         op_end = pyo.value(model.process_operation_end[p])
-        for (proc, inst_year), capacity in model._existing_capacity_dict.items():
-            if proc == p:
-                tau_existing = t - inst_year
-                if op_start <= tau_existing <= op_end:
-                    installations_in_operation += capacity
 
-        # Capacity = total_production (SCALED) × fg_scale × installations (REAL) = (REAL)
-        capacity = total_production_scaled * fg_scale * installations_in_operation
+        if has_production_overrides(p, r):
+            # Vintage-aware capacity calculation with sparse override lookup
+            has_production = any(
+                pyo.value(get_production_value(p, r, tau, min(model.SYSTEM_TIME))) != 0
+                for tau in model.PROCESS_TIME
+                if op_start <= tau <= op_end
+            )
+            if not has_production:
+                return pyo.Constraint.Skip
+
+            # Total capacity from all vintage cohorts
+            total_capacity = 0
+            for tau in model.PROCESS_TIME:
+                vintage = t - tau
+                if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
+                    production_per_unit = sum(
+                        get_production_value(p, r, tau_op, vintage)
+                        for tau_op in model.PROCESS_TIME
+                        if op_start <= tau_op <= op_end
+                    )
+                    total_capacity += production_per_unit * model.var_installation[p, vintage]
+
+            # Add brownfield capacity
+            for (proc, inst_year), cap in model._existing_capacity_dict.items():
+                if proc == p:
+                    tau_existing = t - inst_year
+                    if op_start <= tau_existing <= op_end:
+                        nearest_vintage = min(model.SYSTEM_TIME)
+                        production_per_unit = sum(
+                            pyo.value(get_production_value(p, r, tau_op, nearest_vintage))
+                            for tau_op in model.PROCESS_TIME
+                            if op_start <= tau_op <= op_end
+                        )
+                        total_capacity += production_per_unit * cap
+
+            capacity = total_capacity * fg_scale
+        else:
+            # 3D efficient path: no overrides, all vintages have same production rate
+            total_production_scaled = sum(
+                model.foreground_production[p, r, tau]
+                for tau in model.PROCESS_TIME
+                if op_start <= tau <= op_end
+            )
+            if total_production_scaled == 0:
+                return pyo.Constraint.Skip
+
+            installations_in_operation = sum(
+                model.var_installation[p, t - tau]
+                for tau in model.PROCESS_TIME
+                if (t - tau in model.SYSTEM_TIME) and op_start <= tau <= op_end
+            )
+
+            for (proc, inst_year), cap in model._existing_capacity_dict.items():
+                if proc == p:
+                    tau_existing = t - inst_year
+                    if op_start <= tau_existing <= op_end:
+                        installations_in_operation += cap
+
+            capacity = total_production_scaled * fg_scale * installations_in_operation
+
         return model.var_operation[p, t] <= capacity
 
     model.OperationCapacity = pyo.Constraint(
@@ -602,40 +691,47 @@ def create_model(
 
     def product_demand_fulfillment_rule(model, r, t):
         """
-        Demand constraint: total_production × o_t ≥ f_t
+        Demand constraint: total_production == external_demand + internal_consumption
 
-        For production flows: use total production per installation (sum across operation phase).
-        o_t represents production amount, bounded by installed capacity.
-
-        Total production must meet:
-        - External demand (from demand parameter)
-        - Internal consumption by other foreground processes
-
-        This is LINEAR: parameter × variable
+        With vintage overrides: production from each vintage cohort may differ.
+        Without overrides: all installations have the same production rate (efficient 3D path).
         """
-        # Total production of product r at time t
-        # Sum of production across operation phase × operation level
-        total_production = sum(
-            sum(
-                model.foreground_production[p, r, tau]
-                for tau in model.PROCESS_TIME
-                if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+        # Check if ANY process has production overrides for this product
+        any_overrides = any(has_production_overrides(p, r) for p in model.PROCESS)
+
+        if any_overrides:
+            # Vintage-aware production calculation with sparse override lookup
+            total_production = 0
+            for p in model.PROCESS:
+                op_start = pyo.value(model.process_operation_start[p])
+                op_end = pyo.value(model.process_operation_end[p])
+                for tau in model.PROCESS_TIME:
+                    vintage = t - tau
+                    if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
+                        production_rate = sum(
+                            get_production_value(p, r, tau_op, vintage)
+                            for tau_op in model.PROCESS_TIME
+                            if op_start <= tau_op <= op_end
+                        )
+                        total_production += production_rate * model.var_installation[p, vintage]
+        else:
+            # 3D efficient path: no overrides
+            total_production = sum(
+                sum(
+                    model.foreground_production[p, r, tau]
+                    for tau in model.PROCESS_TIME
+                    if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+                )
+                * model.var_operation[p, t]
+                for p in model.PROCESS
             )
-            * model.var_operation[p, t]
-            for p in model.PROCESS
-        )
 
-        # External demand (from demand parameter)
         external_demand = model.demand[r, t]
-
-        # Internal consumption (sum over all processes consuming product r)
         internal_consumption = sum(
             model.scaled_internal_demand_dependent_on_installation[p, r, t]
             + model.scaled_internal_demand_dependent_on_operation[p, r, t]
             for p in model.PROCESS
         )
-
-        # Exact fulfillment (= constraint)
         return total_production == external_demand + internal_consumption
 
     model.ProductDemandFulfillment = pyo.Constraint(
@@ -700,15 +796,36 @@ def create_model(
 
     # Expression for total product output at time t (in SCALED units)
     def total_product_flow_rule(model, r, t):
-        return sum(
-            sum(
-                model.foreground_production[p, r, tau]
-                for tau in model.PROCESS_TIME
-                if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+        # Check if ANY process has production overrides for this product
+        any_overrides = any(has_production_overrides(p, r) for p in model.PROCESS)
+
+        if any_overrides:
+            # Vintage-aware: sum over all active vintage cohorts with sparse override lookup
+            total = 0
+            for p in model.PROCESS:
+                op_start = pyo.value(model.process_operation_start[p])
+                op_end = pyo.value(model.process_operation_end[p])
+                for tau in model.PROCESS_TIME:
+                    vintage = t - tau
+                    if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
+                        production_rate = sum(
+                            get_production_value(p, r, tau_op, vintage)
+                            for tau_op in model.PROCESS_TIME
+                            if op_start <= tau_op <= op_end
+                        )
+                        total += production_rate * model.var_installation[p, vintage]
+            return total
+        else:
+            # 3D efficient path: no overrides
+            return sum(
+                sum(
+                    model.foreground_production[p, r, tau]
+                    for tau in model.PROCESS_TIME
+                    if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+                )
+                * model.var_operation[p, t]
+                for p in model.PROCESS
             )
-            * model.var_operation[p, t]
-            for p in model.PROCESS
-        )
 
     model.total_product_flow = pyo.Expression(
         model.PRODUCT, model.SYSTEM_TIME, rule=total_product_flow_rule
@@ -952,45 +1069,82 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
     max_violation = 0.0
     fg_scale = model.scales["foreground"]
 
+    # Get sparse overrides for production with precomputed index for O(1) lookup
+    production_overrides = getattr(model, "_production_vintage_overrides", {}) or {}
+    production_overrides_index = getattr(model, "_production_overrides_index", frozenset())
+
+    def get_prod_value(p, r, tau, vintage):
+        """Get production value, checking sparse overrides first."""
+        key = (p, r, tau, vintage)
+        if key in production_overrides:
+            return production_overrides[key]
+        return pyo.value(model.foreground_production[p, r, tau])
+
+    def has_prod_overrides(p, r):
+        """O(1) check if any vintage overrides exist for this process/product."""
+        return (p, r) in production_overrides_index
+
     for p in model.PROCESS:
         for t in model.SYSTEM_TIME:
             operation_value = pyo.value(model.var_operation[p, t])
+            op_start = pyo.value(model.process_operation_start[p])
+            op_end = pyo.value(model.process_operation_end[p])
 
-            # Calculate capacity for each product this process produces
-            # The binding capacity constraint uses the product with maximum capacity
             max_capacity = 0.0
             for r in model.PRODUCT:
-                # Total production per installation during operation phase (SCALED)
-                total_production_scaled = sum(
-                    pyo.value(model.foreground_production[p, r, tau])
-                    for tau in model.PROCESS_TIME
-                    if pyo.value(model.process_operation_start[p]) <= tau <= pyo.value(model.process_operation_end[p])
-                )
+                if has_prod_overrides(p, r):
+                    # Vintage-aware capacity calculation with sparse override lookup
+                    total_capacity = 0.0
+                    for tau in model.PROCESS_TIME:
+                        vintage = t - tau
+                        if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
+                            production_rate = sum(
+                                get_prod_value(p, r, tau_op, vintage)
+                                for tau_op in model.PROCESS_TIME
+                                if op_start <= tau_op <= op_end
+                            )
+                            installed = pyo.value(model.var_installation[p, vintage])
+                            total_capacity += production_rate * installed
 
-                # Skip if process doesn't produce this product
-                if total_production_scaled == 0:
-                    continue
+                    existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
+                    for (proc, inst_year), cap in existing_cap_dict.items():
+                        if proc == p:
+                            tau_existing = t - inst_year
+                            if op_start <= tau_existing <= op_end:
+                                nearest_vintage = min(model.SYSTEM_TIME)
+                                production_rate = sum(
+                                    get_prod_value(p, r, tau_op, nearest_vintage)
+                                    for tau_op in model.PROCESS_TIME
+                                    if op_start <= tau_op <= op_end
+                                )
+                                total_capacity += production_rate * cap
 
-                # Calculate installations in operation phase
-                installations_in_operation = sum(
-                    pyo.value(model.var_installation[p, t - tau])
-                    for tau in model.PROCESS_TIME
-                    if (t - tau in model.SYSTEM_TIME)
-                    and pyo.value(model.process_operation_start[p]) <= tau <= pyo.value(model.process_operation_end[p])
-                )
+                    capacity = total_capacity * fg_scale
+                else:
+                    # 3D efficient path: no overrides
+                    total_production_scaled = sum(
+                        pyo.value(model.foreground_production[p, r, tau])
+                        for tau in model.PROCESS_TIME
+                        if op_start <= tau <= op_end
+                    )
+                    if total_production_scaled == 0:
+                        continue
 
-                # Add existing (brownfield) capacity that is still in operation phase
-                op_start = pyo.value(model.process_operation_start[p])
-                op_end = pyo.value(model.process_operation_end[p])
-                existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
-                for (proc, inst_year), cap in existing_cap_dict.items():
-                    if proc == p:
-                        tau_existing = t - inst_year
-                        if op_start <= tau_existing <= op_end:
-                            installations_in_operation += cap
+                    installations_in_operation = sum(
+                        pyo.value(model.var_installation[p, t - tau])
+                        for tau in model.PROCESS_TIME
+                        if (t - tau in model.SYSTEM_TIME) and op_start <= tau <= op_end
+                    )
 
-                # Capacity = total_production (SCALED) × fg_scale × installations (REAL)
-                capacity = total_production_scaled * fg_scale * installations_in_operation
+                    existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
+                    for (proc, inst_year), cap in existing_cap_dict.items():
+                        if proc == p:
+                            tau_existing = t - inst_year
+                            if op_start <= tau_existing <= op_end:
+                                installations_in_operation += cap
+
+                    capacity = total_production_scaled * fg_scale * installations_in_operation
+
                 max_capacity = max(max_capacity, capacity)
 
             # Check if operation exceeds capacity
