@@ -136,19 +136,20 @@ class OptimizationModelInputs(BaseModel):
         ),
     )
 
-    # Effective 4D tensors (computed from vintage tensors or base tensors)
-    # These are populated by _expand_vintage_parameters() during get_scaled_copy()
-    foreground_technosphere_effective: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+    # Sparse vintage overrides (computed from vintage tensors via interpolation)
+    # These contain ONLY the (process, flow, tau, vintage) entries that differ from base 3D tensor
+    # Populated by _expand_vintage_parameters() during get_scaled_copy()
+    foreground_technosphere_vintage_overrides: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
         None,
-        description="Computed 4D effective tensor (process, flow, tau, installation_year).",
+        description="Sparse 4D overrides for vintage-specific values (only entries that differ from base).",
     )
-    foreground_biosphere_effective: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+    foreground_biosphere_vintage_overrides: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
         None,
-        description="Computed 4D effective tensor (process, flow, tau, installation_year).",
+        description="Sparse 4D overrides for vintage-specific values (only entries that differ from base).",
     )
-    foreground_production_effective: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+    foreground_production_vintage_overrides: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
         None,
-        description="Computed 4D effective tensor (process, product, tau, installation_year).",
+        description="Sparse 4D overrides for vintage-specific values (only entries that differ from base).",
     )
 
     background_inventory: Dict[Tuple[str, str, str], float] = Field(
@@ -831,89 +832,65 @@ class OptimizationModelInputs(BaseModel):
 
     def _expand_vintage_parameters(self) -> None:
         """
-        Expand vintage-aware tensors to effective 4D tensors for all installation years.
+        Expand vintage-aware tensors to sparse 4D override dictionaries.
 
-        If vintage-specific tensors are provided, they are expanded using interpolation
-        for all system time installation years. If only base 3D tensors are provided,
-        they are expanded to 4D with uniform values across all vintages.
+        Only processes/flows with explicit vintage-specific values are expanded.
+        The base 3D tensors remain unchanged - overrides are applied at lookup time.
 
-        This method populates:
-        - foreground_technosphere_effective: 4D tensor (process, flow, tau, vintage)
-        - foreground_biosphere_effective: 4D tensor (process, flow, tau, vintage)
-        - foreground_production_effective: 4D tensor (process, product, tau, vintage)
+        This method populates sparse override dictionaries:
+        - foreground_technosphere_vintage_overrides
+        - foreground_biosphere_vintage_overrides
+        - foreground_production_vintage_overrides
         """
-        # Helper to expand a 3D base tensor to 4D (same value for all vintages)
-        def expand_base_to_4d(
-            base_tensor: Dict[Tuple[str, str, int], float],
-            system_times: List[int],
-        ) -> Dict[Tuple[str, str, int, int], float]:
-            expanded = {}
-            for (proc, flow, tau), value in base_tensor.items():
-                for t in system_times:
-                    expanded[(proc, flow, tau, t)] = value
-            return expanded
-
         system_times = list(self.SYSTEM_TIME)
 
-        # Handle foreground_technosphere
+        # Handle foreground_technosphere - only create overrides if vintage data exists
         if self.foreground_technosphere_vintages:
-            self.foreground_technosphere_effective = expand_foreground_tensor_with_vintages(
+            self.foreground_technosphere_vintage_overrides = expand_foreground_tensor_with_vintages(
                 self.foreground_technosphere_vintages,
                 self.REFERENCE_VINTAGES,
                 system_times,
             )
         elif self.technology_evolution and self.foreground_technosphere:
-            self.foreground_technosphere_effective = expand_foreground_tensor_with_evolution(
+            self.foreground_technosphere_vintage_overrides = expand_foreground_tensor_with_evolution(
                 self.foreground_technosphere,
                 self.technology_evolution,
                 self.REFERENCE_VINTAGES,
                 system_times,
                 "INTERMEDIATE_FLOW",
             )
-        else:
-            # Expand base 3D to 4D (uniform across vintages)
-            self.foreground_technosphere_effective = expand_base_to_4d(
-                self.foreground_technosphere, system_times
-            )
+        # else: no overrides, use base 3D tensor directly
 
         # Handle foreground_biosphere
         if self.foreground_biosphere_vintages:
-            self.foreground_biosphere_effective = expand_foreground_tensor_with_vintages(
+            self.foreground_biosphere_vintage_overrides = expand_foreground_tensor_with_vintages(
                 self.foreground_biosphere_vintages,
                 self.REFERENCE_VINTAGES,
                 system_times,
             )
         elif self.technology_evolution and self.foreground_biosphere:
-            self.foreground_biosphere_effective = expand_foreground_tensor_with_evolution(
+            self.foreground_biosphere_vintage_overrides = expand_foreground_tensor_with_evolution(
                 self.foreground_biosphere,
                 self.technology_evolution,
                 self.REFERENCE_VINTAGES,
                 system_times,
                 "ELEMENTARY_FLOW",
             )
-        else:
-            self.foreground_biosphere_effective = expand_base_to_4d(
-                self.foreground_biosphere, system_times
-            )
 
         # Handle foreground_production
         if self.foreground_production_vintages:
-            self.foreground_production_effective = expand_foreground_tensor_with_vintages(
+            self.foreground_production_vintage_overrides = expand_foreground_tensor_with_vintages(
                 self.foreground_production_vintages,
                 self.REFERENCE_VINTAGES,
                 system_times,
             )
         elif self.technology_evolution and self.foreground_production:
-            self.foreground_production_effective = expand_foreground_tensor_with_evolution(
+            self.foreground_production_vintage_overrides = expand_foreground_tensor_with_evolution(
                 self.foreground_production,
                 self.technology_evolution,
                 self.REFERENCE_VINTAGES,
                 system_times,
                 "PRODUCT",
-            )
-        else:
-            self.foreground_production_effective = expand_base_to_4d(
-                self.foreground_production, system_times
             )
 
     def get_scaled_copy(self) -> Tuple["OptimizationModelInputs", Dict[str, Any]]:
@@ -971,14 +948,14 @@ class OptimizationModelInputs(BaseModel):
             scaled_dict = {k: orig[k] / fg_scale for k in orig}
             setattr(scaled, d, scaled_dict)
 
-        # Apply foreground scaling to effective 4D tensors
+        # Apply foreground scaling to sparse vintage overrides
         for d in (
-            "foreground_production_effective",
-            "foreground_biosphere_effective",
-            "foreground_technosphere_effective",
+            "foreground_production_vintage_overrides",
+            "foreground_biosphere_vintage_overrides",
+            "foreground_technosphere_vintage_overrides",
         ):
-            if hasattr(scaled, d):
-                orig: Dict = getattr(scaled, d)
+            orig: Dict = getattr(scaled, d, None)
+            if orig:
                 scaled_dict = {k: v / fg_scale for k, v in orig.items()}
                 setattr(scaled, d, scaled_dict)
 
