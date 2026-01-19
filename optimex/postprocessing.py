@@ -1221,12 +1221,8 @@ class PostProcessor:
         existing_removals_df = breakdown["existing_removals_df"]
         operation_df = breakdown["operation_df"]
 
-        # Color palette
-        distinct_colors = [
-            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-        ]
-        bar_colors = [distinct_colors[i % len(distinct_colors)] for i in range(len(capacity_additions_df.columns))]
+        # Get colors from the shared color map (uses original process codes before annotation)
+        process_codes = list(capacity_additions_df.columns)
 
         # Annotate DataFrames
         capacity_additions_df = self._annotate_dataframe(capacity_additions_df.copy(), annotated)
@@ -1250,7 +1246,7 @@ class PostProcessor:
             bottom_additions = np.zeros(len(x_positions))
             for i, col in enumerate(capacity_additions_df.columns):
                 add_values = capacity_additions_df[col].values
-                clr = bar_colors[i] if i < len(bar_colors) else 'black'
+                clr = self._color_map.get(process_codes[i], 'black')
                 ax.bar(cap_positions, add_values, width=bar_width, bottom=bottom_additions,
                        color=clr, hatch="///", edgecolor="#30A834FF", linewidth=1.5, zorder=1)
                 bottom_additions += add_values
@@ -1258,7 +1254,7 @@ class PostProcessor:
             # Plot existing capacity additions (light green border)
             for i, col in enumerate(existing_additions_df.columns):
                 add_values = existing_additions_df[col].values
-                clr = bar_colors[i] if i < len(bar_colors) else 'black'
+                clr = self._color_map.get(process_codes[i], 'black')
                 ax.bar(cap_positions, add_values, width=bar_width, bottom=bottom_additions,
                        color=clr, hatch="///", edgecolor="#81C784", linewidth=1.5, zorder=1)
                 bottom_additions += add_values
@@ -1267,7 +1263,7 @@ class PostProcessor:
             bottom_removals = np.zeros(len(x_positions))
             for i, col in enumerate(capacity_removals_df.columns):
                 rem_values = capacity_removals_df[col].values
-                clr = bar_colors[i] if i < len(bar_colors) else 'black'
+                clr = self._color_map.get(process_codes[i], 'black')
                 ax.bar(cap_positions, -rem_values, width=bar_width, bottom=bottom_removals,
                        color=clr, hatch="///", edgecolor="#CD221FFF", linewidth=1.5, zorder=1)
                 bottom_removals -= rem_values
@@ -1275,7 +1271,7 @@ class PostProcessor:
             # Plot existing capacity removals (light red border)
             for i, col in enumerate(existing_removals_df.columns):
                 rem_values = existing_removals_df[col].values
-                clr = bar_colors[i] if i < len(bar_colors) else 'black'
+                clr = self._color_map.get(process_codes[i], 'black')
                 ax.bar(cap_positions, -rem_values, width=bar_width, bottom=bottom_removals,
                        color=clr, hatch="///", edgecolor="#E57373", linewidth=1.5, zorder=1)
                 bottom_removals -= rem_values
@@ -1284,9 +1280,9 @@ class PostProcessor:
             bottom_operation = np.zeros(len(x_positions))
             for i, col in enumerate(operation_df.columns):
                 operation_values = operation_df[col].values
-                color = bar_colors[i] if i < len(bar_colors) else f'C{i}'
+                clr = self._color_map.get(process_codes[i], 'black')
                 ax.bar(op_positions, operation_values, width=bar_width, bottom=bottom_operation,
-                       alpha=0.9, color=color, edgecolor='black', linewidth=1, zorder=2)
+                       alpha=0.9, color=clr, edgecolor='black', linewidth=1, zorder=2)
                 bottom_operation += operation_values
 
             ax.axhline(0, color='gray', linewidth=0.5, zorder=0)
@@ -1298,7 +1294,7 @@ class PostProcessor:
                    ha='center', va='top', fontsize=self._plot_config["fontsize"] - 3, color='gray')
 
             # Build legend handles
-            process_legend = [Patch(facecolor=bar_colors[i], edgecolor='black', linewidth=0.5, label=col)
+            process_legend = [Patch(facecolor=self._color_map.get(process_codes[i], 'black'), edgecolor='black', linewidth=0.5, label=col)
                             for i, col in enumerate(capacity_additions_df.columns)]
             type_legend = [
                 Patch(facecolor="white", edgecolor='#30A834', linewidth=2, label='+ New Cap'),
@@ -1473,27 +1469,21 @@ class PostProcessor:
             axes = np.array([axes])
         axes = axes.flatten() if isinstance(axes, np.ndarray) else [axes]
 
-        # Plot each product
-        process_legend = []
-        type_legend = []
+        # Plot each product with individual legends (colors are synced via self._color_map)
         for i, product in enumerate(products):
             ax = axes[i]
             if detailed:
-                proc_leg, type_leg = self._plot_capacity_balance_detailed_on_ax(
+                self._plot_capacity_balance_detailed_on_ax(
                     ax, product, prod_df, capacity_df,
                     annotated=annotated,
-                    show_legend=False,  # We'll add a shared legend
+                    show_legend=True,
                     show_title=True
                 )
-                # Keep the first non-empty legend handles for shared legend
-                if not process_legend and proc_leg:
-                    process_legend = proc_leg
-                    type_legend = type_leg
             else:
                 self._plot_capacity_balance_on_ax(
                     ax, product, prod_df, capacity_df,
                     annotated=annotated,
-                    show_legend=False,  # We'll add a shared legend
+                    show_legend=True,
                     show_fill=True,
                     show_title=True
                 )
@@ -1502,32 +1492,6 @@ class PostProcessor:
         for j in range(len(products), len(axes)):
             fig.delaxes(axes[j])
 
-        # Add shared legend at the bottom
-        if detailed and process_legend:
-            # For detailed mode, combine process and type legends
-            from matplotlib.patches import Patch
-            all_handles = process_legend + type_legend
-            ncol = min(6, len(all_handles))
-            fig.legend(
-                handles=all_handles,
-                loc='upper center',
-                bbox_to_anchor=(0.5, 0.02),
-                ncol=ncol,
-                fontsize=self._plot_config["fontsize"] - 2,
-                frameon=False
-            )
-        else:
-            # For simple mode, get handles from the first axis
-            handles, labels = axes[0].get_legend_handles_labels()
-            fig.legend(
-                handles, labels,
-                loc='upper center',
-                bbox_to_anchor=(0.5, 0.02),
-                ncol=3,
-                fontsize=self._plot_config["fontsize"] - 2,
-                frameon=False
-            )
-
         fig.suptitle(
             "Production vs Capacity by Product",
             fontsize=self._plot_config["fontsize"] + 4,
@@ -1535,7 +1499,6 @@ class PostProcessor:
         )
 
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.15 if detailed else 0.12)
         plt.show()
 
     def plot_utilization_heatmap(self, product=None, annotated=True, show_values=True):

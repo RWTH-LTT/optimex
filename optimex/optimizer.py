@@ -28,7 +28,8 @@ Both decision variables remain in REAL (unscaled) units to:
 
 **Characterization parameters** (scaled by `cat_scales[category]`):
 - `characterization[c, e, t]`: impact per kg emission [SCALED]
-- `category_impact_limit[c]`: maximum impact allowed [SCALED]
+- `category_impact_limits[(c, t)]`: time-specific maximum impact allowed [SCALED]
+- `cumulative_category_impact_limits[c]`: cumulative maximum impact allowed [SCALED]
 
 **Unscaled parameters**:
 - `background_inventory[bkg, i, e]`: kg emission / kg intermediate [UNSCALED]
@@ -358,14 +359,21 @@ def create_model(
         else {}
     )
 
-    model.category_impact_limit = pyo.Param(
+    # Store category impact limit data for constraint generation
+    model._category_impact_limits = (
+        scaled_inputs.category_impact_limits
+        if scaled_inputs.category_impact_limits is not None
+        else {}
+    )
+
+    model.cumulative_category_impact_limits = pyo.Param(
         model.CATEGORY,
         within=pyo.Reals,
-        doc="maximum impact limit",
+        doc="cumulative maximum impact limit per category",
         default=float("inf"),
         initialize=(
-            scaled_inputs.category_impact_limit
-            if scaled_inputs.category_impact_limit is not None
+            scaled_inputs.cumulative_category_impact_limits
+            if scaled_inputs.cumulative_category_impact_limits is not None
             else {}
         ),
     )
@@ -667,12 +675,30 @@ def create_model(
 
     model.total_impact = pyo.Expression(model.CATEGORY, rule=total_impact_in_category)
 
-    # Category impact limit
-    def category_impact_limit_rule(model, c):
-        return model.total_impact[c] <= model.category_impact_limit[c]
+    # Time-specific impact (impact at a specific time across all processes)
+    def time_specific_impact_rule(model, c, t):
+        return sum(model.specific_impact[c, p, t] for p in model.PROCESS)
 
-    model.CategoryImpactLimit = pyo.Constraint(
-        model.CATEGORY, rule=category_impact_limit_rule
+    model.time_specific_impact = pyo.Expression(
+        model.CATEGORY, model.SYSTEM_TIME, rule=time_specific_impact_rule
+    )
+
+    # Time-specific category impact limits
+    def category_impact_limits_rule(model, c, t):
+        if (c, t) in model._category_impact_limits:
+            return model.time_specific_impact[c, t] <= model._category_impact_limits[(c, t)]
+        return pyo.Constraint.Skip
+
+    model.CategoryImpactLimits = pyo.Constraint(
+        model.CATEGORY, model.SYSTEM_TIME, rule=category_impact_limits_rule
+    )
+
+    # Cumulative category impact limit
+    def cumulative_category_impact_limit_rule(model, c):
+        return model.total_impact[c] <= model.cumulative_category_impact_limits[c]
+
+    model.CumulativeCategoryImpactLimits = pyo.Constraint(
+        model.CATEGORY, rule=cumulative_category_impact_limit_rule
     )
 
     # Flow limits
