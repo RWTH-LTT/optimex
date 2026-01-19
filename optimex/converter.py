@@ -197,8 +197,18 @@ class OptimizationModelInputs(BaseModel):
         ),
     )
 
-    category_impact_limit: Optional[Dict[str, float]] = Field(
-        None, description="Optional limits on impact categories."
+    category_impact_limits: Optional[Dict[Tuple[str, int], float]] = Field(
+        None,
+        description=(
+            "Time-specific upper bounds on impact categories. Maps (category, system_time) "
+            "to maximum allowed impact at that time."
+        ),
+    )
+    cumulative_category_impact_limits: Optional[Dict[str, float]] = Field(
+        None,
+        description=(
+            "Cumulative upper bounds on total impact per category across all time periods."
+        ),
     )
     process_deployment_limits_max: Optional[Dict[Tuple[str, int], float]] = Field(
         None, description="Upper bounds on (process, system_time) deployment."
@@ -423,9 +433,14 @@ class OptimizationModelInputs(BaseModel):
             )
             validate_keys([key[2]], system_times, "characterization system times")
 
-        if data.get("category_impact_limit") is not None:
-            for key in data["category_impact_limit"].keys():
-                validate_keys([key], categories, "category_impact_limit")
+        if data.get("category_impact_limits") is not None:
+            for key in data["category_impact_limits"].keys():
+                validate_keys([key[0]], categories, "category_impact_limits categories")
+                validate_keys([key[1]], system_times, "category_impact_limits system times")
+
+        if data.get("cumulative_category_impact_limits") is not None:
+            for key in data["cumulative_category_impact_limits"].keys():
+                validate_keys([key], categories, "cumulative_category_impact_limits")
 
         if data.get("process_deployment_limits_max") is not None:
             for key in data["process_deployment_limits_max"].keys():
@@ -1002,10 +1017,16 @@ class OptimizationModelInputs(BaseModel):
         # Impact is computed as: (biosphere/fg_scale) * (characterization/cat_scale) * installation
         # So scaled_impact = real_impact / (fg_scale * cat_scale)
         # Therefore, the limit must also be divided by both scales
-        if self.category_impact_limit is not None:
-            scaled.category_impact_limit = {
+        if self.category_impact_limits is not None:
+            scaled.category_impact_limits = {
+                (cat, t): lim / (fg_scale * cat_scales.get(cat, 1.0))
+                for (cat, t), lim in self.category_impact_limits.items()
+            }
+
+        if self.cumulative_category_impact_limits is not None:
+            scaled.cumulative_category_impact_limits = {
                 cat: lim / (fg_scale * cat_scales.get(cat, 1.0))
-                for cat, lim in self.category_impact_limit.items()
+                for cat, lim in self.cumulative_category_impact_limits.items()
             }
 
         # NOTE: Process limits are NOT scaled because var_installation is in real units
@@ -1102,7 +1123,8 @@ class ModelInputManager:
             "characterization": lca_processor.characterization,
             "operation_time_limits": lca_processor.operation_time_limits,
             # Optional constraints not populated by default
-            "category_impact_limit": None,
+            "category_impact_limits": None,
+            "cumulative_category_impact_limits": None,
             "process_deployment_limits_max": None,
             "process_deployment_limits_min": None,
             "process_operation_limits_max": None,
@@ -1280,6 +1302,7 @@ class ModelInputManager:
                 "existing_capacity",
                 "flow_limits_max",
                 "flow_limits_min",
+                "category_impact_limits",
             ]
 
             for field in tuple_key_fields:
@@ -1349,6 +1372,7 @@ class ModelInputManager:
                 "existing_capacity",
                 "flow_limits_max",
                 "flow_limits_min",
+                "category_impact_limits",
             ]
 
             for field in tuple_key_fields:

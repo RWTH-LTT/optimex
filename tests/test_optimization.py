@@ -502,15 +502,15 @@ def test_operation_limits_respected():
     )
 
 
-def test_category_impact_limit_respected():
+def test_cumulative_category_impact_limit_respected():
     """
-    Test that category impact limits are correctly applied and respected.
+    Test that cumulative category impact limits are correctly applied and respected.
 
     Creates a model with two processes:
     - P1 (low CO2, high land use): preferred for climate, bad for land
     - P2 (high CO2, low land use): worse for climate, better for land
 
-    Optimizes for climate_change but limits land_use.
+    Optimizes for climate_change but limits cumulative land_use.
     Verifies that the land_use limit forces P2 usage even though it has higher CO2.
     """
     model_inputs_dict = {
@@ -631,7 +631,7 @@ def test_category_impact_limit_respected():
     land_use_limit = 200.0
 
     model_inputs_limited = converter.OptimizationModelInputs(**model_inputs_dict)
-    model_inputs_limited.category_impact_limit = {"land_use": land_use_limit}
+    model_inputs_limited.cumulative_category_impact_limits = {"land_use": land_use_limit}
 
     model_limited = optimizer.create_model(
         inputs=model_inputs_limited,
@@ -675,6 +675,143 @@ def test_category_impact_limit_respected():
     expected_climate = 250 - 4 * (150 / 9)  # ~183.33
     assert pytest.approx(expected_climate, rel=0.01) == obj_limited, (
         f"Limited climate impact should be ~{expected_climate:.1f}, got {obj_limited}"
+    )
+
+
+def test_time_specific_category_impact_limit_respected():
+    """
+    Test that time-specific category impact limits constrain impact at specific times.
+
+    Creates a model with two processes:
+    - P1 (low CO2, high land use): preferred for climate, bad for land
+    - P2 (high CO2, low land use): worse for climate, better for land
+
+    Optimizes for climate_change but limits land_use at specific years.
+    Verifies that the time-specific limits are respected independently.
+    """
+    model_inputs_dict = {
+        "PROCESS": ["P1_low_co2", "P2_high_co2"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": [],
+        "ELEMENTARY_FLOW": ["CO2", "land"],
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020, 2021, 2022],
+        "CATEGORY": ["climate_change", "land_use"],
+        "operation_time_limits": {
+            "P1_low_co2": (0, 0),
+            "P2_high_co2": (0, 0),
+        },
+        "demand": {
+            ("product", 2020): 10,
+            ("product", 2021): 10,
+            ("product", 2022): 10,
+        },
+        "foreground_technosphere": {},
+        "internal_demand_technosphere": {},
+        # P1: low CO2 (1), high land use (10)
+        # P2: high CO2 (5), low land use (1)
+        "foreground_biosphere": {
+            ("P1_low_co2", "CO2", 0): 1,
+            ("P1_low_co2", "land", 0): 10,
+            ("P2_high_co2", "CO2", 0): 5,
+            ("P2_high_co2", "land", 0): 1,
+        },
+        "foreground_production": {
+            ("P1_low_co2", "product", 0): 1.0,
+            ("P2_high_co2", "product", 0): 1.0,
+        },
+        "operation_flow": {
+            ("P1_low_co2", "product"): True,
+            ("P1_low_co2", "CO2"): True,
+            ("P1_low_co2", "land"): True,
+            ("P2_high_co2", "product"): True,
+            ("P2_high_co2", "CO2"): True,
+            ("P2_high_co2", "land"): True,
+        },
+        "background_inventory": {},
+        "mapping": {
+            ("db_2020", 2020): 1.0,
+            ("db_2020", 2021): 1.0,
+            ("db_2020", 2022): 1.0,
+        },
+        "characterization": {
+            ("climate_change", "CO2", 2020): 1.0,
+            ("climate_change", "CO2", 2021): 1.0,
+            ("climate_change", "CO2", 2022): 1.0,
+            ("climate_change", "land", 2020): 0.0,
+            ("climate_change", "land", 2021): 0.0,
+            ("climate_change", "land", 2022): 0.0,
+            ("land_use", "CO2", 2020): 0.0,
+            ("land_use", "CO2", 2021): 0.0,
+            ("land_use", "CO2", 2022): 0.0,
+            ("land_use", "land", 2020): 1.0,
+            ("land_use", "land", 2021): 1.0,
+            ("land_use", "land", 2022): 1.0,
+        },
+    }
+
+    # Set time-specific limit on land_use for year 2021 only
+    # Limit land_use in 2021 to 50, which requires mixing P1 and P2
+    # Without limits, P1 handles all 10 units -> land_use = 100 in each year
+    # With limit of 50: need x from P1, (10-x) from P2
+    # 10*x + 1*(10-x) = 50 => 9x = 40 => x = 40/9 = 4.44
+    land_use_limit_2021 = 50.0
+
+    model_inputs_limited = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_inputs_limited.category_impact_limits = {
+        ("land_use", 2021): land_use_limit_2021
+    }
+
+    model_limited = optimizer.create_model(
+        inputs=model_inputs_limited,
+        objective_category="climate_change",
+        name="test_time_specific_category_limit",
+    )
+    solved_limited, obj_limited, results = optimizer.solve_model(
+        model_limited, solver_name="glpk", tee=False
+    )
+
+    # Verify solution is optimal
+    assert results.solver.status == pyo.SolverStatus.ok
+    assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+    # Calculate actual land_use impact for 2021 (denormalize)
+    fg_scale = solved_limited.scales["foreground"]
+    cat_scale = solved_limited.scales["characterization"]["land_use"]
+    actual_land_use_2021 = (
+        pyo.value(solved_limited.time_specific_impact["land_use", 2021])
+        * fg_scale
+        * cat_scale
+    )
+
+    # Verify land_use in 2021 respects the limit
+    assert actual_land_use_2021 <= land_use_limit_2021 * 1.01, (
+        f"Land_use in 2021 ({actual_land_use_2021:.2f}) exceeds limit ({land_use_limit_2021})"
+    )
+
+    # Verify constraint is binding (at the limit)
+    assert actual_land_use_2021 >= land_use_limit_2021 * 0.99, (
+        f"Land_use in 2021 ({actual_land_use_2021:.2f}) is below limit, constraint not binding"
+    )
+
+    # Verify years without limits are not constrained (should be at 100)
+    actual_land_use_2020 = (
+        pyo.value(solved_limited.time_specific_impact["land_use", 2020])
+        * fg_scale
+        * cat_scale
+    )
+    assert pytest.approx(100, rel=0.01) == actual_land_use_2020, (
+        f"Land_use in 2020 should be 100 (all P1), got {actual_land_use_2020}"
+    )
+
+    actual_land_use_2022 = (
+        pyo.value(solved_limited.time_specific_impact["land_use", 2022])
+        * fg_scale
+        * cat_scale
+    )
+    assert pytest.approx(100, rel=0.01) == actual_land_use_2022, (
+        f"Land_use in 2022 should be 100 (all P1), got {actual_land_use_2022}"
     )
 
 
