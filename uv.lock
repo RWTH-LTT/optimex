@@ -3777,6 +3777,7 @@ requires-dist = [
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'" },
     { name = "optimex", marker = "extra == 'testing'" },
     { name = "pre-commit", marker = "extra == 'dev'" },
+    { name = "pydantic" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pylint", marker = "extra == 'dev'" },
     { name = "pyomo" },

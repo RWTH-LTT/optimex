@@ -59,13 +59,17 @@ class OptimizationModelInputs(BaseModel):
         ..., description="Impact categories for each elementary flow."
     )
 
+    # REFERENCE_VINTAGES is computed automatically from vintage data.
+    # Users should NOT set this directly - it is inferred from the vintage years
+    # present in foreground_*_vintages and technology_evolution dictionaries.
     REFERENCE_VINTAGES: Optional[List[int]] = Field(
         None,
         description=(
-            "Reference vintage years for technology evolution. When specified, allows "
-            "defining foreground parameters that vary based on installation year. "
-            "Parameters are linearly interpolated between reference vintages."
+            "[Computed] Reference vintage years, automatically inferred from "
+            "foreground_*_vintages and technology_evolution dictionaries. "
+            "Do not set directly."
         ),
+        exclude=True,  # Exclude from serialization since it's computed
     )
 
     demand: Dict[Tuple[str, int], float] = Field(
@@ -119,7 +123,8 @@ class OptimizationModelInputs(BaseModel):
         None,
         description=(
             "Vintage-specific technosphere values. Maps (process, intermediate_flow, "
-            "process_time, vintage_year) to amount. Requires REFERENCE_VINTAGES. "
+            "process_time, vintage_year) to amount. Values are linearly interpolated "
+            "for installation years between specified vintages. "
             "Takes precedence over technology_evolution for the same (process, flow)."
         ),
     )
@@ -127,7 +132,8 @@ class OptimizationModelInputs(BaseModel):
         None,
         description=(
             "Vintage-specific biosphere values. Maps (process, elementary_flow, "
-            "process_time, vintage_year) to amount. Requires REFERENCE_VINTAGES. "
+            "process_time, vintage_year) to amount. Values are linearly interpolated "
+            "for installation years between specified vintages. "
             "Takes precedence over technology_evolution for the same (process, flow)."
         ),
     )
@@ -135,7 +141,8 @@ class OptimizationModelInputs(BaseModel):
         None,
         description=(
             "Vintage-specific production values. Maps (process, product, process_time, "
-            "vintage_year) to amount. Requires REFERENCE_VINTAGES. "
+            "vintage_year) to amount. Values are linearly interpolated "
+            "for installation years between specified vintages. "
             "Takes precedence over technology_evolution for the same (process, product)."
         ),
     )
@@ -145,7 +152,8 @@ class OptimizationModelInputs(BaseModel):
             "Scaling factors for vintage-dependent efficiency. Maps (process, flow, "
             "vintage_year) to multiplier applied to base foreground tensor. "
             "Example: {('EV', 'electricity', 2020): 1.0, ('EV', 'electricity', 2030): 0.7} "
-            "means 30% efficiency improvement by 2030. Requires REFERENCE_VINTAGES. "
+            "means 30% efficiency improvement by 2030. Values are linearly interpolated "
+            "for installation years between specified vintages. "
             "Ignored for (process, flow) pairs that have explicit *_vintages values."
         ),
     )
@@ -520,26 +528,27 @@ class OptimizationModelInputs(BaseModel):
                 validate_keys([key], all_flows, "cumulative_flow_limits_min flows")
 
         # Vintage-related validation
-        reference_vintages = set(data.get("REFERENCE_VINTAGES") or [])
-        has_vintage_tensors = any(
-            data.get(f) is not None
-            for f in [
-                "foreground_technosphere_vintages",
-                "foreground_biosphere_vintages",
-                "foreground_production_vintages",
-                "technology_evolution",
-            ]
-        )
+        # Infer REFERENCE_VINTAGES from the vintage data (union of all vintage years)
+        inferred_vintages: set[int] = set()
 
-        # Vintage tensors require REFERENCE_VINTAGES
-        if has_vintage_tensors and not reference_vintages:
-            raise ValueError(
-                "REFERENCE_VINTAGES must be specified when using vintage-aware tensors "
-                "(foreground_technosphere_vintages, foreground_biosphere_vintages, "
-                "foreground_production_vintages, or technology_evolution)."
-            )
+        if data.get("foreground_technosphere_vintages") is not None:
+            for key in data["foreground_technosphere_vintages"].keys():
+                inferred_vintages.add(key[3])
+        if data.get("foreground_biosphere_vintages") is not None:
+            for key in data["foreground_biosphere_vintages"].keys():
+                inferred_vintages.add(key[3])
+        if data.get("foreground_production_vintages") is not None:
+            for key in data["foreground_production_vintages"].keys():
+                inferred_vintages.add(key[3])
+        if data.get("technology_evolution") is not None:
+            for key in data["technology_evolution"].keys():
+                inferred_vintages.add(key[2])
 
-        # Validate foreground_technosphere_vintages
+        # Set REFERENCE_VINTAGES to the inferred values (sorted list)
+        if inferred_vintages:
+            data["REFERENCE_VINTAGES"] = sorted(inferred_vintages)
+
+        # Validate foreground_technosphere_vintages (processes, flows, process_times)
         if data.get("foreground_technosphere_vintages") is not None:
             for key in data["foreground_technosphere_vintages"].keys():
                 validate_keys(
@@ -553,13 +562,8 @@ class OptimizationModelInputs(BaseModel):
                 validate_keys(
                     [key[2]], process_times, "foreground_technosphere_vintages process times"
                 )
-                if key[3] not in reference_vintages:
-                    raise ValueError(
-                        f"Invalid vintage year {key[3]} in foreground_technosphere_vintages, "
-                        f"not in REFERENCE_VINTAGES: {sorted(reference_vintages)}"
-                    )
 
-        # Validate foreground_biosphere_vintages
+        # Validate foreground_biosphere_vintages (processes, flows, process_times)
         if data.get("foreground_biosphere_vintages") is not None:
             for key in data["foreground_biosphere_vintages"].keys():
                 validate_keys(
@@ -573,13 +577,8 @@ class OptimizationModelInputs(BaseModel):
                 validate_keys(
                     [key[2]], process_times, "foreground_biosphere_vintages process times"
                 )
-                if key[3] not in reference_vintages:
-                    raise ValueError(
-                        f"Invalid vintage year {key[3]} in foreground_biosphere_vintages, "
-                        f"not in REFERENCE_VINTAGES: {sorted(reference_vintages)}"
-                    )
 
-        # Validate foreground_production_vintages
+        # Validate foreground_production_vintages (processes, products, process_times)
         if data.get("foreground_production_vintages") is not None:
             for key in data["foreground_production_vintages"].keys():
                 validate_keys(
@@ -591,13 +590,8 @@ class OptimizationModelInputs(BaseModel):
                 validate_keys(
                     [key[2]], process_times, "foreground_production_vintages process times"
                 )
-                if key[3] not in reference_vintages:
-                    raise ValueError(
-                        f"Invalid vintage year {key[3]} in foreground_production_vintages, "
-                        f"not in REFERENCE_VINTAGES: {sorted(reference_vintages)}"
-                    )
 
-        # Validate technology_evolution
+        # Validate technology_evolution (processes, flows)
         if data.get("technology_evolution") is not None:
             for key in data["technology_evolution"].keys():
                 validate_keys([key[0]], processes, "technology_evolution processes")
@@ -605,11 +599,6 @@ class OptimizationModelInputs(BaseModel):
                 validate_keys(
                     [key[1]], all_flows, "technology_evolution flows"
                 )
-                if key[2] not in reference_vintages:
-                    raise ValueError(
-                        f"Invalid vintage year {key[2]} in technology_evolution, "
-                        f"not in REFERENCE_VINTAGES: {sorted(reference_vintages)}"
-                    )
 
         return data
 

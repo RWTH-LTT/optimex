@@ -289,7 +289,7 @@ Both are operating in 2035, but have different efficiency based on when they wer
 
 ### Approach 1: Explicit Vintage Values
 
-Specify exact values at reference vintage years. Values are linearly interpolated for installation years between references.
+Specify exact values at reference vintage years. Values are linearly interpolated for installation years between references. The reference vintages are **automatically inferred** from the years in your vintage dictionaries.
 
 ```python
 from optimex import converter
@@ -297,10 +297,8 @@ from optimex import converter
 model_inputs = converter.OptimizationModelInputs(
     # ... standard fields ...
 
-    # Define reference years where parameters are known
-    REFERENCE_VINTAGES=[2020, 2030, 2040],
-
     # Explicit values per vintage (4D: process, flow, tau, vintage)
+    # Reference vintages [2020, 2030, 2040] are inferred automatically
     foreground_technosphere_vintages={
         # 2020 vintage: 60 MJ electricity per unit at τ=1
         ("EV", "electricity", 1, 2020): 60,
@@ -327,8 +325,6 @@ Apply scaling factors to base foreground tensors. More compact when all exchange
 model_inputs = converter.OptimizationModelInputs(
     # ... standard fields ...
 
-    REFERENCE_VINTAGES=[2020, 2030, 2040],
-
     # Base values (3D tensor - same as standard)
     foreground_technosphere={
         ("EV", "electricity", 1): 60,  # Base value
@@ -336,6 +332,7 @@ model_inputs = converter.OptimizationModelInputs(
     },
 
     # Scaling factors per vintage
+    # Reference vintages [2020, 2030, 2040] are inferred automatically
     technology_evolution={
         ("EV", "electricity", 2020): 1.0,   # 100% of base
         ("EV", "electricity", 2030): 0.75,  # 75% of base (25% improvement)
@@ -380,8 +377,7 @@ inputs = {
     "SYSTEM_TIME": list(range(2020, 2041)),
     "CATEGORY": ["climate_change"],
 
-    # Reference vintages for technology evolution
-    "REFERENCE_VINTAGES": [2020, 2030, 2040],
+    # REFERENCE_VINTAGES is inferred automatically from vintage data
 
     "operation_time_limits": {"EV": (1, 2)},
     "demand": {("vkm", t): 1000 for t in range(2025, 2041)},
@@ -393,6 +389,7 @@ inputs = {
     },
 
     # Vintage-specific electricity consumption
+    # (reference vintages [2020, 2030, 2040] inferred from keys)
     "foreground_technosphere_vintages": {
         # 2020 tech: 60 MJ/vkm (inefficient)
         ("EV", "electricity", 1, 2020): 30,

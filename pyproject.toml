@@ -37,6 +37,7 @@ dependencies = [
     "pyyaml",
     "bw-temporalis",
     "dill",
+    "pydantic",
     # dependencies as strings with quotes, e.g. "foo"
     # You can add version requirements like "foo>2.0"
     "pydantic>=2.12.5",

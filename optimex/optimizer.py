@@ -504,28 +504,42 @@ def create_model(
             if pyo.value(m.operation_flow[p, x]) == 0:
                 return 0
 
+            op_start = pyo.value(m.process_operation_start[p])
+            op_end = pyo.value(m.process_operation_end[p])
+
             # O(1) check if overrides exist for this (process, flow) combination
             if (p, x) in overrides_index:
-                # Vintage-aware: sum flow contributions from all active installations
-                result = 0
-                for tau in m.PROCESS_TIME:
-                    vintage = t - tau
-                    if (vintage in m.SYSTEM_TIME and
-                        m.process_operation_start[p] <= tau <= m.process_operation_end[p]):
-                        # Check sparse override first, fall back to base 3D tensor
-                        key = (p, x, tau, vintage)
-                        if key in overrides:
-                            flow_value = overrides[key]
-                        else:
-                            flow_value = tensor[p, x, tau]
-                        result += flow_value * m.var_installation[p, vintage]
-                return result
+                # Vintage-aware: use var_operation with vintage-specific rates
+                # For each operating tau, the vintage is (t - tau) - the installation year
+                # We sum flow rates across all operating taus/vintages (new installations)
+                flow_rate = sum(
+                    overrides.get((p, x, tau, t - tau), tensor[p, x, tau])
+                    for tau in m.PROCESS_TIME
+                    if op_start <= tau <= op_end and (t - tau) in m.SYSTEM_TIME
+                )
+
+                # Add contribution from existing capacity (brownfield)
+                # Only add ONCE per process if ANY existing capacity is operating at time t
+                has_operating_existing = any(
+                    proc == p and op_start <= (t - inst_year) <= op_end
+                    for (proc, inst_year), cap in m._existing_capacity_dict.items()
+                )
+                if has_operating_existing:
+                    nearest_vintage = min(m.SYSTEM_TIME)
+                    existing_flow_rate = sum(
+                        overrides.get((p, x, tau_op, nearest_vintage), pyo.value(tensor[p, x, tau_op]))
+                        for tau_op in m.PROCESS_TIME
+                        if op_start <= tau_op <= op_end
+                    )
+                    flow_rate += existing_flow_rate
+
+                return flow_rate * m.var_operation[p, t]
             else:
                 # No overrides: use efficient 3D computation with var_operation
                 total_flow_per_installation = sum(
                     tensor[p, x, tau]
                     for tau in m.PROCESS_TIME
-                    if m.process_operation_start[p] <= tau <= m.process_operation_end[p]
+                    if op_start <= tau <= op_end
                 )
                 return total_flow_per_installation * m.var_operation[p, t]
 
@@ -708,20 +722,47 @@ def create_model(
         any_overrides = any(has_production_overrides(p, r) for p in model.PROCESS)
 
         if any_overrides:
-            # Vintage-aware production calculation with sparse override lookup
+            # Vintage-aware production calculation using var_operation
+            # The OperationCapacity constraint bounds var_operation by vintage-specific
+            # production capacity. For each operating tau, the vintage is (t - tau).
             total_production = 0
             for p in model.PROCESS:
                 op_start = pyo.value(model.process_operation_start[p])
                 op_end = pyo.value(model.process_operation_end[p])
-                for tau in model.PROCESS_TIME:
-                    vintage = t - tau
-                    if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
-                        production_rate = sum(
-                            get_production_value(p, r, tau_op, vintage)
+
+                # Check if THIS specific process has production overrides
+                if has_production_overrides(p, r):
+                    # 4D path: sum production rates for taus where vintage is in SYSTEM_TIME
+                    production_rate = sum(
+                        get_production_value(p, r, tau, t - tau)
+                        for tau in model.PROCESS_TIME
+                        if op_start <= tau <= op_end and (t - tau) in model.SYSTEM_TIME
+                    )
+
+                    # Add contribution from existing capacity (brownfield)
+                    # Only add ONCE per process if ANY existing capacity is operating
+                    has_operating_existing = any(
+                        proc == p and op_start <= (t - inst_year) <= op_end
+                        for (proc, inst_year), cap in model._existing_capacity_dict.items()
+                    )
+                    if has_operating_existing:
+                        nearest_vintage = min(model.SYSTEM_TIME)
+                        existing_prod_rate = sum(
+                            pyo.value(get_production_value(p, r, tau_op, nearest_vintage))
                             for tau_op in model.PROCESS_TIME
                             if op_start <= tau_op <= op_end
                         )
-                        total_production += production_rate * model.var_installation[p, vintage]
+                        production_rate += existing_prod_rate
+                else:
+                    # 3D path for this process: no overrides, use efficient calculation
+                    # Sum over ALL operating taus (no vintage filter needed)
+                    production_rate = sum(
+                        model.foreground_production[p, r, tau]
+                        for tau in model.PROCESS_TIME
+                        if op_start <= tau <= op_end
+                    )
+
+                total_production += production_rate * model.var_operation[p, t]
         else:
             # 3D efficient path: no overrides
             total_production = sum(
@@ -826,20 +867,21 @@ def create_model(
         any_overrides = any(has_production_overrides(p, r) for p in model.PROCESS)
 
         if any_overrides:
-            # Vintage-aware: sum over all active vintage cohorts with sparse override lookup
+            # Vintage-aware: use var_operation with vintage-specific production rates
+            # (consistent with demand fulfillment constraint)
             total = 0
             for p in model.PROCESS:
                 op_start = pyo.value(model.process_operation_start[p])
                 op_end = pyo.value(model.process_operation_end[p])
-                for tau in model.PROCESS_TIME:
-                    vintage = t - tau
-                    if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
-                        production_rate = sum(
-                            get_production_value(p, r, tau_op, vintage)
-                            for tau_op in model.PROCESS_TIME
-                            if op_start <= tau_op <= op_end
-                        )
-                        total += production_rate * model.var_installation[p, vintage]
+
+                # Sum production rates across all operating taus/vintages
+                production_rate = sum(
+                    get_production_value(p, r, tau, t - tau)
+                    for tau in model.PROCESS_TIME
+                    if op_start <= tau <= op_end and (t - tau) in model.SYSTEM_TIME
+                )
+
+                total += production_rate * model.var_operation[p, t]
             return total
         else:
             # 3D efficient path: no overrides

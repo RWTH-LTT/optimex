@@ -553,3 +553,407 @@ class TestBrownfieldPostprocessing:
             f"Production capacity at 2020 should include existing capacity, "
             f"got {capacity_df.loc[2020, 'product']}"
         )
+
+
+class TestBrownfieldWithVintageParameters:
+    """Tests for brownfield optimization combined with vintage-dependent parameters."""
+
+    def test_brownfield_with_technology_evolution(self):
+        """
+        Test that brownfield + technology_evolution works correctly.
+
+        This tests the 4D code path triggered by technology_evolution when
+        existing capacity is installed before SYSTEM_TIME.
+
+        Scenario:
+        - Existing capacity from 2015 (before SYSTEM_TIME 2025-2030)
+        - technology_evolution triggers 4D code path
+        - Model should be feasible and use existing capacity
+        """
+        model_inputs_dict = {
+            "PROCESS": ["Plant"],
+            "PRODUCT": ["output"],
+            "INTERMEDIATE_FLOW": ["electricity"],
+            "ELEMENTARY_FLOW": ["CO2"],
+            "BACKGROUND_ID": ["grid"],
+            "PROCESS_TIME": list(range(21)),  # 20-year operation
+            "SYSTEM_TIME": list(range(2025, 2031)),  # 2025-2030
+            "CATEGORY": ["GWP"],
+            "operation_time_limits": {"Plant": (1, 20)},
+            "demand": {("output", t): 100 for t in range(2025, 2031)},
+            "foreground_technosphere": {
+                ("Plant", "electricity", tau): 10 for tau in range(21)
+            },
+            # technology_evolution triggers 4D code path
+            "technology_evolution": {
+                ("Plant", "electricity", 2025): 1.0,
+                ("Plant", "electricity", 2030): 0.8,  # 20% efficiency improvement
+            },
+            "internal_demand_technosphere": {},
+            "foreground_biosphere": {
+                ("Plant", "CO2", tau): 5 for tau in range(21)
+            },
+            "foreground_production": {
+                ("Plant", "output", tau): 50 if 1 <= tau <= 20 else 0
+                for tau in range(21)
+            },
+            "operation_flow": {
+                ("Plant", "output"): True,
+                ("Plant", "electricity"): True,
+                ("Plant", "CO2"): True,
+            },
+            "background_inventory": {("grid", "electricity", "CO2"): 0.5},
+            "mapping": {("grid", t): 1.0 for t in range(2025, 2031)},
+            "characterization": {("GWP", "CO2", t): 1.0 for t in range(2025, 2031)},
+            # Existing capacity from 2015 - before SYSTEM_TIME
+            "existing_capacity": {("Plant", 2015): 3.0},
+        }
+
+        model_inputs = converter.OptimizationModelInputs(**model_inputs_dict)
+        model = optimizer.create_model(
+            inputs=model_inputs,
+            objective_category="GWP",
+            name="brownfield_vintage_test",
+        )
+
+        solved_model, objective, results = optimizer.solve_model(
+            model, solver_name="glpk", tee=False
+        )
+
+        # Model should be feasible
+        assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+        # Existing capacity should contribute to meeting demand
+        # At 2025, existing capacity from 2015 is at tau = 2025-2015 = 10 (in operation)
+        operation_2025 = pyo.value(solved_model.var_operation["Plant", 2025])
+        assert operation_2025 > 0, "Operation should be positive when existing capacity exists"
+
+    def test_brownfield_with_vintage_production_overrides(self):
+        """
+        Test brownfield with explicit vintage production overrides.
+
+        Scenario:
+        - Existing capacity from before SYSTEM_TIME
+        - foreground_production_vintages provides vintage-specific rates
+        - Model should use nearest vintage rate for existing capacity
+        """
+        model_inputs_dict = {
+            "PROCESS": ["Plant"],
+            "PRODUCT": ["output"],
+            "INTERMEDIATE_FLOW": [],
+            "ELEMENTARY_FLOW": ["CO2_install", "CO2_operate"],
+            "BACKGROUND_ID": ["db"],
+            "PROCESS_TIME": [0, 1, 2],
+            "SYSTEM_TIME": [2025, 2026, 2027],
+            "CATEGORY": ["GWP"],
+            "operation_time_limits": {"Plant": (1, 2)},
+            "demand": {("output", t): 50 for t in [2025, 2026, 2027]},
+            "foreground_technosphere": {},
+            "internal_demand_technosphere": {},
+            # Separate flows for installation vs operation (operational must be constant)
+            "foreground_biosphere": {
+                ("Plant", "CO2_install", 0): 100,  # Installation emissions
+                ("Plant", "CO2_operate", 1): 10,   # Operation emissions (constant)
+                ("Plant", "CO2_operate", 2): 10,
+            },
+            # Base production (will be overridden by vintages)
+            "foreground_production": {
+                ("Plant", "output", 0): 0,
+                ("Plant", "output", 1): 100,
+                ("Plant", "output", 2): 100,
+            },
+            # Vintage-specific production rates
+            "foreground_production_vintages": {
+                ("Plant", "output", 1, 2025): 100,
+                ("Plant", "output", 2, 2025): 100,
+                ("Plant", "output", 1, 2027): 120,  # 20% more efficient
+                ("Plant", "output", 2, 2027): 120,
+            },
+            "operation_flow": {
+                ("Plant", "output"): True,
+                ("Plant", "CO2_install"): False,  # NOT operational
+                ("Plant", "CO2_operate"): True,   # Operational
+            },
+            "background_inventory": {},
+            "mapping": {("db", t): 1.0 for t in [2025, 2026, 2027]},
+            "characterization": {
+                ("GWP", "CO2_install", t): 1.0 for t in [2025, 2026, 2027]
+            } | {
+                ("GWP", "CO2_operate", t): 1.0 for t in [2025, 2026, 2027]
+            },
+            # Existing capacity from 2023 (before min SYSTEM_TIME 2025)
+            # At 2025: tau = 2025-2023 = 2, in operation (1 <= 2 <= 2)
+            # At 2026: tau = 2026-2023 = 3, NOT in operation (3 > 2)
+            "existing_capacity": {("Plant", 2023): 1.0},
+        }
+
+        model_inputs = converter.OptimizationModelInputs(**model_inputs_dict)
+        model = optimizer.create_model(
+            inputs=model_inputs,
+            objective_category="GWP",
+            name="brownfield_production_vintage",
+        )
+
+        solved_model, objective, results = optimizer.solve_model(
+            model, solver_name="glpk", tee=False
+        )
+
+        assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+        # Existing capacity should contribute at 2025 (tau=2 is in operation)
+        operation_2025 = pyo.value(solved_model.var_operation["Plant", 2025])
+        assert operation_2025 > 0, "Existing capacity should contribute at 2025"
+
+    def test_brownfield_with_mixed_vintage_processes(self):
+        """
+        Test brownfield with mixed processes - some with vintage evolution, some without.
+
+        Scenario:
+        - OldPlant: No vintage parameters, existing capacity
+        - NewPlant: Has technology_evolution, no existing capacity
+
+        Both should work together correctly.
+        """
+        model_inputs_dict = {
+            "PROCESS": ["OldPlant", "NewPlant"],
+            "PRODUCT": ["output"],
+            "INTERMEDIATE_FLOW": ["electricity"],
+            "ELEMENTARY_FLOW": ["CO2"],
+            "BACKGROUND_ID": ["grid"],
+            "PROCESS_TIME": list(range(11)),  # 10-year operation
+            "SYSTEM_TIME": [2025, 2026, 2027],
+            "CATEGORY": ["GWP"],
+            "operation_time_limits": {
+                "OldPlant": (1, 10),
+                "NewPlant": (1, 10),
+            },
+            "demand": {("output", t): 200 for t in [2025, 2026, 2027]},
+            "foreground_technosphere": {
+                ("OldPlant", "electricity", tau): 20 for tau in range(11)
+            } | {
+                ("NewPlant", "electricity", tau): 15 for tau in range(11)
+            },
+            # technology_evolution only for NewPlant
+            "technology_evolution": {
+                ("NewPlant", "electricity", 2025): 1.0,
+                ("NewPlant", "electricity", 2027): 0.8,
+            },
+            "internal_demand_technosphere": {},
+            "foreground_biosphere": {
+                ("OldPlant", "CO2", tau): 10 for tau in range(11)
+            } | {
+                ("NewPlant", "CO2", tau): 5 for tau in range(11)
+            },
+            "foreground_production": {
+                ("OldPlant", "output", tau): 100 if 1 <= tau <= 10 else 0
+                for tau in range(11)
+            } | {
+                ("NewPlant", "output", tau): 100 if 1 <= tau <= 10 else 0
+                for tau in range(11)
+            },
+            "operation_flow": {
+                ("OldPlant", "output"): True,
+                ("OldPlant", "electricity"): True,
+                ("OldPlant", "CO2"): True,
+                ("NewPlant", "output"): True,
+                ("NewPlant", "electricity"): True,
+                ("NewPlant", "CO2"): True,
+            },
+            "background_inventory": {("grid", "electricity", "CO2"): 0.5},
+            "mapping": {("grid", t): 1.0 for t in [2025, 2026, 2027]},
+            "characterization": {("GWP", "CO2", t): 1.0 for t in [2025, 2026, 2027]},
+            # Existing capacity only for OldPlant
+            "existing_capacity": {("OldPlant", 2020): 2.0},
+        }
+
+        model_inputs = converter.OptimizationModelInputs(**model_inputs_dict)
+        model = optimizer.create_model(
+            inputs=model_inputs,
+            objective_category="GWP",
+            name="mixed_brownfield_vintage",
+        )
+
+        solved_model, objective, results = optimizer.solve_model(
+            model, solver_name="glpk", tee=False
+        )
+
+        assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+        # OldPlant should use existing capacity
+        old_plant_operation_2025 = pyo.value(solved_model.var_operation["OldPlant", 2025])
+
+        # NewPlant may or may not be used depending on optimization
+        # The key is that the model is feasible and optimal
+        total_operation = sum(
+            pyo.value(solved_model.var_operation[p, t])
+            for p in ["OldPlant", "NewPlant"]
+            for t in [2025, 2026, 2027]
+        )
+        assert total_operation > 0, "Total operation should be positive to meet demand"
+
+    def test_brownfield_vintage_impact_calculation(self):
+        """
+        Test that impacts are correctly calculated with brownfield + vintage.
+
+        Verifies that:
+        1. Installation impacts from existing capacity are excluded (sunk costs)
+        2. Operational impacts use correct vintage-specific rates
+        """
+        base_config = {
+            "PROCESS": ["Plant"],
+            "PRODUCT": ["output"],
+            "INTERMEDIATE_FLOW": ["electricity"],
+            "ELEMENTARY_FLOW": ["CO2_install", "CO2_operate"],
+            "BACKGROUND_ID": ["grid"],
+            "PROCESS_TIME": [0, 1, 2],
+            "SYSTEM_TIME": [2025, 2026],
+            "CATEGORY": ["GWP"],
+            # Use (0, 2) so installations produce immediately at tau=0
+            "operation_time_limits": {"Plant": (0, 2)},
+            "demand": {("output", 2025): 100, ("output", 2026): 100},
+            "foreground_technosphere": {
+                ("Plant", "electricity", 0): 10,
+                ("Plant", "electricity", 1): 10,
+                ("Plant", "electricity", 2): 10,
+            },
+            "technology_evolution": {
+                ("Plant", "electricity", 2025): 1.0,
+                ("Plant", "electricity", 2026): 0.9,
+            },
+            "internal_demand_technosphere": {},
+            # Separate flows for installation vs operation (operational must be constant)
+            # Installation emissions are NOT operational (scaled by installation)
+            "foreground_biosphere": {
+                ("Plant", "CO2_install", 0): 500,  # High installation emissions at construction
+            },
+            "foreground_production": {
+                ("Plant", "output", 0): 100,
+                ("Plant", "output", 1): 100,
+                ("Plant", "output", 2): 100,
+            },
+            "operation_flow": {
+                ("Plant", "output"): True,
+                ("Plant", "electricity"): True,
+                ("Plant", "CO2_install"): False,  # NOT operational - scales with installation
+            },
+            "background_inventory": {("grid", "electricity", "CO2_operate"): 1.0},
+            "mapping": {("grid", 2025): 1.0, ("grid", 2026): 1.0},
+            "characterization": {
+                ("GWP", "CO2_install", 2025): 1.0,
+                ("GWP", "CO2_install", 2026): 1.0,
+                ("GWP", "CO2_operate", 2025): 1.0,
+                ("GWP", "CO2_operate", 2026): 1.0,
+            },
+        }
+
+        # Greenfield scenario (no existing capacity)
+        greenfield_inputs = converter.OptimizationModelInputs(**base_config)
+        greenfield_model = optimizer.create_model(
+            inputs=greenfield_inputs,
+            objective_category="GWP",
+            name="greenfield_vintage",
+        )
+        _, greenfield_obj, greenfield_results = optimizer.solve_model(
+            greenfield_model, solver_name="glpk", tee=False
+        )
+        assert greenfield_results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+        # Brownfield scenario (existing capacity covers demand)
+        brownfield_config = dict(base_config)
+        brownfield_config["existing_capacity"] = {("Plant", 2024): 2.0}
+
+        brownfield_inputs = converter.OptimizationModelInputs(**brownfield_config)
+        brownfield_model = optimizer.create_model(
+            inputs=brownfield_inputs,
+            objective_category="GWP",
+            name="brownfield_vintage",
+        )
+        _, brownfield_obj, brownfield_results = optimizer.solve_model(
+            brownfield_model, solver_name="glpk", tee=False
+        )
+        assert brownfield_results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+        # Brownfield should have lower impact (no installation emissions)
+        assert brownfield_obj < greenfield_obj, (
+            f"Brownfield ({brownfield_obj:.2f}) should have lower impact than "
+            f"greenfield ({greenfield_obj:.2f}) due to excluded installation emissions"
+        )
+
+    def test_brownfield_multiple_existing_entries_same_process(self):
+        """
+        Test that multiple existing_capacity entries for the same process work correctly.
+
+        This tests a regression where having multiple existing_capacity entries
+        (e.g., installations from 2005 AND 2015) incorrectly doubled the production
+        rate in the demand constraint, causing var_operation to be too low.
+
+        The production rate should only be counted ONCE per process, regardless
+        of how many existing capacity entries that process has.
+        """
+        model_inputs_dict = {
+            "PROCESS": ["Plant"],
+            "PRODUCT": ["output"],
+            "INTERMEDIATE_FLOW": ["electricity"],
+            "ELEMENTARY_FLOW": ["CO2"],
+            "BACKGROUND_ID": ["grid"],
+            "PROCESS_TIME": list(range(31)),  # 30-year operation
+            "SYSTEM_TIME": list(range(2025, 2036)),  # 2025-2035
+            "CATEGORY": ["GWP"],
+            "operation_time_limits": {"Plant": (1, 30)},
+            # Demand of 1000 per year
+            "demand": {("output", t): 1000 for t in range(2025, 2036)},
+            "foreground_technosphere": {
+                ("Plant", "electricity", tau): 10 for tau in range(31)
+            },
+            # technology_evolution triggers 4D path
+            "technology_evolution": {
+                ("Plant", "electricity", 2025): 1.0,
+                ("Plant", "electricity", 2035): 0.9,
+            },
+            "internal_demand_technosphere": {},
+            "foreground_biosphere": {},
+            "foreground_production": {
+                ("Plant", "output", tau): 100 if 1 <= tau <= 30 else 0
+                for tau in range(31)
+            },
+            "operation_flow": {
+                ("Plant", "output"): True,
+                ("Plant", "electricity"): True,
+            },
+            "background_inventory": {("grid", "electricity", "CO2"): 1.0},
+            "mapping": {("grid", t): 1.0 for t in range(2025, 2036)},
+            "characterization": {("GWP", "CO2", t): 1.0 for t in range(2025, 2036)},
+            # MULTIPLE existing capacity entries for the same process
+            # This should NOT double the production rate
+            "existing_capacity": {
+                ("Plant", 2005): 0.5,  # 0.5 units from 2005
+                ("Plant", 2015): 0.5,  # 0.5 units from 2015
+            },
+        }
+
+        model_inputs = converter.OptimizationModelInputs(**model_inputs_dict)
+        model = optimizer.create_model(
+            inputs=model_inputs,
+            objective_category="GWP",
+            name="multiple_existing_test",
+        )
+
+        solved_model, objective, results = optimizer.solve_model(
+            model, solver_name="glpk", tee=False
+        )
+
+        assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+        # Check that operation is reasonable (should be ~demand/production_rate = 1000/3000 ≈ 0.33)
+        # If the bug exists, operation would be ~0.16 (half of expected) due to doubled rate
+        operation_2025 = pyo.value(solved_model.var_operation["Plant", 2025])
+
+        # Production per unit of operation = sum of production rates for operating taus
+        # With operation_time_limits (1, 30), there are 30 operating taus
+        # Each tau has production = 100, so total = 3000 per unit of operation
+        # To meet demand of 1000, we need operation = 1000/3000 ≈ 0.333
+        expected_operation = 1000 / 3000  # ≈ 0.333
+        assert operation_2025 == pytest.approx(expected_operation, rel=0.01), (
+            f"Operation at 2025 should be ~{expected_operation:.4f}, got {operation_2025:.4f}. "
+            "If operation is half of expected, the production rate is being doubled incorrectly."
+        )
