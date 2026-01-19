@@ -498,7 +498,7 @@ def create_model(
             model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
         )
 
-    def scale_tensor_by_operation(tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset):
+    def scale_tensor_by_operation(tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset, production_overrides: dict):
         def expr(m, p, x, t):
             # Only apply operational scaling to flows marked as operational
             if pyo.value(m.operation_flow[p, x]) == 0:
@@ -509,31 +509,41 @@ def create_model(
 
             # O(1) check if overrides exist for this (process, flow) combination
             if (p, x) in overrides_index:
-                # Vintage-aware: use var_operation with vintage-specific rates
-                # For each operating tau, the vintage is (t - tau) - the installation year
-                # We sum flow rates across all operating taus/vintages (new installations)
+                # Vintage-aware: var_operation represents production volume
+                # We need flow per unit of production, which is flow_rate / production_rate
+                
+                # Sum flow rates across ALL operating taus
                 flow_rate = sum(
                     overrides.get((p, x, tau, t - tau), tensor[p, x, tau])
                     for tau in m.PROCESS_TIME
-                    if op_start <= tau <= op_end and (t - tau) in m.SYSTEM_TIME
+                    if op_start <= tau <= op_end
                 )
-
-                # Add contribution from existing capacity (brownfield)
-                # Only add ONCE per process if ANY existing capacity is operating at time t
-                has_operating_existing = any(
-                    proc == p and op_start <= (t - inst_year) <= op_end
-                    for (proc, inst_year), cap in m._existing_capacity_dict.items()
-                )
-                if has_operating_existing:
-                    nearest_vintage = min(m.SYSTEM_TIME)
-                    existing_flow_rate = sum(
-                        overrides.get((p, x, tau_op, nearest_vintage), pyo.value(tensor[p, x, tau_op]))
-                        for tau_op in m.PROCESS_TIME
-                        if op_start <= tau_op <= op_end
+                
+                # Get production rate for ANY product (to normalize flow rates)
+                # Find a product that this process produces
+                product_for_norm = None
+                for r in m.PRODUCT:
+                    if (p, r) in m._production_overrides_index:
+                        product_for_norm = r
+                        break
+                
+                if product_for_norm is not None:
+                    # Calculate production rate for normalization
+                    production_rate = sum(
+                        production_overrides.get((p, product_for_norm, tau, t - tau), m.foreground_production[p, product_for_norm, tau])
+                        for tau in m.PROCESS_TIME
+                        if op_start <= tau <= op_end
                     )
-                    flow_rate += existing_flow_rate
-
-                return flow_rate * m.var_operation[p, t]
+                    
+                    if production_rate > 0:
+                        # Flow per unit of production
+                        flow_per_production = flow_rate / production_rate
+                        return flow_per_production * m.var_operation[p, t]
+                    else:
+                        return 0
+                else:
+                    # No production overrides, fall back to simple multiplication
+                    return flow_rate * m.var_operation[p, t]
             else:
                 # No overrides: use efficient 3D computation with var_operation
                 total_flow_per_installation = sum(
@@ -567,12 +577,14 @@ def create_model(
         "INTERMEDIATE_FLOW",
         model._technosphere_vintage_overrides,
         model._technosphere_overrides_index,
+        model._production_vintage_overrides,
     )
     model.scaled_biosphere_dependent_on_operation = scale_tensor_by_operation(
         model.foreground_biosphere,
         "ELEMENTARY_FLOW",
         model._biosphere_vintage_overrides,
         model._biosphere_overrides_index,
+        model._production_vintage_overrides,
     )
     # Internal demand has no vintage overrides
     _empty_index = frozenset()
@@ -583,7 +595,7 @@ def create_model(
     )
     model.scaled_internal_demand_dependent_on_operation = (
         scale_tensor_by_operation(
-            model.internal_demand_technosphere, "PRODUCT", {}, _empty_index
+            model.internal_demand_technosphere, "PRODUCT", {}, _empty_index, model._production_vintage_overrides
         )
     )
 
@@ -617,10 +629,36 @@ def create_model(
 
     # Helper to get production value with sparse override lookup
     def get_production_value(p, r, tau, vintage):
-        """Get production value, checking sparse overrides first."""
+        """
+        Get production value, checking sparse overrides first.
+        
+        If vintage is not in overrides (e.g., from brownfield installations),
+        use the nearest available vintage.
+        """
         key = (p, r, tau, vintage)
         if key in model._production_vintage_overrides:
             return model._production_vintage_overrides[key]
+        
+        # If vintage not found and we have overrides for this (p, r),
+        # use nearest available vintage
+        if (p, r) in model._production_overrides_index:
+            # Get all available vintages for this (p, r, tau)
+            available_vintages = sorted([
+                v for (proc, prod, t, v) in model._production_vintage_overrides.keys()
+                if proc == p and prod == r and t == tau
+            ])
+            if available_vintages:
+                # Use nearest vintage
+                if vintage <= available_vintages[0]:
+                    nearest = available_vintages[0]
+                elif vintage >= available_vintages[-1]:
+                    nearest = available_vintages[-1]
+                else:
+                    # Find closest
+                    nearest = min(available_vintages, key=lambda v: abs(v - vintage))
+                return model._production_vintage_overrides[(p, r, tau, nearest)]
+        
+        # Fall back to base tensor
         return model.foreground_production[p, r, tau]
 
     # O(1) check if production overrides exist for a given process/product
@@ -732,27 +770,9 @@ def create_model(
 
                 # Check if THIS specific process has production overrides
                 if has_production_overrides(p, r):
-                    # 4D path: sum production rates for taus where vintage is in SYSTEM_TIME
-                    production_rate = sum(
-                        get_production_value(p, r, tau, t - tau)
-                        for tau in model.PROCESS_TIME
-                        if op_start <= tau <= op_end and (t - tau) in model.SYSTEM_TIME
-                    )
-
-                    # Add contribution from existing capacity (brownfield)
-                    # Only add ONCE per process if ANY existing capacity is operating
-                    has_operating_existing = any(
-                        proc == p and op_start <= (t - inst_year) <= op_end
-                        for (proc, inst_year), cap in model._existing_capacity_dict.items()
-                    )
-                    if has_operating_existing:
-                        nearest_vintage = min(model.SYSTEM_TIME)
-                        existing_prod_rate = sum(
-                            pyo.value(get_production_value(p, r, tau_op, nearest_vintage))
-                            for tau_op in model.PROCESS_TIME
-                            if op_start <= tau_op <= op_end
-                        )
-                        production_rate += existing_prod_rate
+                    # 4D path: var_operation is already bounded by total vintage-aware capacity
+                    # in the OperationCapacity constraint, so it directly represents production
+                    total_production += model.var_operation[p, t]
                 else:
                     # 3D path for this process: no overrides, use efficient calculation
                     # Sum over ALL operating taus (no vintage filter needed)
@@ -761,8 +781,7 @@ def create_model(
                         for tau in model.PROCESS_TIME
                         if op_start <= tau <= op_end
                     )
-
-                total_production += production_rate * model.var_operation[p, t]
+                    total_production += production_rate * model.var_operation[p, t]
         else:
             # 3D efficient path: no overrides
             total_production = sum(
