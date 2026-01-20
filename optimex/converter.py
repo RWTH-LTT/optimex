@@ -1534,7 +1534,9 @@ def expand_foreground_tensor_with_evolution(
     Expand a base foreground tensor using technology evolution scaling factors.
 
     Takes a base 3D tensor and applies vintage-specific scaling factors to produce
-    a 4D tensor with installation year dimension.
+    a 4D tensor with installation year dimension. ONLY expands (process, flow) pairs
+    that have entries in technology_evolution - other pairs are left unchanged to
+    use the efficient 3D path in the optimizer.
 
     Parameters
     ----------
@@ -1553,6 +1555,7 @@ def expand_foreground_tensor_with_evolution(
     -------
     Dict[Tuple[str, str, int, int], float]
         Expanded tensor with values for all system time installation years.
+        Only contains entries for (process, flow) pairs with evolution factors.
 
     Examples
     --------
@@ -1575,8 +1578,16 @@ def expand_foreground_tensor_with_evolution(
     # Get vintage mapping for interpolating evolution factors
     vintage_mapping = construct_vintage_mapping(reference_vintages, system_times)
 
+    # Determine which (process, flow) pairs have evolution factors
+    # Only these pairs should be expanded to 4D
+    evolved_pairs = set((k[0], k[1]) for k in technology_evolution.keys())
+
     expanded: Dict[Tuple[str, str, int, int], float] = {}
     for (proc, flow, tau), base_value in base_tensor.items():
+        # Only expand if this (process, flow) pair has evolution factors
+        if (proc, flow) not in evolved_pairs:
+            continue
+
         for install_year in system_times:
             # Get interpolated evolution factor
             factor = 0.0
