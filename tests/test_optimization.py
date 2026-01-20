@@ -1303,3 +1303,83 @@ def test_cumulative_flow_limits_background_inventory():
         f"required background flows (15), got {results.solver.termination_condition}. "
         "This indicates the cumulative flow constraint is not considering background inventory flows."
     )
+
+
+def test_time_specific_flow_limits_background_inventory():
+    """
+    Test that time-specific flow limits correctly constrain flows from background inventory.
+
+    This tests that time-specific flow_limits_max/min for elementary flows
+    correctly include background inventory flows (not just foreground biosphere flows).
+    """
+    # Create a model where the constrained elementary flow comes from background inventory
+    model_inputs_dict = {
+        "PROCESS": ["P1"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": ["electricity"],
+        "ELEMENTARY_FLOW": ["rare_element"],  # comes from background only
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020, 2021, 2022],
+        "CATEGORY": ["climate_change"],
+        "operation_time_limits": {"P1": (0, 0)},
+        "demand": {
+            ("product", 2020): 10,
+            ("product", 2021): 10,
+            ("product", 2022): 10,
+        },
+        # P1 requires 1 unit of electricity per product
+        "foreground_technosphere": {
+            ("P1", "electricity", 0): 1.0,
+        },
+        "internal_demand_technosphere": {},
+        # NO foreground biosphere for rare_element - it only comes from background
+        "foreground_biosphere": {},
+        "foreground_production": {
+            ("P1", "product", 0): 1.0,
+        },
+        "operation_flow": {
+            ("P1", "product"): True,
+            ("P1", "electricity"): True,
+        },
+        # Background inventory: each unit of electricity produces 0.5 kg of rare_element
+        "background_inventory": {
+            ("db_2020", "electricity", "rare_element"): 0.5,
+        },
+        "mapping": {
+            ("db_2020", 2020): 1.0,
+            ("db_2020", 2021): 1.0,
+            ("db_2020", 2022): 1.0,
+        },
+        "characterization": {
+            ("climate_change", "rare_element", 2020): 1.0,
+            ("climate_change", "rare_element", 2021): 1.0,
+            ("climate_change", "rare_element", 2022): 1.0,
+        },
+    }
+
+    # Test with time-specific limit of 3 in 2020 (less than the 5 needed per year)
+    # This should make the model infeasible since:
+    # - Demand in 2020 requires 10 units of product
+    # - This requires 10 units of electricity
+    # - This generates 5 kg of rare_element from background (10 * 0.5)
+    # - But time-specific limit is only 3 kg
+    time_specific_limit = 3.0
+    model_inputs_limited = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_inputs_limited.flow_limits_max = {
+        ("rare_element", 2020): time_specific_limit,
+    }
+
+    model_limited = optimizer.create_model(
+        inputs=model_inputs_limited,
+        objective_category="climate_change",
+        name="test_time_specific_background_flow",
+    )
+    solver = pyo.SolverFactory("glpk")
+    results = solver.solve(model_limited, tee=False)
+
+    assert results.solver.termination_condition == pyo.TerminationCondition.infeasible, (
+        f"Model should be infeasible when time-specific rare_element limit (3) < "
+        f"required background flows (5) in 2020, got {results.solver.termination_condition}. "
+        "This indicates the time-specific flow constraint is not considering background inventory flows."
+    )

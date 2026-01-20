@@ -911,12 +911,29 @@ def create_model(
     )
 
     # Expression for total elementary flow at time t (in SCALED units)
+    # This includes both foreground biosphere flows AND background inventory flows
+    # (flows from intermediate flows going through background databases)
     def total_elementary_flow_rule(model, e, t):
-        return sum(
+        # Foreground biosphere contribution
+        foreground_flow = sum(
             model.scaled_biosphere_dependent_on_installation[p, e, t]
             + model.scaled_biosphere_dependent_on_operation[p, e, t]
             for p in model.PROCESS
         )
+        # Background inventory contribution (via intermediate flows)
+        background_flow = sum(
+            (
+                model.scaled_technosphere_dependent_on_installation[p, i, t]
+                + model.scaled_technosphere_dependent_on_operation[p, i, t]
+            )
+            * sum(
+                model.background_inventory[bkg, i, e] * model.mapping[bkg, t]
+                for bkg in model.BACKGROUND_ID
+            )
+            for i in model.INTERMEDIATE_FLOW
+            for p in model.PROCESS
+        )
+        return foreground_flow + background_flow
 
     model.total_elementary_flow = pyo.Expression(
         model.ELEMENTARY_FLOW, model.SYSTEM_TIME, rule=total_elementary_flow_rule
