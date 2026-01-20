@@ -4,6 +4,15 @@ import pytest
 from optimex import converter, optimizer
 
 
+def get_total_operation(model, p, t):
+    """Get total operation for a process at a time, summed across all vintages."""
+    return sum(
+        pyo.value(model.var_operation[proc, v, time])
+        for (proc, v, time) in model.ACTIVE_VINTAGE_TIME
+        if proc == p and time == t
+    )
+
+
 def test_dict_converts_to_modelinputs(abstract_system_model_inputs):
     model_inputs = converter.OptimizationModelInputs(**abstract_system_model_inputs)
     assert isinstance(model_inputs, converter.OptimizationModelInputs)
@@ -336,7 +345,7 @@ def test_capacity_constraint_with_high_production():
 
     # Get solution values
     inst = pyo.value(solved_model.var_installation["P1", 2020])
-    oper = pyo.value(solved_model.var_operation["P1", 2020])
+    oper = get_total_operation(solved_model, "P1", 2020)
 
     # With production = 5.0 and demand = 10:
     # - Need var_operation = 10/5 = 2 to produce 10 units
@@ -434,11 +443,11 @@ def test_operation_limits_respected():
 
     # Without limits, P1 should handle all demand (300 total)
     p1_operation_baseline = sum(
-        pyo.value(solved_baseline.var_operation["P1_low_emission", t])
+        get_total_operation(solved_baseline, "P1_low_emission", t)
         for t in solved_baseline.SYSTEM_TIME
     )
     p2_operation_baseline = sum(
-        pyo.value(solved_baseline.var_operation["P2_high_emission", t])
+        get_total_operation(solved_baseline, "P2_high_emission", t)
         for t in solved_baseline.SYSTEM_TIME
     )
     assert pytest.approx(300, rel=0.01) == p1_operation_baseline, (
@@ -473,8 +482,8 @@ def test_operation_limits_respected():
 
     # Check operation values for each year
     for t in [2020, 2021, 2022]:
-        p1_op = pyo.value(solved_limited.var_operation["P1_low_emission", t])
-        p2_op = pyo.value(solved_limited.var_operation["P2_high_emission", t])
+        p1_op = get_total_operation(solved_limited, "P1_low_emission", t)
+        p2_op = get_total_operation(solved_limited, "P2_high_emission", t)
 
         # P1 should be at the limit (binding constraint)
         assert p1_op <= operation_limit * 1.001, (
@@ -601,7 +610,7 @@ def test_cumulative_category_impact_limit_respected():
     # Without limits, P1 should handle all demand (lowest CO2)
     # Total demand = 50, all from P1 -> CO2 = 50, land_use = 500
     p1_op_baseline = sum(
-        pyo.value(solved_baseline.var_operation["P1_low_co2", t])
+        get_total_operation(solved_baseline, "P1_low_co2", t)
         for t in solved_baseline.SYSTEM_TIME
     )
     assert pytest.approx(50, rel=0.01) == p1_op_baseline, (

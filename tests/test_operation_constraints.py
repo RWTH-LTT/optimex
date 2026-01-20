@@ -10,6 +10,15 @@ import pytest
 from optimex import converter, optimizer
 
 
+def get_total_operation(model, p, t):
+    """Get total operation for a process at a time, summed across all vintages."""
+    return sum(
+        pyo.value(model.var_operation[proc, v, time])
+        for (proc, v, time) in model.ACTIVE_VINTAGE_TIME
+        if proc == p and time == t
+    )
+
+
 def test_operation_capacity_single_installation():
     """
     Test that operation is correctly bounded by a single installation.
@@ -88,8 +97,8 @@ def test_operation_capacity_single_installation():
     # var_operation represents number of operating units
     # At 2021: 5 units operating * 1.0 kg/unit = 5 kg (demand)
     # At 2022: 5 units operating * 1.0 kg/unit = 5 kg (demand)
-    operation_2021 = pyo.value(solved_model.var_operation["P1", 2021])
-    operation_2022 = pyo.value(solved_model.var_operation["P1", 2022])
+    operation_2021 = get_total_operation(solved_model, "P1", 2021)
+    operation_2022 = get_total_operation(solved_model, "P1", 2022)
 
     assert pytest.approx(5.0, rel=0.01) == operation_2021
     assert pytest.approx(5.0, rel=0.01) == operation_2022
@@ -165,7 +174,7 @@ def test_operation_capacity_multiple_installations():
     # Total capacity = (install_2020 + install_2021) * 0.5
 
     # Get operation at 2022
-    operation_2022 = pyo.value(solved_model.var_operation["P1", 2022])
+    operation_2022 = get_total_operation(solved_model, "P1", 2022)
 
     # Operation should equal demand (15) since we're minimizing emissions
     assert pytest.approx(15.0, rel=0.01) == operation_2022
@@ -243,8 +252,8 @@ def test_operation_capacity_with_varying_demand():
     # - total_production = 2.0 (sum over operation phase)
     # - To produce 3.0, need var_operation = 3.0 / 2.0 = 1.5
     # - To produce 8.0, need var_operation = 8.0 / 2.0 = 4.0
-    operation_2021 = pyo.value(solved_model.var_operation["P1", 2021])
-    operation_2022 = pyo.value(solved_model.var_operation["P1", 2022])
+    operation_2021 = get_total_operation(solved_model, "P1", 2021)
+    operation_2022 = get_total_operation(solved_model, "P1", 2022)
 
     assert pytest.approx(1.5, rel=0.01) == operation_2021  # 1.5 * 2.0 = 3.0
     assert pytest.approx(4.0, rel=0.01) == operation_2022  # 4.0 * 2.0 = 8.0
@@ -343,7 +352,7 @@ def test_operation_capacity_constraint_violation_prevented():
     # - To produce 8 with production=2.0 per operation: need var_operation = 4.0
     # - So need capacity of at least 4.0 -> need 2 total installations
 
-    operation_2022 = pyo.value(solved_model.var_operation["P1", 2022])
+    operation_2022 = get_total_operation(solved_model, "P1", 2022)
 
     # Operation should equal demand requirement (8 / 2.0 = 4.0)
     assert pytest.approx(4.0, rel=0.01) == operation_2022
@@ -424,7 +433,7 @@ def test_operation_capacity_edge_case_zero_installation():
     assert pytest.approx(0.0, abs=1e-6) == install_2020
 
     # Operation should be zero (no capacity)
-    operation_2021 = pyo.value(solved_model.var_operation["P1", 2021])
+    operation_2021 = get_total_operation(solved_model, "P1", 2021)
     assert pytest.approx(0.0, abs=1e-6) == operation_2021
 
 

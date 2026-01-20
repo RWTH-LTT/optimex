@@ -23,6 +23,15 @@ import pyomo.environ as pyo
 from optimex import converter, optimizer
 
 
+def get_total_operation(model, p, t):
+    """Get total operation for a process at a time, summed across all vintages."""
+    return sum(
+        pyo.value(model.var_operation[proc, v, time])
+        for (proc, v, time) in model.ACTIVE_VINTAGE_TIME
+        if proc == p and time == t
+    )
+
+
 class TestVintageDeterministicResults:
     """Deterministic tests with manually calculated expected values."""
 
@@ -107,7 +116,7 @@ class TestVintageDeterministicResults:
         # demand = 100, production_rate = 10
         # So var_operation should be 100/10 = 10
         for t in [2025, 2026, 2027]:
-            var_op = pyo.value(solved_model.var_operation["Plant", t])
+            var_op = get_total_operation(solved_model, "Plant", t)
             expected_operation = 100 / 10  # demand / production_rate
             assert var_op == pytest.approx(expected_operation, rel=0.001), (
                 f"At {t}: var_operation = {var_op}, expected {expected_operation}"
@@ -206,7 +215,7 @@ class TestVintageDeterministicResults:
         # - CO2 = 9 * 0.5 = 4.5 kg
 
         # Check var_operation
-        var_op_2026 = pyo.value(solved_model.var_operation["Plant", 2026])
+        var_op_2026 = get_total_operation(solved_model, "Plant", 2026)
         assert var_op_2026 == pytest.approx(1.0, rel=0.001), f"var_operation at 2026 = {var_op_2026}"
 
         # Check objective (total CO2)
@@ -299,7 +308,7 @@ class TestVintageDeterministicResults:
 
         # Verify var_operation = 1 at each year (demand/production_rate = 100/100)
         for t in [2025, 2026, 2027]:
-            var_op = pyo.value(solved_model.var_operation["Plant", t])
+            var_op = get_total_operation(solved_model, "Plant", t)
             assert var_op == pytest.approx(1.0, rel=0.001), (
                 f"var_operation at {t} = {var_op}, expected 1.0"
             )
@@ -375,7 +384,7 @@ class TestVintageDeterministicResults:
         assert results.solver.termination_condition == pyo.TerminationCondition.optimal
 
         # var_operation = demand / production_rate = 100 / 100 = 1
-        var_op = pyo.value(solved_model.var_operation["Plant", 2025])
+        var_op = get_total_operation(solved_model, "Plant", 2025)
         assert var_op == pytest.approx(1.0, rel=0.001)
 
         # Impact = electricity * CO2_per_kWh = 10 * 0.5 = 5
@@ -695,8 +704,8 @@ class TestVintageDeterministicResults:
         # var_operation * 300 = production => var_operation = production / 300
         # If each plant produces 300, var_operation should be ~1.0
 
-        var_op_p1_2025 = pyo.value(solved_model.var_operation["Plant1", 2025])
-        var_op_p2_2025 = pyo.value(solved_model.var_operation["Plant2", 2025])
+        var_op_p1_2025 = get_total_operation(solved_model, "Plant1", 2025)
+        var_op_p2_2025 = get_total_operation(solved_model, "Plant2", 2025)
 
         print(f"\nvar_operation Plant1 at 2025: {var_op_p1_2025}")
         print(f"var_operation Plant2 at 2025: {var_op_p2_2025}")
@@ -802,7 +811,7 @@ class TestVintageValidation:
         assert results.solver.termination_condition == pyo.TerminationCondition.optimal
 
         # Check production balance
-        operation_2022 = pyo.value(solved.var_operation["Plant", 2022])
+        operation_2022 = get_total_operation(solved, "Plant", 2022)
         production_rate = 1.0
         actual_production = production_rate * operation_2022
 
@@ -887,7 +896,7 @@ class TestVintageValidation:
         assert results.solver.termination_condition == pyo.TerminationCondition.optimal
 
         # Check production balance
-        operation_2021 = pyo.value(solved.var_operation["Plant", 2021])
+        operation_2021 = get_total_operation(solved, "Plant", 2021)
         production_rate = 1.0
         actual_production = production_rate * operation_2021
 
@@ -972,7 +981,7 @@ class TestVintageValidation:
         assert results.solver.termination_condition == pyo.TerminationCondition.optimal
 
         # Check production balance
-        operation_2022 = pyo.value(solved.var_operation["Plant", 2022])
+        operation_2022 = get_total_operation(solved, "Plant", 2022)
         actual_production = operation_2022
 
         assert actual_production == pytest.approx(100.0, rel=1e-6), \
@@ -1060,8 +1069,8 @@ class TestVintageValidation:
         assert results.solver.termination_condition == pyo.TerminationCondition.optimal
 
         # Check production balances
-        operation_2021 = pyo.value(solved.var_operation["Plant", 2021])
-        operation_2022 = pyo.value(solved.var_operation["Plant", 2022])
+        operation_2021 = get_total_operation(solved, "Plant", 2021)
+        operation_2022 = get_total_operation(solved, "Plant", 2022)
 
         assert operation_2021 == pytest.approx(100.0, rel=1e-6), \
             f"Production at t=2021 must equal demand (100)"

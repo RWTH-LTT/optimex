@@ -14,6 +14,15 @@ import pyomo.environ as pyo
 from optimex import converter, optimizer
 
 
+def get_total_operation(model, p, t):
+    """Get total operation for a process at a time, summed across all vintages."""
+    return sum(
+        pyo.value(model.var_operation[proc, v, time])
+        for (proc, v, time) in model.ACTIVE_VINTAGE_TIME
+        if proc == p and time == t
+    )
+
+
 class TestBrownfieldValidation:
     """Tests for validation of existing_capacity parameter."""
 
@@ -625,7 +634,7 @@ class TestBrownfieldWithVintageParameters:
 
         # Existing capacity should contribute to meeting demand
         # At 2025, existing capacity from 2015 is at tau = 2025-2015 = 10 (in operation)
-        operation_2025 = pyo.value(solved_model.var_operation["Plant", 2025])
+        operation_2025 = get_total_operation(solved_model, "Plant", 2025)
         assert operation_2025 > 0, "Operation should be positive when existing capacity exists"
 
     def test_brownfield_with_vintage_production_overrides(self):
@@ -701,7 +710,7 @@ class TestBrownfieldWithVintageParameters:
         assert results.solver.termination_condition == pyo.TerminationCondition.optimal
 
         # Existing capacity should contribute at 2025 (tau=2 is in operation)
-        operation_2025 = pyo.value(solved_model.var_operation["Plant", 2025])
+        operation_2025 = get_total_operation(solved_model, "Plant", 2025)
         assert operation_2025 > 0, "Existing capacity should contribute at 2025"
 
     def test_brownfield_with_mixed_vintage_processes(self):
@@ -780,12 +789,12 @@ class TestBrownfieldWithVintageParameters:
         assert results.solver.termination_condition == pyo.TerminationCondition.optimal
 
         # OldPlant should use existing capacity
-        old_plant_operation_2025 = pyo.value(solved_model.var_operation["OldPlant", 2025])
+        old_plant_operation_2025 = get_total_operation(solved_model, "OldPlant", 2025)
 
         # NewPlant may or may not be used depending on optimization
         # The key is that the model is feasible and optimal
         total_operation = sum(
-            pyo.value(solved_model.var_operation[p, t])
+            get_total_operation(solved_model, p, t)
             for p in ["OldPlant", "NewPlant"]
             for t in [2025, 2026, 2027]
         )
@@ -946,7 +955,7 @@ class TestBrownfieldWithVintageParameters:
 
         # Check that operation is reasonable (should be ~demand/production_rate = 1000/3000 ≈ 0.33)
         # If the bug exists, operation would be ~0.16 (half of expected) due to doubled rate
-        operation_2025 = pyo.value(solved_model.var_operation["Plant", 2025])
+        operation_2025 = get_total_operation(solved_model, "Plant", 2025)
 
         # Production per unit of operation = sum of production rates for operating taus
         # With operation_time_limits (1, 30), there are 30 operating taus

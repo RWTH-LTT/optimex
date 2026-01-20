@@ -13,6 +13,15 @@ from optimex import converter, optimizer
 from optimex.postprocessing import PostProcessor
 
 
+def get_total_operation(model, p, t):
+    """Get total operation for a process at a time, summed across all vintages."""
+    return sum(
+        pyo.value(model.var_operation[proc, v, time])
+        for (proc, v, time) in model.ACTIVE_VINTAGE_TIME
+        if proc == p and time == t
+    )
+
+
 def test_json_serialization_round_trip(abstract_system_model_inputs):
     """Test that saving and loading to JSON preserves tuple keys correctly."""
     # Create manager and load inputs
@@ -220,8 +229,8 @@ def test_solved_model_save_and_load(solved_system_model):
                     f"Installation value mismatch for ({p}, {t})"
                 )
 
-                original_op = pyo.value(model.var_operation[p, t])
-                loaded_op = pyo.value(loaded_model.var_operation[p, t])
+                original_op = get_total_operation(model, p, t)
+                loaded_op = get_total_operation(loaded_model, p, t)
                 assert abs(original_op - loaded_op) < 1e-9, (
                     f"Operation value mismatch for ({p}, {t})"
                 )

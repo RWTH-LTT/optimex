@@ -509,27 +509,80 @@ class PostProcessor:
         self.df_installation = df_pivot
         return self.df_installation
 
-    def get_operation(self) -> pd.DataFrame:
+    def get_operation(self, aggregate_vintages: bool = True) -> pd.DataFrame:
         """
         Extracts the operation data from the model and returns it as a DataFrame.
-        The DataFrame will have a MultiIndex with 'Time' and 'Process'.
-        The values are the operational levels for each process at each time step.
+
+        With 3D var_operation[p, v, t], this method can either aggregate across
+        vintages (backward compatible) or return per-vintage data.
+
+        Parameters
+        ----------
+        aggregate_vintages : bool, default=True
+            If True (default), sum operation across vintages for each (process, time)
+            to provide backward-compatible 2D output.
+            If False, return full 3D data with (Process, Vintage) as MultiIndex columns.
+
+        Returns
+        -------
+        pd.DataFrame
+            If aggregate_vintages=True: DataFrame with Time as index, Process as columns.
+            If aggregate_vintages=False: DataFrame with Time as index,
+                (Process, Vintage) MultiIndex columns.
 
         Note: var_operation is not scaled because when both demand and
         foreground_production are scaled by the same factor, the scaling
         cancels out in the constraint: demand = production * operation.
         """
-        operation_matrix = {
-            (t, p): pyo.value(self.m.var_operation[p, t])
-            for p in self.m.PROCESS
-            for t in self.m.SYSTEM_TIME
-        }
-        df = pd.DataFrame.from_dict(operation_matrix, orient="index", columns=["Value"])
-        df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process"])
-        df = df.reset_index()
-        df_pivot = df.pivot(index="Time", columns="Process", values="Value")
-        self.df_operation = df_pivot
-        return self.df_operation
+        if aggregate_vintages:
+            # Aggregate across vintages (backward compatible)
+            operation_matrix = {}
+            for p in self.m.PROCESS:
+                for t in self.m.SYSTEM_TIME:
+                    total_op = sum(
+                        pyo.value(self.m.var_operation[proc, v, time])
+                        for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME
+                        if proc == p and time == t
+                    )
+                    operation_matrix[(t, p)] = total_op
+            df = pd.DataFrame.from_dict(operation_matrix, orient="index", columns=["Value"])
+            df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process"])
+            df = df.reset_index()
+            df_pivot = df.pivot(index="Time", columns="Process", values="Value")
+            self.df_operation = df_pivot
+            return self.df_operation
+        else:
+            # Return full 3D data with (Process, Vintage) columns
+            operation_matrix = {
+                (t, p, v): pyo.value(self.m.var_operation[p, v, t])
+                for (p, v, t) in self.m.ACTIVE_VINTAGE_TIME
+            }
+            df = pd.DataFrame.from_dict(operation_matrix, orient="index", columns=["Value"])
+            df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process", "Vintage"])
+            df = df.reset_index()
+            df_pivot = df.pivot(index="Time", columns=["Process", "Vintage"], values="Value")
+            return df_pivot
+
+    def get_operation_by_vintage(self) -> pd.DataFrame:
+        """
+        Get operation data broken down by vintage for detailed merit-order analysis.
+
+        This is a convenience method equivalent to get_operation(aggregate_vintages=False).
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with Time as index and (Process, Vintage) MultiIndex columns.
+            Values are the operational levels for each process-vintage combination.
+
+        Example
+        -------
+        >>> pp = PostProcessor(solved_model)
+        >>> op_by_vintage = pp.get_operation_by_vintage()
+        >>> # See how much each vintage contributes to operation
+        >>> op_by_vintage.loc[2030, ('solar_pv', 2025)]  # Operation of 2025-vintage solar at 2030
+        """
+        return self.get_operation(aggregate_vintages=False)
 
     def get_production(self) -> pd.DataFrame:
         """
@@ -538,8 +591,8 @@ class PostProcessor:
         'Time'. The values are the total production for each process and product
         at each time step.
 
-        Note: Uses vintage-aware 4D calculation when production overrides exist,
-        matching the optimizer's demand constraint calculation.
+        With 3D var_operation[p, v, t], production is summed across all active
+        vintages at each time step.
         """
         production_tensor = {}
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
@@ -547,7 +600,6 @@ class PostProcessor:
         # Get production overrides data from model (if exists)
         production_overrides = getattr(self.m, "_production_vintage_overrides", {})
         production_overrides_index = getattr(self.m, "_production_overrides_index", frozenset())
-        existing_capacity_dict = getattr(self.m, "_existing_capacity_dict", {})
 
         def get_production_value(p, r, tau, vintage):
             """Get production value, checking sparse overrides first."""
@@ -566,39 +618,29 @@ class PostProcessor:
                 op_end = pyo.value(self.m.process_operation_end[p])
 
                 for t in self.m.SYSTEM_TIME:
-                    # Check if production overrides exist for this process/product
-                    if has_production_overrides(p, f):
-                        # 4D vintage-aware calculation (matches optimizer demand constraint)
-                        # Sum production rates for taus where vintage is in SYSTEM_TIME
-                        production_rate = sum(
-                            get_production_value(p, f, tau, t - tau)
-                            for tau in self.m.PROCESS_TIME
-                            if op_start <= tau <= op_end and (t - tau) in self.m.SYSTEM_TIME
-                        )
+                    # Sum production across all active vintages at time t
+                    total_production = 0
+                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
+                        if proc != p or time != t:
+                            continue
 
-                        # Add contribution from existing capacity (brownfield)
-                        has_operating_existing = any(
-                            proc == p and op_start <= (t - inst_year) <= op_end
-                            for (proc, inst_year), cap in existing_capacity_dict.items()
-                        )
-                        if has_operating_existing:
-                            nearest_vintage = min(self.m.SYSTEM_TIME)
-                            existing_prod_rate = sum(
-                                get_production_value(p, f, tau_op, nearest_vintage)
+                        # Get production rate for this vintage
+                        if has_production_overrides(p, f):
+                            production_rate = sum(
+                                pyo.value(get_production_value(p, f, tau_op, v))
                                 for tau_op in self.m.PROCESS_TIME
                                 if op_start <= tau_op <= op_end
                             )
-                            production_rate += existing_prod_rate
-                    else:
-                        # 3D calculation: no overrides, all vintages have same production rate
-                        production_rate = sum(
-                            pyo.value(self.m.foreground_production[p, f, tau])
-                            for tau in self.m.PROCESS_TIME
-                            if op_start <= tau <= op_end
-                        )
+                        else:
+                            production_rate = sum(
+                                pyo.value(self.m.foreground_production[p, f, tau_op])
+                                for tau_op in self.m.PROCESS_TIME
+                                if op_start <= tau_op <= op_end
+                            )
 
-                    # Production = production_rate × var_operation
-                    total_production = production_rate * pyo.value(self.m.var_operation[p, t])
+                        # Production from this vintage
+                        total_production += production_rate * pyo.value(self.m.var_operation[p, v, t])
+
                     production_tensor[(p, f, t)] = total_production * fg_scale
 
         df = pd.DataFrame.from_dict(
@@ -1264,23 +1306,20 @@ class PostProcessor:
                     existing_additions[p][t] = existing_add
                     existing_removals[p][t] = existing_rem
 
-                    # Operation level - use 4D vintage-aware production rate
-                    # (same calculation as get_production)
-                    production_rate = sum(
-                        get_production_value(p, product, tau, t - tau)
-                        for tau in self.m.PROCESS_TIME
-                        if op_start <= tau <= op_end and (t - tau) in self.m.SYSTEM_TIME
-                    )
-                    # Add contribution from existing capacity
-                    has_operating_existing = any(
-                        proc == p and op_start <= (t - inst_year) <= op_end
-                        for (proc, inst_year), cap in existing_cap_dict.items()
-                    )
-                    if has_operating_existing:
-                        production_rate += prod_per_inst_existing
+                    # Operation level - sum production across all active vintages
+                    total_operation = 0
+                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
+                        if proc != p or time != t:
+                            continue
+                        # Get production rate for this vintage
+                        production_rate = sum(
+                            pyo.value(get_production_value(p, product, tau_op, v))
+                            for tau_op in self.m.PROCESS_TIME
+                            if op_start <= tau_op <= op_end
+                        )
+                        total_operation += production_rate * pyo.value(self.m.var_operation[p, v, t])
 
-                    var_op = pyo.value(self.m.var_operation[p, t])
-                    operation[p][t] = var_op * production_rate * fg_scale
+                    operation[p][t] = total_operation * fg_scale
                 else:
                     # 3D calculation: no overrides
                     prod_per_inst = prod_per_inst_3d
@@ -1317,9 +1356,14 @@ class PostProcessor:
                     existing_additions[p][t] = existing_add
                     existing_removals[p][t] = existing_rem
 
-                    # Operation level
-                    var_op = pyo.value(self.m.var_operation[p, t])
-                    operation[p][t] = var_op * prod_per_inst * fg_scale
+                    # Operation level - sum production across all active vintages
+                    total_operation = 0
+                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
+                        if proc != p or time != t:
+                            continue
+                        total_operation += prod_per_inst * pyo.value(self.m.var_operation[p, v, t])
+
+                    operation[p][t] = total_operation * fg_scale
 
         # Convert to DataFrames
         capacity_additions_df = pd.DataFrame(capacity_additions)
@@ -1784,22 +1828,19 @@ class PostProcessor:
 
                     capacity *= fg_scale
 
-                    # Operation - use 4D vintage-aware production rate
-                    production_rate = sum(
-                        get_production_value(p, product, tau, t - tau)
-                        for tau in self.m.PROCESS_TIME
-                        if op_start <= tau <= op_end and (t - tau) in self.m.SYSTEM_TIME
-                    )
-                    # Add contribution from existing capacity
-                    has_operating_existing = any(
-                        proc == p and op_start <= (t - inst_year) <= op_end
-                        for (proc, inst_year), cap in existing_cap_dict.items()
-                    )
-                    if has_operating_existing:
-                        production_rate += prod_per_inst_existing
-
-                    var_op = pyo.value(self.m.var_operation[p, t])
-                    operation = var_op * production_rate * fg_scale
+                    # Operation - sum production across all active vintages
+                    operation = 0
+                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
+                        if proc != p or time != t:
+                            continue
+                        # Get production rate for this vintage
+                        production_rate = sum(
+                            pyo.value(get_production_value(p, product, tau_op, v))
+                            for tau_op in self.m.PROCESS_TIME
+                            if op_start <= tau_op <= op_end
+                        )
+                        operation += production_rate * pyo.value(self.m.var_operation[p, v, t])
+                    operation *= fg_scale
                 else:
                     # 3D calculation: no overrides
                     prod_per_inst = prod_per_inst_3d
@@ -1821,9 +1862,13 @@ class PostProcessor:
 
                     capacity = installations_operating * prod_per_inst * fg_scale
 
-                    # Calculate operation
-                    var_op = pyo.value(self.m.var_operation[p, t])
-                    operation = var_op * prod_per_inst * fg_scale
+                    # Calculate operation - sum across all active vintages
+                    operation = 0
+                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
+                        if proc != p or time != t:
+                            continue
+                        operation += prod_per_inst * pyo.value(self.m.var_operation[p, v, t])
+                    operation *= fg_scale
 
                 capacity_data[p][t] = capacity
                 operation_data[p][t] = operation

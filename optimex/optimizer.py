@@ -384,6 +384,47 @@ def create_model(
         else {}
     )
 
+    # Build ACTIVE_VINTAGE_TIME index: valid (process, vintage, time) tuples
+    # where vintage is active (in operation phase) at time t
+    def _build_active_vintage_index(m):
+        """
+        Build set of valid (process, vintage, time) tuples where vintage is active at time t.
+
+        A vintage v is active at time t if:
+        - tau = t - v (process-relative time)
+        - op_start <= tau <= op_end (within operation phase)
+
+        This includes both:
+        - Greenfield vintages: v in SYSTEM_TIME (new installations)
+        - Brownfield vintages: v from existing_capacity (pre-existing installations)
+        """
+        indices = []
+        for p in m.PROCESS:
+            op_start = pyo.value(m.process_operation_start[p])
+            op_end = pyo.value(m.process_operation_end[p])
+
+            # Greenfield vintages (new installations within system time horizon)
+            for v in m.SYSTEM_TIME:
+                for t in m.SYSTEM_TIME:
+                    tau = t - v  # Process-relative time
+                    if v <= t and op_start <= tau <= op_end:
+                        indices.append((p, v, t))
+
+            # Brownfield vintages (existing capacity installed before system time)
+            for (proc, inst_year), _ in model._existing_capacity_dict.items():
+                if proc == p:
+                    for t in m.SYSTEM_TIME:
+                        tau = t - inst_year
+                        if op_start <= tau <= op_end:
+                            indices.append((p, inst_year, t))
+        return indices
+
+    model.ACTIVE_VINTAGE_TIME = pyo.Set(
+        dimen=3,
+        initialize=_build_active_vintage_index,
+        doc="Set of (process, vintage, time) tuples where vintage is in operation phase at time t"
+    )
+
     # Store category impact limit data for constraint generation
     model._category_impact_limits = (
         scaled_inputs.category_impact_limits
@@ -455,24 +496,47 @@ def create_model(
     def in_operation_phase(p, tau):
         return model.process_operation_start[p] <= tau <= model.process_operation_end[p]
 
+    # 3D operation variable: (process, vintage, time)
+    # Each vintage cohort has its own operation variable for merit-order dispatch
     model.var_operation = pyo.Var(
-        model.PROCESS,
-        model.SYSTEM_TIME,
-        within=pyo.NonNegativeReals,  # Non-negative activity level
-        doc="Operational activity level (production amounts at each time)",
+        model.ACTIVE_VINTAGE_TIME,
+        within=pyo.NonNegativeReals,
+        doc="Operational activity level per vintage (process, vintage, time)",
     )
 
-    # Operation limits
+    # Operation limits apply to TOTAL operation across all vintages
+    def process_operation_limit_max_rule(m, p, t):
+        active_vintages = [
+            (proc, v, time)
+            for (proc, v, time) in m.ACTIVE_VINTAGE_TIME
+            if proc == p and time == t
+        ]
+        if not active_vintages:
+            return pyo.Constraint.Skip
+        total_op = sum(m.var_operation[proc, v, time] for (proc, v, time) in active_vintages)
+        return total_op <= m.process_operation_limits_max[p, t]
+
     model.ProcessOperationLimitMax = pyo.Constraint(
         model.PROCESS,
         model.SYSTEM_TIME,
-        rule=lambda m, p, t: m.var_operation[p, t] <= m.process_operation_limits_max[p, t],
+        rule=process_operation_limit_max_rule,
     )
+
+    def process_operation_limit_min_rule(m, p, t):
+        active_vintages = [
+            (proc, v, time)
+            for (proc, v, time) in m.ACTIVE_VINTAGE_TIME
+            if proc == p and time == t
+        ]
+        if not active_vintages:
+            return pyo.Constraint.Skip
+        total_op = sum(m.var_operation[proc, v, time] for (proc, v, time) in active_vintages)
+        return total_op >= m.process_operation_limits_min[p, t]
 
     model.ProcessOperationLimitMin = pyo.Constraint(
         model.PROCESS,
         model.SYSTEM_TIME,
-        rule=lambda m, p, t: m.var_operation[p, t] >= m.process_operation_limits_min[p, t],
+        rule=process_operation_limit_min_rule,
     )
 
     # Expression builders using sparse vintage override lookup
@@ -499,6 +563,12 @@ def create_model(
         )
 
     def scale_tensor_by_operation(tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset):
+        """
+        Scale tensor by operation, summing flows across active vintages.
+
+        With 3D var_operation[p, v, t], we sum flow contributions from each
+        vintage cohort operating at time t.
+        """
         def expr(m, p, x, t):
             # Only apply operational scaling to flows marked as operational
             if pyo.value(m.operation_flow[p, x]) == 0:
@@ -507,25 +577,31 @@ def create_model(
             op_start = pyo.value(m.process_operation_start[p])
             op_end = pyo.value(m.process_operation_end[p])
 
-            # O(1) check if overrides exist for this (process, flow) combination
-            if (p, x) in overrides_index:
-                # Vintage-aware: sum flow rates across ALL operating taus
-                # No SYSTEM_TIME filter - include all taus (handles brownfield naturally)
-                flow_rate = sum(
-                    overrides.get((p, x, tau, t - tau), tensor[p, x, tau])
-                    for tau in m.PROCESS_TIME
-                    if op_start <= tau <= op_end
-                )
+            total = 0
+            # Sum flows across all active vintages at time t
+            for (proc, v, time) in m.ACTIVE_VINTAGE_TIME:
+                if proc != p or time != t:
+                    continue
 
-                return flow_rate * m.var_operation[p, t]
-            else:
-                # No overrides: use efficient 3D computation with var_operation
-                total_flow_per_installation = sum(
-                    tensor[p, x, tau]
-                    for tau in m.PROCESS_TIME
-                    if op_start <= tau <= op_end
-                )
-                return total_flow_per_installation * m.var_operation[p, t]
+                # Get vintage-specific flow rate
+                if (p, x) in overrides_index:
+                    # Vintage-aware: sum flow rates across all operating taus for this vintage
+                    flow_rate = sum(
+                        overrides.get((p, x, tau, v), tensor[p, x, tau])
+                        for tau in m.PROCESS_TIME
+                        if op_start <= tau <= op_end
+                    )
+                else:
+                    # No overrides: all vintages have same flow rate
+                    flow_rate = sum(
+                        tensor[p, x, tau]
+                        for tau in m.PROCESS_TIME
+                        if op_start <= tau <= op_end
+                    )
+
+                total += flow_rate * m.var_operation[p, v, t]
+
+            return total
 
         return pyo.Expression(
             model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
@@ -612,152 +688,94 @@ def create_model(
         """Check if any vintage overrides exist for this process/product."""
         return (p, r) in model._production_overrides_index
 
-    def operation_capacity_constraint_rule(model, p, r, t):
+    def operation_capacity_constraint_rule(model, p, v, t, r):
         """
-        Capacity constraint: o_t ≤ total_capacity_at_time_t
+        Per-vintage capacity constraint: var_operation[p, v, t] ≤ capacity_for_vintage(p, v, t)
 
-        This constraint ensures operation level cannot exceed the total production
-        capacity provided by active installations.
+        This constraint ensures each vintage's operation level cannot exceed its
+        own production capacity.
 
-        With vintage overrides: different installation cohorts may have different production rates.
-        Without overrides: all installations have the same production rate (efficient 3D path).
+        For greenfield (v in SYSTEM_TIME): capacity = production_rate * var_installation[p, v]
+        For brownfield (v not in SYSTEM_TIME): capacity = production_rate * existing_capacity[p, v]
         """
         fg_scale = model.scales["foreground"]
         op_start = pyo.value(model.process_operation_start[p])
         op_end = pyo.value(model.process_operation_end[p])
 
+        # Calculate production rate for this vintage
         if has_production_overrides(p, r):
-            # Vintage-aware capacity calculation with sparse override lookup
-            has_production = any(
-                pyo.value(get_production_value(p, r, tau, min(model.SYSTEM_TIME))) != 0
-                for tau in model.PROCESS_TIME
-                if op_start <= tau <= op_end
+            production_per_unit = sum(
+                pyo.value(get_production_value(p, r, tau_op, v))
+                for tau_op in model.PROCESS_TIME
+                if op_start <= tau_op <= op_end
             )
-            if not has_production:
-                return pyo.Constraint.Skip
-
-            # Total capacity from all vintage cohorts
-            total_capacity = 0
-            for tau in model.PROCESS_TIME:
-                vintage = t - tau
-                if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
-                    production_per_unit = sum(
-                        get_production_value(p, r, tau_op, vintage)
-                        for tau_op in model.PROCESS_TIME
-                        if op_start <= tau_op <= op_end
-                    )
-                    total_capacity += production_per_unit * model.var_installation[p, vintage]
-
-            # Add brownfield capacity
-            for (proc, inst_year), cap in model._existing_capacity_dict.items():
-                if proc == p:
-                    tau_existing = t - inst_year
-                    if op_start <= tau_existing <= op_end:
-                        nearest_vintage = min(model.SYSTEM_TIME)
-                        production_per_unit = sum(
-                            pyo.value(get_production_value(p, r, tau_op, nearest_vintage))
-                            for tau_op in model.PROCESS_TIME
-                            if op_start <= tau_op <= op_end
-                        )
-                        total_capacity += production_per_unit * cap
-
-            capacity = total_capacity * fg_scale
         else:
-            # 3D efficient path: no overrides, all vintages have same production rate
-            total_production_scaled = sum(
-                model.foreground_production[p, r, tau]
-                for tau in model.PROCESS_TIME
-                if op_start <= tau <= op_end
+            production_per_unit = sum(
+                model.foreground_production[p, r, tau_op]
+                for tau_op in model.PROCESS_TIME
+                if op_start <= tau_op <= op_end
             )
-            if total_production_scaled == 0:
+
+        if pyo.value(production_per_unit) == 0:
+            return pyo.Constraint.Skip
+
+        # Determine capacity based on vintage type
+        if v in model.SYSTEM_TIME:
+            # Greenfield: capacity from var_installation
+            capacity = production_per_unit * model.var_installation[p, v] * fg_scale
+        else:
+            # Brownfield: capacity from existing_capacity dict
+            existing_cap = model._existing_capacity_dict.get((p, v), 0)
+            if existing_cap == 0:
                 return pyo.Constraint.Skip
+            capacity = pyo.value(production_per_unit) * existing_cap * fg_scale
 
-            installations_in_operation = sum(
-                model.var_installation[p, t - tau]
-                for tau in model.PROCESS_TIME
-                if (t - tau in model.SYSTEM_TIME) and op_start <= tau <= op_end
-            )
+        return model.var_operation[p, v, t] <= capacity
 
-            for (proc, inst_year), cap in model._existing_capacity_dict.items():
-                if proc == p:
-                    tau_existing = t - inst_year
-                    if op_start <= tau_existing <= op_end:
-                        installations_in_operation += cap
-
-            capacity = total_production_scaled * fg_scale * installations_in_operation
-
-        return model.var_operation[p, t] <= capacity
+    # Build constraint over ACTIVE_VINTAGE_TIME × PRODUCT
+    def _build_operation_capacity_constraints(m):
+        """Generate constraint indices for per-vintage capacity bounds."""
+        for (p, v, t) in m.ACTIVE_VINTAGE_TIME:
+            for r in m.PRODUCT:
+                yield (p, v, t, r)
 
     model.OperationCapacity = pyo.Constraint(
-        model.PROCESS,
-        model.PRODUCT,
-        model.SYSTEM_TIME,
-        rule=operation_capacity_constraint_rule,
+        _build_operation_capacity_constraints(model),
+        rule=lambda m, p, v, t, r: operation_capacity_constraint_rule(m, p, v, t, r),
     )
 
     def product_demand_fulfillment_rule(model, r, t):
         """
         Demand constraint: total_production == external_demand + internal_consumption
 
-        With vintage overrides: production from each vintage cohort may differ.
-        Without overrides: all installations have the same production rate (efficient 3D path).
+        With 3D var_operation[p, v, t], sum production across all active vintages.
+        Each vintage may have different production rates (if overrides exist).
         """
-        # Check if ANY process has production overrides for this product
-        any_overrides = any(has_production_overrides(p, r) for p in model.PROCESS)
+        total_production = 0
 
-        if any_overrides:
-            # Vintage-aware production calculation using var_operation
-            # The OperationCapacity constraint bounds var_operation by vintage-specific
-            # production capacity. For each operating tau, the vintage is (t - tau).
-            total_production = 0
-            for p in model.PROCESS:
-                op_start = pyo.value(model.process_operation_start[p])
-                op_end = pyo.value(model.process_operation_end[p])
+        # Sum production across all active vintages at time t
+        for (p, v, time) in model.ACTIVE_VINTAGE_TIME:
+            if time != t:
+                continue
 
-                # Check if THIS specific process has production overrides
-                if has_production_overrides(p, r):
-                    # 4D path: sum production rates for taus where vintage is in SYSTEM_TIME
-                    production_rate = sum(
-                        get_production_value(p, r, tau, t - tau)
-                        for tau in model.PROCESS_TIME
-                        if op_start <= tau <= op_end and (t - tau) in model.SYSTEM_TIME
-                    )
+            op_start = pyo.value(model.process_operation_start[p])
+            op_end = pyo.value(model.process_operation_end[p])
 
-                    # Add contribution from existing capacity (brownfield)
-                    # Only add ONCE per process if ANY existing capacity is operating
-                    has_operating_existing = any(
-                        proc == p and op_start <= (t - inst_year) <= op_end
-                        for (proc, inst_year), cap in model._existing_capacity_dict.items()
-                    )
-                    if has_operating_existing:
-                        nearest_vintage = min(model.SYSTEM_TIME)
-                        existing_prod_rate = sum(
-                            pyo.value(get_production_value(p, r, tau_op, nearest_vintage))
-                            for tau_op in model.PROCESS_TIME
-                            if op_start <= tau_op <= op_end
-                        )
-                        production_rate += existing_prod_rate
-                else:
-                    # 3D path for this process: no overrides, use efficient calculation
-                    # Sum over ALL operating taus (no vintage filter needed)
-                    production_rate = sum(
-                        model.foreground_production[p, r, tau]
-                        for tau in model.PROCESS_TIME
-                        if op_start <= tau <= op_end
-                    )
-
-                total_production += production_rate * model.var_operation[p, t]
-        else:
-            # 3D efficient path: no overrides
-            total_production = sum(
-                sum(
-                    model.foreground_production[p, r, tau]
-                    for tau in model.PROCESS_TIME
-                    if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
+            # Get production rate for this vintage
+            if has_production_overrides(p, r):
+                production_rate = sum(
+                    pyo.value(get_production_value(p, r, tau_op, v))
+                    for tau_op in model.PROCESS_TIME
+                    if op_start <= tau_op <= op_end
                 )
-                * model.var_operation[p, t]
-                for p in model.PROCESS
-            )
+            else:
+                production_rate = sum(
+                    model.foreground_production[p, r, tau_op]
+                    for tau_op in model.PROCESS_TIME
+                    if op_start <= tau_op <= op_end
+                )
+
+            total_production += production_rate * model.var_operation[p, v, t]
 
         external_demand = model.demand[r, t]
         internal_consumption = sum(
@@ -847,37 +865,34 @@ def create_model(
 
     # Expression for total product output at time t (in SCALED units)
     def total_product_flow_rule(model, r, t):
-        # Check if ANY process has production overrides for this product
-        any_overrides = any(has_production_overrides(p, r) for p in model.PROCESS)
+        """
+        Calculate total product output at time t, summing across all active vintages.
+        Consistent with 3D var_operation[p, v, t].
+        """
+        total = 0
+        for (p, v, time) in model.ACTIVE_VINTAGE_TIME:
+            if time != t:
+                continue
 
-        if any_overrides:
-            # Vintage-aware: use var_operation with vintage-specific production rates
-            # (consistent with demand fulfillment constraint)
-            total = 0
-            for p in model.PROCESS:
-                op_start = pyo.value(model.process_operation_start[p])
-                op_end = pyo.value(model.process_operation_end[p])
+            op_start = pyo.value(model.process_operation_start[p])
+            op_end = pyo.value(model.process_operation_end[p])
 
-                # Sum production rates across all operating taus/vintages
+            # Get production rate for this vintage
+            if has_production_overrides(p, r):
                 production_rate = sum(
-                    get_production_value(p, r, tau, t - tau)
-                    for tau in model.PROCESS_TIME
-                    if op_start <= tau <= op_end and (t - tau) in model.SYSTEM_TIME
+                    pyo.value(get_production_value(p, r, tau_op, v))
+                    for tau_op in model.PROCESS_TIME
+                    if op_start <= tau_op <= op_end
+                )
+            else:
+                production_rate = sum(
+                    model.foreground_production[p, r, tau_op]
+                    for tau_op in model.PROCESS_TIME
+                    if op_start <= tau_op <= op_end
                 )
 
-                total += production_rate * model.var_operation[p, t]
-            return total
-        else:
-            # 3D efficient path: no overrides
-            return sum(
-                sum(
-                    model.foreground_production[p, r, tau]
-                    for tau in model.PROCESS_TIME
-                    if model.process_operation_start[p] <= tau <= model.process_operation_end[p]
-                )
-                * model.var_operation[p, t]
-                for p in model.PROCESS
-            )
+            total += production_rate * model.var_operation[p, v, t]
+        return total
 
     model.total_product_flow = pyo.Expression(
         model.PRODUCT, model.SYSTEM_TIME, rule=total_product_flow_rule
@@ -1088,10 +1103,12 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
     """
     Validate that operation levels respect capacity constraints.
 
-    This function performs post-solve validation to ensure that var_operation
-    does not exceed the production capacity from installations in operation phase.
+    This function performs post-solve validation to ensure that var_operation[p, v, t]
+    does not exceed the production capacity for each vintage.
 
-    The capacity constraint is: var_operation <= total_production * fg_scale * installations
+    With 3D operation variables:
+    - Greenfield: var_operation[p, v, t] <= production_rate * var_installation[p, v] * fg_scale
+    - Brownfield: var_operation[p, v, t] <= production_rate * existing_capacity[p, v] * fg_scale
 
     Parameters
     ----------
@@ -1105,7 +1122,7 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
     dict
         Validation results with keys:
         - "valid": bool, True if all operation levels respect capacity
-        - "violations": list of tuples (process, time, operation, capacity, violation_type)
+        - "violations": list of tuples (process, vintage, time, operation, capacity, violation_type)
         - "max_violation": float, maximum violation found
         - "summary": str, human-readable summary
 
@@ -1124,6 +1141,7 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
     # Get sparse overrides for production with precomputed index for O(1) lookup
     production_overrides = getattr(model, "_production_vintage_overrides", {}) or {}
     production_overrides_index = getattr(model, "_production_overrides_index", frozenset())
+    existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
 
     def get_prod_value(p, r, tau, vintage):
         """Get production value, checking sparse overrides first."""
@@ -1136,86 +1154,60 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
         """O(1) check if any vintage overrides exist for this process/product."""
         return (p, r) in production_overrides_index
 
-    for p in model.PROCESS:
-        for t in model.SYSTEM_TIME:
-            operation_value = pyo.value(model.var_operation[p, t])
-            op_start = pyo.value(model.process_operation_start[p])
-            op_end = pyo.value(model.process_operation_end[p])
+    # Validate per-vintage operation bounds
+    for (p, v, t) in model.ACTIVE_VINTAGE_TIME:
+        operation_value = pyo.value(model.var_operation[p, v, t])
+        op_start = pyo.value(model.process_operation_start[p])
+        op_end = pyo.value(model.process_operation_end[p])
 
-            max_capacity = 0.0
-            for r in model.PRODUCT:
-                if has_prod_overrides(p, r):
-                    # Vintage-aware capacity calculation with sparse override lookup
-                    total_capacity = 0.0
-                    for tau in model.PROCESS_TIME:
-                        vintage = t - tau
-                        if vintage in model.SYSTEM_TIME and op_start <= tau <= op_end:
-                            production_rate = sum(
-                                get_prod_value(p, r, tau_op, vintage)
-                                for tau_op in model.PROCESS_TIME
-                                if op_start <= tau_op <= op_end
-                            )
-                            installed = pyo.value(model.var_installation[p, vintage])
-                            total_capacity += production_rate * installed
+        max_capacity = 0.0
+        for r in model.PRODUCT:
+            # Get production rate for this vintage
+            if has_prod_overrides(p, r):
+                production_rate = sum(
+                    get_prod_value(p, r, tau_op, v)
+                    for tau_op in model.PROCESS_TIME
+                    if op_start <= tau_op <= op_end
+                )
+            else:
+                production_rate = sum(
+                    pyo.value(model.foreground_production[p, r, tau_op])
+                    for tau_op in model.PROCESS_TIME
+                    if op_start <= tau_op <= op_end
+                )
 
-                    existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
-                    for (proc, inst_year), cap in existing_cap_dict.items():
-                        if proc == p:
-                            tau_existing = t - inst_year
-                            if op_start <= tau_existing <= op_end:
-                                nearest_vintage = min(model.SYSTEM_TIME)
-                                production_rate = sum(
-                                    get_prod_value(p, r, tau_op, nearest_vintage)
-                                    for tau_op in model.PROCESS_TIME
-                                    if op_start <= tau_op <= op_end
-                                )
-                                total_capacity += production_rate * cap
+            if production_rate == 0:
+                continue
 
-                    capacity = total_capacity * fg_scale
-                else:
-                    # 3D efficient path: no overrides
-                    total_production_scaled = sum(
-                        pyo.value(model.foreground_production[p, r, tau])
-                        for tau in model.PROCESS_TIME
-                        if op_start <= tau <= op_end
-                    )
-                    if total_production_scaled == 0:
-                        continue
+            # Calculate capacity for this vintage
+            if v in model.SYSTEM_TIME:
+                # Greenfield: capacity from var_installation
+                installed = pyo.value(model.var_installation[p, v])
+                capacity = production_rate * installed * fg_scale
+            else:
+                # Brownfield: capacity from existing_capacity dict
+                existing_cap = existing_cap_dict.get((p, v), 0)
+                capacity = production_rate * existing_cap * fg_scale
 
-                    installations_in_operation = sum(
-                        pyo.value(model.var_installation[p, t - tau])
-                        for tau in model.PROCESS_TIME
-                        if (t - tau in model.SYSTEM_TIME) and op_start <= tau <= op_end
-                    )
+            max_capacity = max(max_capacity, capacity)
 
-                    existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
-                    for (proc, inst_year), cap in existing_cap_dict.items():
-                        if proc == p:
-                            tau_existing = t - inst_year
-                            if op_start <= tau_existing <= op_end:
-                                installations_in_operation += cap
-
-                    capacity = total_production_scaled * fg_scale * installations_in_operation
-
-                max_capacity = max(max_capacity, capacity)
-
-            # Check if operation exceeds capacity
-            if operation_value < -tolerance:
-                violation = abs(operation_value)
-                violations.append((p, t, operation_value, max_capacity, "negative"))
-                max_violation = max(max_violation, violation)
-            elif max_capacity > 0 and operation_value > max_capacity * (1.0 + tolerance):
-                violation = operation_value - max_capacity
-                violations.append((p, t, operation_value, max_capacity, "exceeds_capacity"))
-                max_violation = max(max_violation, violation)
+        # Check if operation exceeds capacity
+        if operation_value < -tolerance:
+            violation = abs(operation_value)
+            violations.append((p, v, t, operation_value, max_capacity, "negative"))
+            max_violation = max(max_violation, violation)
+        elif max_capacity > 0 and operation_value > max_capacity * (1.0 + tolerance):
+            violation = operation_value - max_capacity
+            violations.append((p, v, t, operation_value, max_capacity, "exceeds_capacity"))
+            max_violation = max(max_violation, violation)
 
     # Generate summary
     is_valid = len(violations) == 0
     if is_valid:
-        summary = "✓ All operation levels respect capacity constraints"
+        summary = "✓ All per-vintage operation levels respect capacity constraints"
     else:
         summary = (
-            f"✗ Found {len(violations)} operation bound violations. "
+            f"✗ Found {len(violations)} per-vintage operation bound violations. "
             f"Max violation: {max_violation:.2e}"
         )
 
