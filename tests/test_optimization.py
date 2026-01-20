@@ -1189,3 +1189,117 @@ def test_product_flow_limits_respected():
         f"Model should be infeasible when cumulative product limit < total demand, "
         f"got {results_cum.solver.termination_condition}"
     )
+
+
+def test_cumulative_flow_limits_background_inventory():
+    """
+    Test that cumulative flow limits correctly constrain flows from background inventory.
+
+    This tests the bug where cumulative_flow_limits_max for elementary flows
+    only considered foreground biosphere flows but not background inventory flows.
+
+    The test creates a scenario where:
+    - An elementary flow (e.g., "iridium") comes ONLY from background inventory
+      (via intermediate flows), not from foreground biosphere
+    - A cumulative flow limit is set on this elementary flow
+    - The constraint should be respected when checking total inventory flows
+    """
+    # Create a model where the constrained elementary flow comes from background inventory
+    # P1 uses intermediate flow "electricity" which produces "rare_element" in background
+    model_inputs_dict = {
+        "PROCESS": ["P1"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": ["electricity"],
+        "ELEMENTARY_FLOW": ["rare_element"],  # e.g., iridium - comes from background
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020, 2021, 2022],
+        "CATEGORY": ["climate_change"],
+        "operation_time_limits": {"P1": (0, 0)},
+        "demand": {
+            ("product", 2020): 10,
+            ("product", 2021): 10,
+            ("product", 2022): 10,
+        },
+        # P1 requires 1 unit of electricity per product
+        "foreground_technosphere": {
+            ("P1", "electricity", 0): 1.0,
+        },
+        "internal_demand_technosphere": {},
+        # NO foreground biosphere for rare_element - it only comes from background
+        "foreground_biosphere": {},
+        "foreground_production": {
+            ("P1", "product", 0): 1.0,
+        },
+        "operation_flow": {
+            ("P1", "product"): True,
+            ("P1", "electricity"): True,
+        },
+        # Background inventory: each unit of electricity produces 0.5 kg of rare_element
+        "background_inventory": {
+            ("db_2020", "electricity", "rare_element"): 0.5,
+        },
+        "mapping": {
+            ("db_2020", 2020): 1.0,
+            ("db_2020", 2021): 1.0,
+            ("db_2020", 2022): 1.0,
+        },
+        # Characterization for climate impact (use rare_element for simplicity)
+        "characterization": {
+            ("climate_change", "rare_element", 2020): 1.0,
+            ("climate_change", "rare_element", 2021): 1.0,
+            ("climate_change", "rare_element", 2022): 1.0,
+        },
+    }
+
+    # First solve without constraint to get baseline
+    model_inputs_baseline = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_baseline = optimizer.create_model(
+        inputs=model_inputs_baseline,
+        objective_category="climate_change",
+        name="test_background_flow_baseline",
+    )
+    solved_baseline, obj_baseline, _ = optimizer.solve_model(
+        model_baseline, solver_name="glpk", tee=False
+    )
+
+    # Calculate total rare_element from inventory (including background)
+    # Total demand = 30, electricity per product = 1, so total electricity = 30
+    # Background inventory: 0.5 rare_element per electricity
+    # Total rare_element = 30 * 0.5 = 15
+    fg_scale = solved_baseline.scales["foreground"]
+    total_inventory = sum(
+        pyo.value(solved_baseline.scaled_inventory["P1", "rare_element", t]) * fg_scale
+        for t in solved_baseline.SYSTEM_TIME
+    )
+    assert pytest.approx(15, rel=0.01) == total_inventory, (
+        f"Baseline total inventory should be 15, got {total_inventory}"
+    )
+
+    # Now test with cumulative limit of 10 (less than the 15 needed)
+    # This should make the model infeasible since rare_element comes from background
+    cumulative_limit = 10.0
+    model_inputs_limited = converter.OptimizationModelInputs(**model_inputs_dict)
+    model_inputs_limited.cumulative_flow_limits_max = {
+        "rare_element": cumulative_limit,
+    }
+
+    model_limited = optimizer.create_model(
+        inputs=model_inputs_limited,
+        objective_category="climate_change",
+        name="test_background_flow_limited",
+    )
+    solver = pyo.SolverFactory("glpk")
+    results = solver.solve(model_limited, tee=False)
+
+    # The model SHOULD be infeasible because:
+    # - Total demand requires 30 units of product
+    # - This requires 30 units of electricity (foreground_technosphere)
+    # - This generates 15 kg of rare_element from background (30 * 0.5)
+    # - But cumulative limit is only 10 kg
+    # Therefore, the constraint cannot be satisfied.
+    assert results.solver.termination_condition == pyo.TerminationCondition.infeasible, (
+        f"Model should be infeasible when cumulative rare_element limit (10) < "
+        f"required background flows (15), got {results.solver.termination_condition}. "
+        "This indicates the cumulative flow constraint is not considering background inventory flows."
+    )
