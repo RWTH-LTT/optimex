@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
-from matplotlib.ticker import ScalarFormatter, MultipleLocator, AutoMinorLocator, NullLocator, FuncFormatter
+from matplotlib.ticker import ScalarFormatter, MultipleLocator, AutoMinorLocator, NullLocator, FuncFormatter, FormatStrFormatter
 from pathlib import Path
 from datetime import datetime
 
@@ -1074,9 +1074,8 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
         ax.set_xticks(xtick_positions)
         ax.set_xticklabels(xtick_labels)
         ax.set_xlim(-1, len(years_plot))
-        ax.set_ylim(water_ylim_min, water_ylim_max)
         
-        # Custom tick spacing for water use
+        # Custom tick spacing and limits for water use
         ax.yaxis.set_major_locator(MultipleLocator(0.5))
         ax.set_ylim(0, 4.6)
         
