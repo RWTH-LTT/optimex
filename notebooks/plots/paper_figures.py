@@ -12,9 +12,12 @@ Demonstrates the capabilities of optimex for transition pathway optimization.
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from matplotlib.patches import Patch
-from matplotlib.ticker import ScalarFormatter, MultipleLocator, AutoMinorLocator
+from matplotlib.lines import Line2D
+from matplotlib.ticker import ScalarFormatter, MultipleLocator, AutoMinorLocator, NullLocator, FuncFormatter
 from pathlib import Path
+from datetime import datetime
 
 # Configuration
 PLOTS_DIR = Path(__file__).parent / "data"
@@ -631,9 +634,18 @@ def load_characterized_inventory(scenario: str) -> pd.DataFrame:
         
     Returns:
         DataFrame with yearly aggregated impacts by activity (activity as columns, year as index)
+        
+    Raises:
+        ValueError: If required columns are missing from the data file
     """
     filepath = PLOTS_DIR / f"characterized_inventory_{scenario}.xlsx"
     df = pd.read_excel(filepath)
+    
+    # Validate required columns exist
+    required_columns = ['date', 'activity', 'amount']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Missing required columns in {filepath}: {missing_columns}")
     
     # Extract year from date
     df['year'] = pd.to_datetime(df['date']).dt.year
@@ -656,10 +668,6 @@ def create_radiative_forcing_figure():
     - Row 1: Cumulative radiative forcing (stacked area plots)
     - Columns: Three scenarios (no_evolution, fg_bg_evolution, iridium_constraint)
     """
-    import matplotlib.dates as mdates
-    from matplotlib.ticker import NullLocator, FuncFormatter
-    from datetime import datetime
-    
     fig, axes = plt.subplots(2, 3, figsize=(10, 6), sharex=True)
     
     # Colors for processes (using existing PROCESS_COLORS)
@@ -687,20 +695,25 @@ def create_radiative_forcing_figure():
             idx = list(all_activities).index(activity) % len(colors)
             activity_colors[activity] = colors[idx]
     
-    # Determine global y-axis limits
+    # Determine global y-axis limits with NaN handling
     inst_max = 0
     inst_min = 0
     cum_max = 0
     cum_min = 0
     
     for scenario, df in scenario_data.items():
+        if df.empty:
+            continue
         # Instantaneous: sum across all processes per year
-        inst_max = max(inst_max, df.max().max())
-        inst_min = min(inst_min, df.min().min())
+        df_max = np.nanmax(df.values) if df.size > 0 else 0
+        df_min = np.nanmin(df.values) if df.size > 0 else 0
+        inst_max = max(inst_max, df_max)
+        inst_min = min(inst_min, df_min)
         # Cumulative: cumsum then sum across processes
         cumsum_df = df.cumsum()
-        cum_max = max(cum_max, cumsum_df.sum(axis=1).max())
-        cum_min = min(cum_min, cumsum_df.sum(axis=1).min())
+        cumsum_sum = cumsum_df.sum(axis=1)
+        cum_max = max(cum_max, np.nanmax(cumsum_sum.values) if cumsum_sum.size > 0 else 0)
+        cum_min = min(cum_min, np.nanmin(cumsum_sum.values) if cumsum_sum.size > 0 else 0)
     
     # Add padding
     inst_ylim = (inst_min * 1.1 if inst_min < 0 else 0, inst_max * 1.1)
@@ -767,7 +780,6 @@ def create_radiative_forcing_figure():
     
     # Configure x-axis ticks and labels
     major_locator = mdates.YearLocator(20)
-    minor_locator = mdates.YearLocator(10)
     
     for ax_row in axes:
         for ax in ax_row:
@@ -791,7 +803,6 @@ def create_radiative_forcing_figure():
             label_idx += 1
     
     # Create legend at bottom - collect from all activities across all scenarios
-    from matplotlib.lines import Line2D
     unique_handles = []
     unique_labels = []
     for activity in all_activities:
