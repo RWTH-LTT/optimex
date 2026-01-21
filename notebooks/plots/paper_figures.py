@@ -1129,7 +1129,6 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
                bbox_to_anchor=(0.5, -0.02), ncol=min(len(all_handles_water), 7), 
                frameon=False, fontsize=9)
     
-    fig.tight_layout()
     fig.subplots_adjust(bottom=0.12, top=0.94, left=0.10)
     
     return fig
