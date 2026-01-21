@@ -454,6 +454,17 @@ def create_combined_results_figure(scenarios_data: dict):
     # all_labels.append("+ Cap")
     # all_handles.append(Patch(facecolor="#E69679", edgecolor="#CC071E", linewidth=1, hatch="///"))
     # all_labels.append("− Cap")
+    
+    labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)', '(g)', '(h)', '(i)', '(j)', '(k)', '(l)']
+    label_idx = 0
+    for row in range(4):  # Changed from range(2) to range(4)
+        for col in range(3):
+            ax = axes_matrix[row, col]  # Changed from axes[row, col] to axes_matrix[row, col]
+            # Position label in top-right corner
+            ax.text(0.95, 0.95, labels[label_idx], transform=ax.transAxes,
+                   ha='right', va='top', fontsize=10,
+                   bbox=dict(boxstyle='square,pad=0.1', fc='white', ec='none'))
+            label_idx += 1
 
     fig.legend(all_handles, all_labels, loc="lower center", bbox_to_anchor=(0.5, 0.02),
                ncol=4, frameon=False, fontsize=9)
@@ -615,7 +626,18 @@ def create_combined_impacts_figure(scenarios_data: dict):
                     if process not in all_handles:
                         all_handles[process] = Patch(facecolor=PROCESS_COLORS.get(process, "gray"), 
                                                      edgecolor="white", linewidth=0.5)
-
+                        
+    labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)']
+    label_idx = 0
+    for row in range(2):
+        for col in range(3):
+            ax = axes[row, col]
+            # Position label in top-right corner
+            ax.text(0.95, 0.95, labels[label_idx], transform=ax.transAxes,
+                   ha='right', va='top', fontsize=10,
+                   bbox=dict(boxstyle='square,pad=0.1', fc='white', ec='none'))
+            label_idx += 1
+            
     fig.legend(all_handles.values(), all_handles.keys(), loc="lower center",
                bbox_to_anchor=(0.5, -0.02), ncol=min(len(all_handles), 7), frameon=False, fontsize=9)
 
@@ -691,16 +713,10 @@ def load_characterized_inventory(scenario: str) -> pd.DataFrame:
 def create_radiative_forcing_figure():
     """
     Create a figure showing instantaneous and cumulative radiative forcing.
-    
-    Layout: 2 rows x 3 columns
-    - Row 0: Instantaneous radiative forcing (line plots)
-    - Row 1: Cumulative radiative forcing (stacked area plots)
-    - Columns: Three scenarios (no_evolution, fg_bg_evolution, iridium_constraint)
+    Normalized by powers of 10 similar to impacts figure.
     """
-    fig, axes = plt.subplots(2, 3, figsize=(10, 6), sharex=True)
-    
-    # Colors for processes (using existing PROCESS_COLORS)
-    colors = list(PROCESS_COLORS.values())
+    fig, axes = plt.subplots(2, 3, figsize=(14, 5.5), sharex=True)
+    fig.subplots_adjust(hspace=0.08, wspace=0.06)
     
     # Load data for each scenario
     scenario_data = {}
@@ -711,79 +727,82 @@ def create_radiative_forcing_figure():
         scenario_data[scenario] = df
         all_activities.update(df.columns.tolist())
     
-    # Sort activities for consistent ordering
     all_activities = sorted(all_activities)
     
-    # Create a color mapping for all activities
+    # Create color mapping
     activity_colors = {}
     for activity in all_activities:
-        if activity in PROCESS_COLORS:
-            activity_colors[activity] = PROCESS_COLORS[activity]
-        else:
-            # Assign a color from the palette for activities not in PROCESS_COLORS
-            idx = list(all_activities).index(activity) % len(colors)
-            activity_colors[activity] = colors[idx]
+        activity_colors[activity] = PROCESS_COLORS.get(activity, 'gray')
     
-    # Determine global y-axis limits with NaN handling
+    # Determine power of 10 for each row
+    row_powers = {}
+    row_ylim_max = {}
+    row_ylim_min = {}
+    
+    # Row 0: Instantaneous
     inst_max = 0
     inst_min = 0
+    for scenario, df in scenario_data.items():
+        if not df.empty:
+            inst_max = max(inst_max, np.nanmax(df.values) if df.size > 0 else 0)
+            inst_min = min(inst_min, np.nanmin(df.values) if df.size > 0 else 0)
+    
+    abs_val_inst = max(abs(inst_max), abs(inst_min))
+    exponent_inst = int(np.floor(np.log10(abs_val_inst))) if abs_val_inst > 0 else 0
+    row_powers[0] = exponent_inst
+    scaling_factor_inst = 10**exponent_inst
+    row_ylim_max[0] = (inst_max / scaling_factor_inst) * 1.1
+    row_ylim_min[0] = (inst_min / scaling_factor_inst) * 1.1 if inst_min < 0 else 0
+    
+    # Row 1: Cumulative
     cum_max = 0
     cum_min = 0
-    
     for scenario, df in scenario_data.items():
-        if df.empty:
-            continue
-        # Instantaneous: sum across all processes per year
-        df_max = np.nanmax(df.values) if df.size > 0 else 0
-        df_min = np.nanmin(df.values) if df.size > 0 else 0
-        inst_max = max(inst_max, df_max)
-        inst_min = min(inst_min, df_min)
-        # Cumulative: cumsum then sum across processes
-        cumsum_df = df.cumsum()
-        cumsum_sum = cumsum_df.sum(axis=1)
-        cum_max = max(cum_max, np.nanmax(cumsum_sum.values) if cumsum_sum.size > 0 else 0)
-        cum_min = min(cum_min, np.nanmin(cumsum_sum.values) if cumsum_sum.size > 0 else 0)
+        if not df.empty:
+            cumsum_df = df.cumsum()
+            cumsum_sum = cumsum_df.sum(axis=1)
+            cum_max = max(cum_max, np.nanmax(cumsum_sum.values) if cumsum_sum.size > 0 else 0)
+            cum_min = min(cum_min, np.nanmin(cumsum_sum.values) if cumsum_sum.size > 0 else 0)
     
-    # Add padding
-    inst_ylim = (inst_min * 1.1 if inst_min < 0 else 0, inst_max * 1.1)
-    cum_ylim = (cum_min * 1.1 if cum_min < 0 else 0, cum_max * 1.1)
+    abs_val_cum = max(abs(cum_max), abs(cum_min))
+    exponent_cum = int(np.floor(np.log10(abs_val_cum))) if abs_val_cum > 0 else 0
+    row_powers[1] = exponent_cum
+    scaling_factor_cum = 10**exponent_cum
+    row_ylim_max[1] = (cum_max / scaling_factor_cum) * 1.1
+    row_ylim_min[1] = (cum_min / scaling_factor_cum) * 1.1 if cum_min < 0 else 0
     
     # Plot each scenario
     for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
         df = scenario_data[scenario]
-        
-        # Index is already datetime from load_characterized_inventory
         dates = df.index
         
-        # Row 0: Instantaneous radiative forcing (line plots)
+        # Row 0: Instantaneous radiative forcing (scaled)
         ax_inst = axes[0, col]
         for activity in df.columns:
             color = activity_colors.get(activity, 'gray')
-            ax_inst.plot(dates, df[activity].fillna(0).values, linewidth=1.2, 
+            values_scaled = df[activity].fillna(0).values / scaling_factor_inst
+            ax_inst.plot(dates, values_scaled, linewidth=1.2, 
                         color=color, label=activity)
         
-        ax_inst.set_xlim(datetime(2025, 1, 1), datetime(2126, 1, 1))
-        ax_inst.set_ylim(inst_ylim)
-        ax_inst.grid(which="major", linestyle="-", linewidth=0.5, alpha=0.7)
+        ax_inst.set_xlim(datetime(2020, 1, 1), datetime(2126, 1, 1))
+        ax_inst.set_ylim(row_ylim_min[0], row_ylim_max[0])
+        ax_inst.grid(which="both", alpha=0.3, axis="both", zorder=0)
         ax_inst.set_axisbelow(True)
         
         if col == 0:
-            ax_inst.set_ylabel("Instantaneous radiative forcing\n[W m$^{-2}$]")
+            ax_inst.set_ylabel(f"Instantaneous radiative forcing\n[$10^{{{exponent_inst}}}$ W m$^{{-2}}$]")
         else:
-            ax_inst.set_yticklabels([])
+            ax_inst.tick_params(labelleft=False)
         
-        # Set title (scenario name)
         ax_inst.set_title(scenario_label)
+        ax_inst.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
         
-        # Row 1: Cumulative radiative forcing (stacked area plots)
+        # Row 1: Cumulative radiative forcing (scaled)
         ax_cum = axes[1, col]
-        
-        # Compute cumulative sums for each activity
         cumsum_df = df.cumsum()
         
-        # Prepare data for stackplot
         activities_in_df = [a for a in all_activities if a in cumsum_df.columns]
-        stack_data = [cumsum_df[a].fillna(0).values for a in activities_in_df]
+        stack_data = [cumsum_df[a].fillna(0).values / scaling_factor_cum for a in activities_in_df]
         stack_colors = [activity_colors[a] for a in activities_in_df]
         
         if stack_data:
@@ -793,41 +812,30 @@ def create_radiative_forcing_figure():
                             edgecolor="white",
                             linewidth=0.5)
         
-        ax_cum.set_xlim(datetime(2025, 1, 1), datetime(2126, 1, 1))
-        ax_cum.set_ylim(cum_ylim)
-        ax_cum.grid(which="major", linestyle="-", linewidth=0.5, alpha=0.7)
+        ax_cum.set_xlim(datetime(2020, 1, 1), datetime(2126, 1, 1))
+        ax_cum.set_ylim(row_ylim_min[1], row_ylim_max[1])
+        ax_cum.grid(which="both", alpha=0.3, axis="both", zorder=0)
         ax_cum.set_axisbelow(True)
         
+        ax_cum.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
+        
         if col == 0:
-            ax_cum.set_ylabel("Cumulative radiative forcing\n[W m$^{-2}$]")
+            ax_cum.set_ylabel(f"Cumulative radiative forcing\n[$10^{{{exponent_cum}}}$ W m$^{{-2}}$]")
         else:
-            ax_cum.set_yticklabels([])
+            ax_cum.tick_params(labelleft=False)
     
-    # Configure x-axis ticks and labels
-    major_locator = mdates.YearLocator(20)
-    
-    for ax_row in axes:
-        for ax in ax_row:
-            ax.xaxis.set_major_locator(major_locator)
-            ax.xaxis.set_minor_locator(NullLocator())
-            
-            for label in ax.get_xticklabels():
-                label.set_rotation(45)
-                label.set_ha("right")
-    
-    # Add subplot labels (a), (b), etc.
+    # Add subplot labels
     labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)']
     label_idx = 0
     for row in range(2):
         for col in range(3):
             ax = axes[row, col]
-            # Position label in top-right corner
             ax.text(0.95, 0.95, labels[label_idx], transform=ax.transAxes,
                    ha='right', va='top', fontsize=10,
                    bbox=dict(boxstyle='square,pad=0.1', fc='white', ec='none'))
             label_idx += 1
     
-    # Create legend at bottom - collect from all activities across all scenarios
+    # Create legend
     unique_handles = []
     unique_labels = []
     for activity in all_activities:
@@ -836,7 +844,7 @@ def create_radiative_forcing_figure():
         unique_labels.append(activity)
     
     fig.legend(unique_handles, unique_labels, 
-              loc='upper center', 
+              loc='lower center', 
               ncol=min(len(unique_labels), 4),
               bbox_to_anchor=(0.5, 0.02),
               frameon=False)
