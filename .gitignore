@@ -141,3 +141,6 @@ dmypy.json
 notebooks/import_ecoinvent.ipynb
 notebooks/premise_usage.ipynb
 notebooks/results
+
+# Generated plot files
+notebooks/plots/figs/*.png

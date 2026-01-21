@@ -622,6 +622,195 @@ def create_combined_impacts_figure(scenarios_data: dict):
     return fig
 
 
+def load_characterized_inventory(scenario: str) -> pd.DataFrame:
+    """
+    Load characterized inventory data for a scenario and aggregate by year and activity.
+    
+    Args:
+        scenario: Scenario name (key from SCENARIOS dict)
+        
+    Returns:
+        DataFrame with yearly aggregated impacts by activity (activity as columns, year as index)
+    """
+    filepath = PLOTS_DIR / f"characterized_inventory_{scenario}.xlsx"
+    df = pd.read_excel(filepath)
+    
+    # Extract year from date
+    df['year'] = pd.to_datetime(df['date']).dt.year
+    
+    # Clean up activity names using PROCESS_NAMES mapping
+    df['activity_clean'] = df['activity'].map(lambda x: PROCESS_NAMES.get(x, x))
+    
+    # Aggregate by year and activity
+    yearly_by_activity = df.groupby(['year', 'activity_clean'])['amount'].sum().unstack(fill_value=0)
+    
+    return yearly_by_activity
+
+
+def create_radiative_forcing_figure():
+    """
+    Create a figure showing instantaneous and cumulative radiative forcing.
+    
+    Layout: 2 rows x 3 columns
+    - Row 0: Instantaneous radiative forcing (line plots)
+    - Row 1: Cumulative radiative forcing (stacked area plots)
+    - Columns: Three scenarios (no_evolution, fg_bg_evolution, iridium_constraint)
+    """
+    import matplotlib.dates as mdates
+    from matplotlib.ticker import NullLocator, FuncFormatter
+    from datetime import datetime
+    
+    fig, axes = plt.subplots(2, 3, figsize=(10, 6), sharex=True)
+    
+    # Colors for processes (using existing PROCESS_COLORS)
+    colors = list(PROCESS_COLORS.values())
+    
+    # Load data for each scenario
+    scenario_data = {}
+    all_activities = set()
+    
+    for scenario in SCENARIOS.keys():
+        df = load_characterized_inventory(scenario)
+        scenario_data[scenario] = df
+        all_activities.update(df.columns.tolist())
+    
+    # Sort activities for consistent ordering
+    all_activities = sorted(all_activities)
+    
+    # Create a color mapping for all activities
+    activity_colors = {}
+    for activity in all_activities:
+        if activity in PROCESS_COLORS:
+            activity_colors[activity] = PROCESS_COLORS[activity]
+        else:
+            # Assign a color from the palette for activities not in PROCESS_COLORS
+            idx = list(all_activities).index(activity) % len(colors)
+            activity_colors[activity] = colors[idx]
+    
+    # Determine global y-axis limits
+    inst_max = 0
+    inst_min = 0
+    cum_max = 0
+    cum_min = 0
+    
+    for scenario, df in scenario_data.items():
+        # Instantaneous: sum across all processes per year
+        inst_max = max(inst_max, df.max().max())
+        inst_min = min(inst_min, df.min().min())
+        # Cumulative: cumsum then sum across processes
+        cumsum_df = df.cumsum()
+        cum_max = max(cum_max, cumsum_df.sum(axis=1).max())
+        cum_min = min(cum_min, cumsum_df.sum(axis=1).min())
+    
+    # Add padding
+    inst_ylim = (inst_min * 1.1 if inst_min < 0 else 0, inst_max * 1.1)
+    cum_ylim = (cum_min * 1.1 if cum_min < 0 else 0, cum_max * 1.1)
+    
+    # Convert year index to datetime for plotting
+    def year_to_datetime(year_index):
+        return [datetime(int(y), 1, 1) for y in year_index]
+    
+    # Plot each scenario
+    for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
+        df = scenario_data[scenario]
+        
+        # Convert index to datetime
+        dates = year_to_datetime(df.index)
+        
+        # Row 0: Instantaneous radiative forcing (line plots)
+        ax_inst = axes[0, col]
+        for activity in df.columns:
+            color = activity_colors.get(activity, 'gray')
+            ax_inst.plot(dates, df[activity].values, linewidth=1.2, 
+                        color=color, label=activity)
+        
+        ax_inst.set_xlim(datetime(2025, 1, 1), datetime(2126, 1, 1))
+        ax_inst.set_ylim(inst_ylim)
+        ax_inst.grid(which="major", linestyle="-", linewidth=0.5, alpha=0.7)
+        ax_inst.set_axisbelow(True)
+        
+        if col == 0:
+            ax_inst.set_ylabel("Instantaneous radiative forcing\n[W m$^{-2}$]")
+        else:
+            ax_inst.set_yticklabels([])
+        
+        # Set title (scenario name)
+        ax_inst.set_title(scenario_label)
+        
+        # Row 1: Cumulative radiative forcing (stacked area plots)
+        ax_cum = axes[1, col]
+        
+        # Compute cumulative sums for each activity
+        cumsum_df = df.cumsum()
+        
+        # Prepare data for stackplot
+        activities_in_df = [a for a in all_activities if a in cumsum_df.columns]
+        stack_data = [cumsum_df[a].fillna(0).values for a in activities_in_df]
+        stack_colors = [activity_colors[a] for a in activities_in_df]
+        
+        if stack_data:
+            ax_cum.stackplot(dates, *stack_data, 
+                            labels=activities_in_df,
+                            colors=stack_colors,
+                            edgecolor="white",
+                            linewidth=0.5)
+        
+        ax_cum.set_xlim(datetime(2025, 1, 1), datetime(2126, 1, 1))
+        ax_cum.set_ylim(cum_ylim)
+        ax_cum.grid(which="major", linestyle="-", linewidth=0.5, alpha=0.7)
+        ax_cum.set_axisbelow(True)
+        
+        if col == 0:
+            ax_cum.set_ylabel("Cumulative radiative forcing\n[W m$^{-2}$]")
+        else:
+            ax_cum.set_yticklabels([])
+    
+    # Configure x-axis ticks and labels
+    major_locator = mdates.YearLocator(20)
+    minor_locator = mdates.YearLocator(10)
+    
+    for ax_row in axes:
+        for ax in ax_row:
+            ax.xaxis.set_major_locator(major_locator)
+            ax.xaxis.set_minor_locator(NullLocator())
+            
+            for label in ax.get_xticklabels():
+                label.set_rotation(45)
+                label.set_ha("right")
+    
+    # Add subplot labels (a), (b), etc.
+    labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)']
+    label_idx = 0
+    for row in range(2):
+        for col in range(3):
+            ax = axes[row, col]
+            # Position label in top-right corner
+            ax.text(0.95, 0.95, labels[label_idx], transform=ax.transAxes,
+                   ha='right', va='top', fontsize=10,
+                   bbox=dict(boxstyle='square,pad=0.1', fc='white', ec='none'))
+            label_idx += 1
+    
+    # Create legend at bottom - collect from all activities across all scenarios
+    from matplotlib.lines import Line2D
+    unique_handles = []
+    unique_labels = []
+    for activity in all_activities:
+        color = activity_colors.get(activity, 'gray')
+        unique_handles.append(Line2D([0], [0], color=color, linewidth=2))
+        unique_labels.append(activity)
+    
+    fig.legend(unique_handles, unique_labels, 
+              loc='upper center', 
+              ncol=min(len(unique_labels), 4),
+              bbox_to_anchor=(0.5, 0.02),
+              frameon=False)
+    
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.15)
+    
+    return fig
+
+
 def main():
     """Generate all paper figures."""
     print("Loading scenario data...")
@@ -656,6 +845,11 @@ def main():
     fig_combined_impacts = create_combined_impacts_figure(scenarios_data)
     fig_combined_impacts.savefig(OUTPUT_DIR / "impacts.pdf")
     plt.close(fig_combined_impacts)
+
+    print("Creating radiative forcing figure...")
+    fig_rf = create_radiative_forcing_figure()
+    fig_rf.savefig(OUTPUT_DIR / "radiative_forcing.pdf")
+    plt.close(fig_rf)
 
     # print("Creating capacity balance figure...")
     # fig_capacity = create_capacity_balance_figure(scenarios_data)
