@@ -867,11 +867,11 @@ def create_radiative_forcing_figure():
 def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
     """
     Create a combined figure showing radiative forcing (instantaneous and cumulative) 
-    and impacts (CRF and water use). Radiative forcing is shown only until 2050.
+    and impacts (CRF and water use). All plots show data from 2025-2050.
     
     Structure:
-    - Row 0: Instantaneous radiative forcing (2020-2050) - line plots
-    - Row 1: Cumulative radiative forcing (2020-2050) - stacked area plots
+    - Row 0: Instantaneous radiative forcing (2025-2050) - line plots
+    - Row 1: Cumulative radiative forcing (2025-2050) - stacked area plots
     - Row 2: Cumulative radiative forcing (2025-2050) - bar plots from impacts data
     - Row 3: Water use (2025-2050) - bar plots
     """
@@ -900,13 +900,13 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
     row_ylim_max_rf = {}
     row_ylim_min_rf = {}
     
-    # Row 0: Instantaneous (filtered to 2050)
+    # Row 0: Instantaneous (filtered to 2025-2050)
     inst_max = 0
     inst_min = 0
     for scenario, df in rf_scenario_data.items():
         if not df.empty:
-            # Filter to 2050
-            df_filtered = df[df.index <= datetime(2050, 12, 31)]
+            # Filter to 2025-2050
+            df_filtered = df[(df.index >= datetime(2025, 1, 1)) & (df.index <= datetime(2050, 12, 31))]
             if not df_filtered.empty:
                 inst_max = max(inst_max, np.nanmax(df_filtered.values) if df_filtered.size > 0 else 0)
                 inst_min = min(inst_min, np.nanmin(df_filtered.values) if df_filtered.size > 0 else 0)
@@ -918,13 +918,13 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
     row_ylim_max_rf[0] = (inst_max / scaling_factor_inst) * 1.1
     row_ylim_min_rf[0] = (inst_min / scaling_factor_inst) * 1.1 if inst_min < 0 else 0
     
-    # Row 1: Cumulative (filtered to 2050)
+    # Row 1: Cumulative (filtered to 2025-2050)
     cum_max = 0
     cum_min = 0
     for scenario, df in rf_scenario_data.items():
         if not df.empty:
-            # Filter to 2050
-            df_filtered = df[df.index <= datetime(2050, 12, 31)]
+            # Filter to 2025-2050
+            df_filtered = df[(df.index >= datetime(2025, 1, 1)) & (df.index <= datetime(2050, 12, 31))]
             if not df_filtered.empty:
                 cumsum_df = df_filtered.cumsum()
                 cumsum_sum = cumsum_df.sum(axis=1)
@@ -996,8 +996,8 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
     # ===== PLOT RADIATIVE FORCING (Rows 0 and 1) =====
     for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
         df = rf_scenario_data[scenario]
-        # Filter to 2050
-        df_filtered = df[df.index <= datetime(2050, 12, 31)]
+        # Filter to 2025-2050
+        df_filtered = df[(df.index >= datetime(2025, 1, 1)) & (df.index <= datetime(2050, 12, 31))]
         dates = df_filtered.index
         
         # Row 0: Instantaneous radiative forcing (scaled)
@@ -1012,7 +1012,7 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
             ax_inst.plot(dates, values_scaled, linewidth=1.2, 
                         color=color, label=activity)
         
-        ax_inst.set_xlim(datetime(2020, 1, 1), datetime(2050, 12, 31))
+        ax_inst.set_xlim(datetime(2025, 1, 1), datetime(2050, 12, 31))
         ax_inst.set_ylim(row_ylim_min_rf[0], row_ylim_max_rf[0])
         ax_inst.grid(which="both", alpha=0.3, axis="both", zorder=0)
         ax_inst.set_axisbelow(True)
@@ -1045,7 +1045,7 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
                             edgecolor="white",
                             linewidth=0.5)
         
-        ax_cum.set_xlim(datetime(2020, 1, 1), datetime(2050, 12, 31))
+        ax_cum.set_xlim(datetime(2025, 1, 1), datetime(2050, 12, 31))
         ax_cum.set_ylim(row_ylim_min_rf[1], row_ylim_max_rf[1])
         ax_cum.grid(which="both", alpha=0.3, axis="both", zorder=0)
         ax_cum.set_axisbelow(True)
