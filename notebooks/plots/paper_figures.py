@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
-from matplotlib.ticker import ScalarFormatter
+from matplotlib.ticker import ScalarFormatter, MultipleLocator, AutoMinorLocator
 from pathlib import Path
 
 # Configuration
@@ -25,7 +25,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 SCENARIOS = {
     "no_evolution": "No Evolution",
     "fg_bg_evolution": "Foreground & Background Evolution",
-    "iridium_constraint": "Constrained (Water & Iridium Limits)",
+    "iridium_constraint": "Evolution + Constraints",
 }
 
 # Impact categories of interest
@@ -285,8 +285,8 @@ def create_combined_results_figure(scenarios_data: dict):
                 row_ylim_max[row] = max(row_ylim_max[row], capacity_values.max())
                 additions, retirements = compute_capacity_changes(cap_df[cap_mask], product_col)
                 row_ylim_max[row] = max(row_ylim_max[row], additions.max() / 1e6)
-                if retirements.max() > 0:
-                    row_ylim_min[row] = min(row_ylim_min[row], -retirements.max() / 1e6)
+                # if retirements.max() > 0:
+                #     row_ylim_min[row] = min(row_ylim_min[row], -retirements.max() / 1e6)
 
         row_ylim_max[row] *= 1.1
         if row_ylim_min[row] < 0:
@@ -410,9 +410,9 @@ def create_combined_results_figure(scenarios_data: dict):
             ax.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
 
             # --- Formatting Shared Axes ---
-            ax.set_xlim(-0.5, len(years_plot) - 0.5)
+            ax.set_xlim(-1, len(years_plot))
             ax.set_ylim(row_ylim_min[row], row_ylim_max[row])
-            ax.grid(True, alpha=0.3, axis="both", zorder=0)
+            ax.grid(True, alpha=0.3, which="both", axis="both", zorder=0)
             ax.set_axisbelow(True)
             
             # X-axis: Only bottom row gets labels
@@ -427,6 +427,10 @@ def create_combined_results_figure(scenarios_data: dict):
             if col == 0:
                 label_suffix = " *" if is_intermediate else ""
                 ax.set_ylabel(f"{product_label}{label_suffix}\n[$10^6$ kg]")
+                
+                # Custom tick spacing for Captured CO₂
+                if product_label == "Captured CO₂":
+                    ax.yaxis.set_major_locator(MultipleLocator(0.5))
             else:
                 ax.tick_params(labelleft=False)
 
@@ -566,8 +570,17 @@ def create_combined_impacts_figure(scenarios_data: dict):
             ax.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
             ax.set_xticks(xtick_positions)
             ax.set_xticklabels(xtick_labels)
-            ax.set_xlim(-0.5, len(years_plot) - 0.5)
+            ax.set_xlim(-1, len(years_plot))
             ax.set_ylim(row_ylim_min[row], row_ylim_max[row])
+            
+            # Custom tick spacing for Cumulative Radiative Forcing
+            if category == "climate_change":
+                ax.yaxis.set_major_locator(MultipleLocator(0.5))  # Major ticks at whole numbers
+                ax.set_ylim(-1.6, 3.1)
+                
+            if category == "water_use":
+                ax.yaxis.set_major_locator(MultipleLocator(0.5))  # Major ticks at whole numbers
+                ax.set_ylim(0, 4.6)
 
             # Simple float formatter for "1.4" style labels
             ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
@@ -578,7 +591,7 @@ def create_combined_impacts_figure(scenarios_data: dict):
             if row < 1:
                 ax.tick_params(labelbottom=False)
 
-            ax.grid(True, alpha=0.3, axis="both", zorder=0)
+            ax.grid(True, which="both", alpha=0.3, axis="both", zorder=0)
             ax.set_axisbelow(True)
             
             if row == 0:
@@ -636,12 +649,12 @@ def main():
 
     print("Creating combined results figure...")
     fig_combined = create_combined_results_figure(scenarios_data)
-    fig_combined.savefig(OUTPUT_DIR / "combined_results.pdf")
+    fig_combined.savefig(OUTPUT_DIR / "operation.pdf")
     plt.close(fig_combined)
 
     print("Creating combined impacts figure...")
     fig_combined_impacts = create_combined_impacts_figure(scenarios_data)
-    fig_combined_impacts.savefig(OUTPUT_DIR / "combined_impacts.pdf")
+    fig_combined_impacts.savefig(OUTPUT_DIR / "impacts.pdf")
     plt.close(fig_combined_impacts)
 
     # print("Creating capacity balance figure...")
