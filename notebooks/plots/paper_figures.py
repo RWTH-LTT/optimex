@@ -864,6 +864,277 @@ def create_radiative_forcing_figure():
     return fig
 
 
+def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
+    """
+    Create a combined figure showing radiative forcing (instantaneous and cumulative) 
+    and water use impacts. Radiative forcing is shown only until 2050.
+    
+    Structure:
+    - Row 0: Instantaneous radiative forcing (2020-2050)
+    - Row 1: Cumulative radiative forcing (2020-2050)
+    - Row 2: Water use (2025-2050)
+    """
+    fig = plt.figure(figsize=(14, 8.5))
+    gs = fig.add_gridspec(3, 3, hspace=0.08, wspace=0.06)
+    
+    # Load radiative forcing data for each scenario
+    rf_scenario_data = {}
+    all_activities = set()
+    
+    for scenario in SCENARIOS.keys():
+        df = load_characterized_inventory(scenario)
+        rf_scenario_data[scenario] = df
+        all_activities.update(df.columns.tolist())
+    
+    all_activities = sorted(all_activities)
+    
+    # Create color mapping for radiative forcing activities
+    activity_colors = {}
+    for activity in all_activities:
+        activity_colors[activity] = PROCESS_COLORS.get(activity, 'gray')
+    
+    # ===== ROW 0 & 1: Radiative Forcing (Instantaneous and Cumulative) =====
+    # Determine power of 10 for each radiative forcing row
+    row_powers_rf = {}
+    row_ylim_max_rf = {}
+    row_ylim_min_rf = {}
+    
+    # Row 0: Instantaneous (filtered to 2050)
+    inst_max = 0
+    inst_min = 0
+    for scenario, df in rf_scenario_data.items():
+        if not df.empty:
+            # Filter to 2050
+            df_filtered = df[df.index <= datetime(2050, 12, 31)]
+            if not df_filtered.empty:
+                inst_max = max(inst_max, np.nanmax(df_filtered.values) if df_filtered.size > 0 else 0)
+                inst_min = min(inst_min, np.nanmin(df_filtered.values) if df_filtered.size > 0 else 0)
+    
+    abs_val_inst = max(abs(inst_max), abs(inst_min))
+    exponent_inst = int(np.floor(np.log10(abs_val_inst))) if abs_val_inst > 0 else 0
+    row_powers_rf[0] = exponent_inst
+    scaling_factor_inst = 10**exponent_inst
+    row_ylim_max_rf[0] = (inst_max / scaling_factor_inst) * 1.1
+    row_ylim_min_rf[0] = (inst_min / scaling_factor_inst) * 1.1 if inst_min < 0 else 0
+    
+    # Row 1: Cumulative (filtered to 2050)
+    cum_max = 0
+    cum_min = 0
+    for scenario, df in rf_scenario_data.items():
+        if not df.empty:
+            # Filter to 2050
+            df_filtered = df[df.index <= datetime(2050, 12, 31)]
+            if not df_filtered.empty:
+                cumsum_df = df_filtered.cumsum()
+                cumsum_sum = cumsum_df.sum(axis=1)
+                cum_max = max(cum_max, np.nanmax(cumsum_sum.values) if cumsum_sum.size > 0 else 0)
+                cum_min = min(cum_min, np.nanmin(cumsum_sum.values) if cumsum_sum.size > 0 else 0)
+    
+    abs_val_cum = max(abs(cum_max), abs(cum_min))
+    exponent_cum = int(np.floor(np.log10(abs_val_cum))) if abs_val_cum > 0 else 0
+    row_powers_rf[1] = exponent_cum
+    scaling_factor_cum = 10**exponent_cum
+    row_ylim_max_rf[1] = (cum_max / scaling_factor_cum) * 1.1
+    row_ylim_min_rf[1] = (cum_min / scaling_factor_cum) * 1.1 if cum_min < 0 else 0
+    
+    # ===== ROW 2: Water Use =====
+    # Determine power of 10 for water use
+    water_max = 0
+    water_min = 0
+    
+    for scenario in scenarios_data.keys():
+        impacts = load_impacts_properly(scenario)
+        if "water_use" in impacts:
+            imp_df = impacts["water_use"]
+            mask = (imp_df.index >= 2025) & (imp_df.index <= 2050)
+            pos_sum = imp_df.loc[mask].clip(lower=0).sum(axis=1).max()
+            neg_sum = imp_df.loc[mask].clip(upper=0).sum(axis=1).min()
+            water_max = max(water_max, pos_sum)
+            water_min = min(water_min, neg_sum)
+    
+    # Determine the power of 10 for water use
+    abs_val_water = max(abs(water_max), abs(water_min))
+    if abs_val_water == 0:
+        exponent_water = 0
+    else:
+        exponent_water = int(np.floor(np.log10(abs_val_water)))
+    
+    scaling_factor_water = 10**exponent_water
+    water_ylim_max = (water_max / scaling_factor_water) * 1.15
+    water_ylim_min = (water_min / scaling_factor_water) * 1.15
+    
+    # Create axes array
+    axes = np.empty((3, 3), dtype=object)
+    
+    # ===== PLOT RADIATIVE FORCING (Rows 0 and 1) =====
+    for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
+        df = rf_scenario_data[scenario]
+        # Filter to 2050
+        df_filtered = df[df.index <= datetime(2050, 12, 31)]
+        dates = df_filtered.index
+        
+        # Row 0: Instantaneous radiative forcing (scaled)
+        sharex_ax = axes[0, 0] if col > 0 else None
+        sharey_ax = axes[0, 0] if col > 0 else None
+        ax_inst = fig.add_subplot(gs[0, col], sharex=sharex_ax, sharey=sharey_ax)
+        axes[0, col] = ax_inst
+        
+        for activity in df_filtered.columns:
+            color = activity_colors.get(activity, 'gray')
+            values_scaled = df_filtered[activity].fillna(0).values / scaling_factor_inst
+            ax_inst.plot(dates, values_scaled, linewidth=1.2, 
+                        color=color, label=activity)
+        
+        ax_inst.set_xlim(datetime(2020, 1, 1), datetime(2050, 12, 31))
+        ax_inst.set_ylim(row_ylim_min_rf[0], row_ylim_max_rf[0])
+        ax_inst.grid(which="both", alpha=0.3, axis="both", zorder=0)
+        ax_inst.set_axisbelow(True)
+        
+        if col == 0:
+            ax_inst.set_ylabel(f"Instantaneous radiative forcing\n[$10^{{{exponent_inst}}}$ W m$^{{-2}}$]")
+        else:
+            ax_inst.tick_params(labelleft=False)
+        
+        ax_inst.set_title(scenario_label)
+        ax_inst.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
+        ax_inst.tick_params(labelbottom=False)
+        
+        # Row 1: Cumulative radiative forcing (scaled)
+        sharex_ax = axes[0, col]
+        sharey_ax = axes[1, 0] if col > 0 else None
+        ax_cum = fig.add_subplot(gs[1, col], sharex=sharex_ax, sharey=sharey_ax)
+        axes[1, col] = ax_cum
+        
+        cumsum_df = df_filtered.cumsum()
+        
+        activities_in_df = [a for a in all_activities if a in cumsum_df.columns]
+        stack_data = [cumsum_df[a].fillna(0).values / scaling_factor_cum for a in activities_in_df]
+        stack_colors = [activity_colors[a] for a in activities_in_df]
+        
+        if stack_data:
+            ax_cum.stackplot(dates, *stack_data, 
+                            labels=activities_in_df,
+                            colors=stack_colors,
+                            edgecolor="white",
+                            linewidth=0.5)
+        
+        ax_cum.set_xlim(datetime(2020, 1, 1), datetime(2050, 12, 31))
+        ax_cum.set_ylim(row_ylim_min_rf[1], row_ylim_max_rf[1])
+        ax_cum.grid(which="both", alpha=0.3, axis="both", zorder=0)
+        ax_cum.set_axisbelow(True)
+        
+        ax_cum.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
+        ax_cum.tick_params(labelbottom=False)
+        
+        if col == 0:
+            ax_cum.set_ylabel(f"Cumulative radiative forcing\n[$10^{{{exponent_cum}}}$ W m$^{{-2}}$]")
+        else:
+            ax_cum.tick_params(labelleft=False)
+    
+    # ===== PLOT WATER USE (Row 2) =====
+    years_plot = np.arange(2025, 2051)
+    x_positions = np.arange(len(years_plot))
+    xtick_positions = [i for i, y in enumerate(years_plot) if y % 5 == 0]
+    xtick_labels = [str(y) for y in years_plot if y % 5 == 0]
+    
+    y_label_water = f"Water Use\n[$10^{{{exponent_water}}}$ m³-eq]"
+    
+    for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
+        sharey_ax = axes[2, 0] if col > 0 else None
+        
+        ax = fig.add_subplot(gs[2, col], sharey=sharey_ax)
+        axes[2, col] = ax
+        
+        impacts = load_impacts_properly(scenario)
+        if "water_use" in impacts:
+            imp_df = impacts["water_use"]
+            mask = (imp_df.index >= 2025) & (imp_df.index <= 2050)
+            data = imp_df.loc[mask]
+            
+            bottom_pos = np.zeros(len(years_plot))
+            bottom_neg = np.zeros(len(years_plot))
+            
+            for process in data.columns:
+                # MANUALLY SCALE DATA
+                values = data[process].values / scaling_factor_water
+                
+                if np.any(np.abs(values) > 1e-12):
+                    color = PROCESS_COLORS.get(process, "gray")
+                    pos_v, neg_v = np.maximum(values, 0), np.minimum(values, 0)
+                    if np.any(pos_v > 0):
+                        ax.bar(x_positions, pos_v, bottom=bottom_pos, color=color, 
+                               width=bar_width, edgecolor="white", linewidth=linewidth_bar_outline)
+                        bottom_pos += pos_v
+                    if np.any(neg_v < 0):
+                        ax.bar(x_positions, neg_v, bottom=bottom_neg, color=color, 
+                               width=bar_width, edgecolor="white", linewidth=linewidth_bar_outline)
+                        bottom_neg += neg_v
+        
+        ax.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
+        ax.set_xticks(xtick_positions)
+        ax.set_xticklabels(xtick_labels)
+        ax.set_xlim(-1, len(years_plot))
+        ax.set_ylim(water_ylim_min, water_ylim_max)
+        
+        # Custom tick spacing for water use
+        ax.yaxis.set_major_locator(MultipleLocator(0.5))
+        ax.set_ylim(0, 4.6)
+        
+        # Simple float formatter
+        ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+        
+        if col > 0:
+            ax.tick_params(labelleft=False)
+        
+        ax.grid(True, which="both", alpha=0.3, axis="both", zorder=0)
+        ax.set_axisbelow(True)
+        
+        ax.set_xlabel("Year")
+        if col == 0:
+            ax.set_ylabel(y_label_water)
+    
+    # ===== SUBPLOT LABELS =====
+    labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)', '(g)', '(h)', '(i)']
+    label_idx = 0
+    for row in range(3):
+        for col in range(3):
+            ax = axes[row, col]
+            ax.text(0.95, 0.95, labels[label_idx], transform=ax.transAxes,
+                   ha='right', va='top', fontsize=10,
+                   bbox=dict(boxstyle='square,pad=0.1', fc='white', ec='none'))
+            label_idx += 1
+    
+    # ===== LEGENDS =====
+    # Legend for radiative forcing (line plots)
+    unique_handles_rf = []
+    unique_labels_rf = []
+    for activity in all_activities:
+        color = activity_colors.get(activity, 'gray')
+        unique_handles_rf.append(Line2D([0], [0], color=color, linewidth=2))
+        unique_labels_rf.append(activity)
+    
+    # Legend for water use (bar plots)
+    all_handles_water = {}
+    for scenario in SCENARIOS.keys():
+        impacts = load_impacts_properly(scenario)
+        if "water_use" in impacts:
+            for process in impacts["water_use"].columns:
+                if process not in all_handles_water:
+                    all_handles_water[process] = Patch(facecolor=PROCESS_COLORS.get(process, "gray"), 
+                                                      edgecolor="white", linewidth=0.5)
+    
+    # Combine legends - use water use legend since it's more comprehensive
+    fig.legend(all_handles_water.values(), all_handles_water.keys(), 
+               loc="lower center",
+               bbox_to_anchor=(0.5, -0.02), ncol=min(len(all_handles_water), 7), 
+               frameon=False, fontsize=9)
+    
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.12, top=0.94, left=0.10)
+    
+    return fig
+
+
 def main():
     """Generate all paper figures."""
     print("Loading scenario data...")
@@ -894,15 +1165,10 @@ def main():
     fig_combined.savefig(OUTPUT_DIR / "operation.pdf")
     plt.close(fig_combined)
 
-    print("Creating combined impacts figure...")
-    fig_combined_impacts = create_combined_impacts_figure(scenarios_data)
-    fig_combined_impacts.savefig(OUTPUT_DIR / "impacts.pdf")
-    plt.close(fig_combined_impacts)
-
-    print("Creating radiative forcing figure...")
-    fig_rf = create_radiative_forcing_figure()
-    fig_rf.savefig(OUTPUT_DIR / "radiative_forcing.pdf")
-    plt.close(fig_rf)
+    print("Creating combined forcing and impacts figure...")
+    fig_combined_forcing_impacts = create_combined_forcing_and_impacts_figure(scenarios_data)
+    fig_combined_forcing_impacts.savefig(OUTPUT_DIR / "forcing_and_impacts.pdf")
+    plt.close(fig_combined_forcing_impacts)
 
     # print("Creating capacity balance figure...")
     # fig_capacity = create_capacity_balance_figure(scenarios_data)
