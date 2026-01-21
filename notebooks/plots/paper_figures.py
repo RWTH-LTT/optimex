@@ -647,14 +647,17 @@ def load_characterized_inventory(scenario: str) -> pd.DataFrame:
     if missing_columns:
         raise ValueError(f"Missing required columns in {filepath}: {missing_columns}")
     
-    # Extract year from date
+    # Extract year from date (cut off month and day, just take year)
     df['year'] = pd.to_datetime(df['date']).dt.year
     
     # Clean up activity names using PROCESS_NAMES mapping
     df['activity_clean'] = df['activity'].map(lambda x: PROCESS_NAMES.get(x, x))
     
     # Aggregate by year and activity
-    yearly_by_activity = df.groupby(['year', 'activity_clean'])['amount'].sum().unstack(fill_value=0)
+    # First sum amounts per timestamp and activity, then take mean per year
+    # This normalizes for varying numbers of timestamps per year
+    per_timestamp = df.groupby(['date', 'year', 'activity_clean'])['amount'].sum().reset_index()
+    yearly_by_activity = per_timestamp.groupby(['year', 'activity_clean'])['amount'].mean().unstack(fill_value=0)
     
     return yearly_by_activity
 
