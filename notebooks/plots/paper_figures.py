@@ -625,6 +625,28 @@ def create_combined_impacts_figure(scenarios_data: dict):
     return fig
 
 
+def round_datetime_to_year(date: datetime) -> pd.Timestamp:
+    """
+    Round a datetime object to the nearest year boundary.
+    
+    Parameters
+    ----------
+    date : datetime
+        datetime object to be rounded
+        
+    Returns
+    -------
+    pd.Timestamp
+        rounded datetime object (Jan 1 of nearest year)
+    """
+    mid_year = pd.Timestamp(f"{date.year}-07-01")
+    return (
+        pd.Timestamp(f"{date.year+1}-01-01")
+        if date >= mid_year
+        else pd.Timestamp(f"{date.year}-01-01")
+    )
+
+
 def load_characterized_inventory(scenario: str) -> pd.DataFrame:
     """
     Load characterized inventory data for a scenario and aggregate by year and activity.
@@ -633,7 +655,7 @@ def load_characterized_inventory(scenario: str) -> pd.DataFrame:
         scenario: Scenario name (key from SCENARIOS dict)
         
     Returns:
-        DataFrame with yearly aggregated impacts by activity (activity as columns, year as index)
+        DataFrame with yearly aggregated impacts by activity (activity as columns, date as index)
         
     Raises:
         ValueError: If required columns are missing from the data file
@@ -647,19 +669,23 @@ def load_characterized_inventory(scenario: str) -> pd.DataFrame:
     if missing_columns:
         raise ValueError(f"Missing required columns in {filepath}: {missing_columns}")
     
-    # Extract year from date (cut off month and day, just take year)
-    df['year'] = pd.to_datetime(df['date']).dt.year
-    
     # Clean up activity names using PROCESS_NAMES mapping
     df['activity_clean'] = df['activity'].map(lambda x: PROCESS_NAMES.get(x, x))
     
-    # Aggregate by year and activity
-    # First sum amounts per timestamp and activity, then take mean per year
-    # This normalizes for varying numbers of timestamps per year
-    per_timestamp = df.groupby(['date', 'year', 'activity_clean'])['amount'].sum().reset_index()
-    yearly_by_activity = per_timestamp.groupby(['year', 'activity_clean'])['amount'].mean().unstack(fill_value=0)
+    # First group by date and activity, sum the amounts
+    plot_df = df.groupby(["date", "activity_clean"], as_index=False)["amount"].sum()
     
-    return yearly_by_activity
+    # Round dates to nearest year boundary
+    plot_df["date"] = plot_df["date"].apply(round_datetime_to_year)
+    
+    # Group again by rounded date and activity, sum, then pivot
+    final_data = (
+        plot_df.groupby(["date", "activity_clean"], as_index=False)["amount"]
+        .sum()
+        .pivot(index="date", columns="activity_clean", values="amount")
+    )
+    
+    return final_data
 
 
 def create_radiative_forcing_figure():
@@ -722,22 +748,18 @@ def create_radiative_forcing_figure():
     inst_ylim = (inst_min * 1.1 if inst_min < 0 else 0, inst_max * 1.1)
     cum_ylim = (cum_min * 1.1 if cum_min < 0 else 0, cum_max * 1.1)
     
-    # Convert year index to datetime for plotting
-    def year_to_datetime(year_index):
-        return [datetime(int(y), 1, 1) for y in year_index]
-    
     # Plot each scenario
     for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
         df = scenario_data[scenario]
         
-        # Convert index to datetime
-        dates = year_to_datetime(df.index)
+        # Index is already datetime from load_characterized_inventory
+        dates = df.index
         
         # Row 0: Instantaneous radiative forcing (line plots)
         ax_inst = axes[0, col]
         for activity in df.columns:
             color = activity_colors.get(activity, 'gray')
-            ax_inst.plot(dates, df[activity].values, linewidth=1.2, 
+            ax_inst.plot(dates, df[activity].fillna(0).values, linewidth=1.2, 
                         color=color, label=activity)
         
         ax_inst.set_xlim(datetime(2025, 1, 1), datetime(2126, 1, 1))
