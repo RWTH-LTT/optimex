@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+from matplotlib.ticker import ScalarFormatter
 from pathlib import Path
 
 # Configuration
@@ -22,9 +23,9 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Scenario names and labels
 SCENARIOS = {
-    "no_evolution": "Baseline",
-    "fg_bg_evolution": "Temporal Evolution",
-    "iridium_constraint": "Constrained",
+    "no_evolution": "No Evolution",
+    "fg_bg_evolution": "Foreground & Background Evolution",
+    "iridium_constraint": "Constrained (Water & Iridium Limits)",
 }
 
 # Impact categories of interest
@@ -62,9 +63,9 @@ PROCESS_COLORS = {
     "DAC": "#00549F",
     "PEM Electrolysis": "#0098A1",
     "CO₂ Hydrogenation": "#57AB27",
-    "BF + CCS": "#CC071E",
+    "BF + CCS": "#7A6FAC",
     "Blast Furnace": "#612158",
-    "H₂-DRI": "#006165",
+    "H₂-DRI": "#E30066",
     "NG Reforming": "#F6A800",
 }
 
@@ -232,7 +233,7 @@ def create_combined_results_figure(scenarios_data: dict):
     fig = plt.figure(figsize=(14, 10))
 
     # Tighten spacing now that labels are only on the outside
-    gs = fig.add_gridspec(4, 3, hspace=0.06, wspace=0.06)
+    gs = fig.add_gridspec(4, 3, hspace=0.08, wspace=0.06)
 
     products = [
         ("methanol", "Methanol", False),
@@ -425,12 +426,12 @@ def create_combined_results_figure(scenarios_data: dict):
             # Y-axis: Only first column gets labels
             if col == 0:
                 label_suffix = " *" if is_intermediate else ""
-                ax.set_ylabel(f"{product_label}{label_suffix}\n(Mt/year)")
+                ax.set_ylabel(f"{product_label}{label_suffix}\n[$10^6$ kg]")
             else:
                 ax.tick_params(labelleft=False)
 
             if row == 0:
-                ax.set_title(scenario_label, fontweight="bold")
+                ax.set_title(scenario_label)
 
     # Create shared legend
     all_handles = []
@@ -442,134 +443,168 @@ def create_combined_results_figure(scenarios_data: dict):
     all_labels.append("Available capacity")
     # all_handles.append(plt.Line2D([0], [0], color="red", linestyle="--", linewidth=1))
     # all_labels.append("Demand")
-    all_handles.append(Patch(facecolor="#BDCD00", edgecolor="#41811C", linewidth=1, hatch="///"))
-    all_labels.append("+ Cap")
-    all_handles.append(Patch(facecolor="#E69679", edgecolor="#CC071E", linewidth=1, hatch="///"))
-    all_labels.append("− Cap")
+    # all_handles.append(Patch(facecolor="#BDCD00", edgecolor="#41811C", linewidth=1, hatch="///"))
+    # all_labels.append("+ Cap")
+    # all_handles.append(Patch(facecolor="#E69679", edgecolor="#CC071E", linewidth=1, hatch="///"))
+    # all_labels.append("− Cap")
 
     fig.legend(all_handles, all_labels, loc="lower center", bbox_to_anchor=(0.5, 0.02),
-               ncol=6, frameon=False, fontsize=9)
+               ncol=4, frameon=False, fontsize=9)
 
     return fig
 
 
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
+from matplotlib.patches import Patch
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
+from matplotlib.patches import Patch
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FormatStrFormatter
+from matplotlib.patches import Patch
+
 def create_combined_impacts_figure(scenarios_data: dict):
     """
-    Create a combined impacts figure with climate change and water use as bar charts.
-    Layout: 2 rows (impact categories) x 3 columns (scenarios)
+    Create a combined impacts figure with manual scaling to show 10^x in the Y-axis label.
+    Shared Y axes per row, Shared X axes per column.
     """
     
     fig = plt.figure(figsize=(14, 5.5))
-    gs = fig.add_gridspec(2, 3, hspace=0.35, wspace=0.25)
+    # Reduced wspace and hspace for a tight "scientific paper" look
+    gs = fig.add_gridspec(2, 3, hspace=0.08, wspace=0.06) 
 
     categories = [
-        ("climate_change", "Climate Change (CRF)"),
-        ("water_use", "Water Use (m³-eq)"),
+        ("climate_change", "Cumulative Radiative Forcing", "W/m²"),
+        ("water_use", "Water Use", "m³-eq"),
     ]
 
-    # First pass: compute y-axis limits for each row
+    # First pass: compute limits and find the best power of 10 for each row
     row_ylim_max = {}
     row_ylim_min = {}
+    row_powers = {}
 
-    for row, (category, category_label) in enumerate(categories):
-        row_ylim_max[row] = 0
-        row_ylim_min[row] = 0
-
-        for scenario in SCENARIOS.keys():
+    for row, (category, label, unit) in enumerate(categories):
+        abs_max = 0
+        current_max, current_min = 0, 0
+        
+        for scenario in scenarios_data.keys():
             impacts = load_impacts_properly(scenario)
-
             if category in impacts:
                 imp_df = impacts[category]
-                years = imp_df.index.values
-                mask = (years >= 2025) & (years <= 2050)
+                mask = (imp_df.index >= 2025) & (imp_df.index <= 2050)
+                pos_sum = imp_df.loc[mask].clip(lower=0).sum(axis=1).max()
+                neg_sum = imp_df.loc[mask].clip(upper=0).sum(axis=1).min()
+                current_max = max(current_max, pos_sum)
+                current_min = min(current_min, neg_sum)
+        
+        # Determine the power of 10 (exponent) based on the largest absolute value
+        abs_val = max(abs(current_max), abs(current_min))
+        if abs_val == 0:
+            exponent = 0
+        else:
+            exponent = int(np.floor(np.log10(abs_val)))
+        
+        row_powers[row] = exponent
+        # Store scaled limits with padding
+        row_ylim_max[row] = (current_max / (10**exponent)) * 1.15
+        row_ylim_min[row] = (current_min / (10**exponent)) * 1.15
 
-                # Compute max (sum of positive values per year)
-                for idx in range(mask.sum()):
-                    year_values = imp_df.iloc[mask].iloc[idx]
-                    pos_sum = year_values[year_values > 0].sum()
-                    neg_sum = year_values[year_values < 0].sum()
-                    row_ylim_max[row] = max(row_ylim_max[row], pos_sum)
-                    row_ylim_min[row] = min(row_ylim_min[row], neg_sum)
-
-        # Add padding
-        row_ylim_max[row] *= 1.15
-        if row_ylim_min[row] < 0:
-            row_ylim_min[row] *= 1.15
-
-    # Common x-axis setup
     years_plot = np.arange(2025, 2051)
     x_positions = np.arange(len(years_plot))
     xtick_positions = [i for i, y in enumerate(years_plot) if y % 5 == 0]
     xtick_labels = [str(y) for y in years_plot if y % 5 == 0]
 
+    axes = np.empty((2, 3), dtype=object)
+
     # Second pass: create plots
-    for row, (category, category_label) in enumerate(categories):
+    for row, (category, label_base, unit) in enumerate(categories):
+        exponent = row_powers[row]
+        scaling_factor = 10**exponent
+        
+        # Format the Y label to include scientific notation
+        # Uses LaTeX for pretty exponents
+        y_label = f"{label_base}\n[$10^{{{exponent}}}$ {unit}]"
+
         for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
-            ax = fig.add_subplot(gs[row, col])
+            sharex_ax = axes[0, col] if row > 0 else None
+            sharey_ax = axes[row, 0] if col > 0 else None
+            
+            ax = fig.add_subplot(gs[row, col], sharex=sharex_ax, sharey=sharey_ax)
+            axes[row, col] = ax
 
             impacts = load_impacts_properly(scenario)
-
             if category in impacts:
                 imp_df = impacts[category]
-                years = imp_df.index.values
-                mask = (years >= 2025) & (years <= 2050)
+                mask = (imp_df.index >= 2025) & (imp_df.index <= 2050)
+                data = imp_df.loc[mask]
 
-                # Stack positive bars
                 bottom_pos = np.zeros(len(years_plot))
                 bottom_neg = np.zeros(len(years_plot))
 
-                for process in imp_df.columns:
-                    values = imp_df[process].values[mask]
-                    if np.any(np.abs(values) > 1e-10):
+                for process in data.columns:
+                    # MANUALLY SCALE DATA
+                    values = data[process].values / scaling_factor
+                    
+                    if np.any(np.abs(values) > 1e-12):
                         color = PROCESS_COLORS.get(process, "gray")
-                        # Separate positive and negative values
-                        pos_values = np.maximum(values, 0)
-                        neg_values = np.minimum(values, 0)
-
-                        if np.any(pos_values > 0):
-                            ax.bar(x_positions, pos_values, bottom=bottom_pos, label=process,
-                                   color=color, width=bar_width, edgecolor="white", linewidth=linewidth_bar_outline)
-                            bottom_pos += pos_values
-
-                        if np.any(neg_values < 0):
-                            ax.bar(x_positions, neg_values, bottom=bottom_neg,
-                                   color=color, width=bar_width, edgecolor="white", linewidth=linewidth_bar_outline)
-                            bottom_neg += neg_values
+                        pos_v, neg_v = np.maximum(values, 0), np.minimum(values, 0)
+                        if np.any(pos_v > 0):
+                            ax.bar(x_positions, pos_v, bottom=bottom_pos, color=color, 
+                                   width=bar_width, edgecolor="white", linewidth=linewidth_bar_outline)
+                            bottom_pos += pos_v
+                        if np.any(neg_v < 0):
+                            ax.bar(x_positions, neg_v, bottom=bottom_neg, color=color, 
+                                   width=bar_width, edgecolor="white", linewidth=linewidth_bar_outline)
+                            bottom_neg += neg_v
 
             ax.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
-
-            # Set consistent axes
             ax.set_xticks(xtick_positions)
             ax.set_xticklabels(xtick_labels)
             ax.set_xlim(-0.5, len(years_plot) - 0.5)
             ax.set_ylim(row_ylim_min[row], row_ylim_max[row])
 
+            # Simple float formatter for "1.4" style labels
+            ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+
+            if col > 0:
+                ax.tick_params(labelleft=False)
+            
+            if row < 1:
+                ax.tick_params(labelbottom=False)
+
             ax.grid(True, alpha=0.3, axis="both", zorder=0)
             ax.set_axisbelow(True)
             
             if row == 0:
-                ax.set_title(scenario_label, fontweight="bold")
+                ax.set_title(scenario_label)
             if row == 1:
                 ax.set_xlabel("Year")
             if col == 0:
-                ax.set_ylabel(category_label)
+                ax.set_ylabel(y_label)
 
-    # Create shared legend for processes
+    # Legend Logic
     all_handles = {}
-    for row, (category, _) in enumerate(categories):
-        for col, (scenario, _) in enumerate(SCENARIOS.items()):
-            impacts = load_impacts_properly(scenario)
-            if category in impacts:
-                for process in impacts[category].columns:
+    for scenario in SCENARIOS.keys():
+        impacts = load_impacts_properly(scenario)
+        for cat_tuple in categories:
+            cat = cat_tuple[0]
+            if cat in impacts:
+                for process in impacts[cat].columns:
                     if process not in all_handles:
-                        color = PROCESS_COLORS.get(process, "gray")
-                        all_handles[process] = Patch(facecolor=color, edgecolor="white", linewidth=0.5)
+                        all_handles[process] = Patch(facecolor=PROCESS_COLORS.get(process, "gray"), 
+                                                     edgecolor="white", linewidth=0.5)
 
     fig.legend(all_handles.values(), all_handles.keys(), loc="lower center",
                bbox_to_anchor=(0.5, -0.02), ncol=min(len(all_handles), 7), frameon=False, fontsize=9)
 
     fig.tight_layout()
-    fig.subplots_adjust(bottom=0.12)
+    fig.subplots_adjust(bottom=0.18, top=0.92, left=0.10)
 
     return fig
 
