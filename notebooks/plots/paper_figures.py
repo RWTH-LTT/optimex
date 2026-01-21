@@ -783,6 +783,11 @@ def create_radiative_forcing_figure():
             values_scaled = df[activity].fillna(0).values / scaling_factor_inst
             ax_inst.plot(dates, values_scaled, linewidth=1.2, 
                         color=color, label=activity)
+            
+        # # Add total sum line
+        # total_inst = df.sum(axis=1).fillna(0).values / scaling_factor_inst
+        # ax_inst.plot(dates, total_inst, color='black', linestyle='--', 
+        #             linewidth=1.5, label='Total', zorder=0.6)
         
         ax_inst.set_xlim(datetime(2020, 1, 1), datetime(2126, 1, 1))
         ax_inst.set_ylim(row_ylim_min[0], row_ylim_max[0])
@@ -842,6 +847,10 @@ def create_radiative_forcing_figure():
         color = activity_colors.get(activity, 'gray')
         unique_handles.append(Line2D([0], [0], color=color, linewidth=2))
         unique_labels.append(activity)
+        
+    # # Add total line to legend
+    # unique_handles.append(Line2D([0], [0], color='black', linestyle='--', linewidth=1))
+    # unique_labels.append('Total')
     
     fig.legend(unique_handles, unique_labels, 
               loc='lower center', 
