@@ -1065,6 +1065,351 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
     return fig
 
 
+def create_combined_results_and_impacts_figure(scenarios_data: dict):
+    """
+    Create a comprehensive combined figure with production mix (results) on top and 
+    impacts (radiative forcing, water use) below.
+    
+    Layout: 7 rows x 3 columns (scenarios)
+    - Rows 0-3: Production results (Methanol, Pig Iron, Captured CO₂, Hydrogen)
+    - Rows 4-6: Impacts (Aggregated RF, Instantaneous RF, Water Use)
+    
+    Axes: Shared Y per row, Shared X per column. Labels only on outer edges.
+    """
+    fig = plt.figure(figsize=(14, 17))
+    
+    # GridSpec for 7 rows x 3 columns
+    gs = fig.add_gridspec(7, 3, hspace=0.08, wspace=0.06)
+    
+    products = [
+        ("methanol", "Methanol", False),
+        ("pig iron", "Pig Iron", False),
+        ("captured co2", "Captured CO₂", True),
+        ("hydrogen", "Hydrogen", True),
+    ]
+    
+    # ===== PART 1: RESULTS (Rows 0-3) =====
+    
+    # First pass: compute y-axis limits for each product row
+    row_ylim_max = {}
+    row_ylim_min = {}
+    
+    for row, (product_key, product_label, is_intermediate) in enumerate(products):
+        row_ylim_max[row] = 0.1
+        row_ylim_min[row] = 0
+        
+        for scenario in SCENARIOS.keys():
+            data = scenarios_data[scenario]
+            filepath = PLOTS_DIR / f"production_{scenario}.xlsx"
+            prod_df = pd.read_excel(filepath, header=[0, 1])
+            prod_df = prod_df.set_index(prod_df.columns[0])
+            prod_df = prod_df.iloc[1:]
+            prod_df.index = pd.to_numeric(prod_df.index, errors="coerce")
+            prod_df = prod_df.dropna()
+            
+            cap_df = clean_capacity_df(data["capacity"])
+            product_col = None
+            for c in cap_df.columns:
+                if product_key.lower() in str(c).lower():
+                    product_col = c
+                    break
+            
+            years = prod_df.index.values
+            mask = (years >= 2025) & (years <= 2050)
+            
+            prod_total_per_year = np.zeros(mask.sum())
+            for c in prod_df.columns:
+                if isinstance(c, tuple):
+                    process, product = c
+                    if product_key.lower() in str(product).lower():
+                        prod_total_per_year += prod_df[c].astype(float).values[mask]
+            
+            row_ylim_max[row] = max(row_ylim_max[row], prod_total_per_year.max() / 1e6)
+            
+            if product_col is not None:
+                cap_years = cap_df.index.values
+                cap_mask = (cap_years >= 2025) & (cap_years <= 2050)
+                capacity_values = cap_df[product_col].values[cap_mask] / 1e6
+                row_ylim_max[row] = max(row_ylim_max[row], capacity_values.max())
+                additions, retirements = compute_capacity_changes(cap_df[cap_mask], product_col)
+                row_ylim_max[row] = max(row_ylim_max[row], additions.max() / 1e6)
+        
+        row_ylim_max[row] *= 1.1
+        if row_ylim_min[row] < 0:
+            row_ylim_min[row] *= 1.1
+    
+    # Common x-axis setup for results
+    years_plot = np.arange(2025, 2051)
+    x_positions = np.arange(len(years_plot))
+    prod_positions = x_positions
+    
+    xtick_positions_results = [i for i, y in enumerate(years_plot) if y % 5 == 0]
+    xtick_labels_results = [str(y) for y in years_plot if y % 5 == 0]
+    
+    # Matrix to store all axes
+    axes_matrix = np.empty((7, 3), dtype=object)
+    
+    # Second pass: create production plots (rows 0-3)
+    for row, (product_key, product_label, is_intermediate) in enumerate(products):
+        for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
+            
+            # Shared Axis logic
+            if row == 0 and col == 0:
+                ax = fig.add_subplot(gs[row, col])
+            elif col == 0:
+                ax = fig.add_subplot(gs[row, col], sharex=axes_matrix[0, 0])
+            else:
+                ax = fig.add_subplot(gs[row, col], sharey=axes_matrix[row, 0], sharex=axes_matrix[0, col])
+            
+            axes_matrix[row, col] = ax
+            data = scenarios_data[scenario]
+            
+            # Load production data
+            filepath = PLOTS_DIR / f"production_{scenario}.xlsx"
+            prod_df = pd.read_excel(filepath, header=[0, 1])
+            prod_df = prod_df.set_index(prod_df.columns[0])
+            prod_df = prod_df.iloc[1:]
+            prod_df.index = pd.to_numeric(prod_df.index, errors="coerce")
+            prod_df = prod_df.dropna()
+            
+            # Get capacity data
+            cap_df = clean_capacity_df(data["capacity"])
+            product_col = None
+            for c in cap_df.columns:
+                if product_key.lower() in str(c).lower():
+                    product_col = c
+                    break
+            
+            # Filter for product
+            process_production = {}
+            for c in prod_df.columns:
+                if isinstance(c, tuple):
+                    process, product = c
+                    if product_key.lower() in str(product).lower():
+                        clean_process = PROCESS_NAMES.get(process, process)
+                        if clean_process not in process_production:
+                            process_production[clean_process] = prod_df[c].astype(float).values
+            
+            years = prod_df.index.values
+            mask = (years >= 2025) & (years <= 2050)
+            
+            # Stack production bars
+            if process_production:
+                bottom = np.zeros(len(years_plot))
+                for process, values in process_production.items():
+                    values_plot = values[mask] / 1e6
+                    if np.any(values_plot > 0.01):
+                        color = PROCESS_COLORS.get(process, "gray")
+                        ax.bar(prod_positions, values_plot, bottom=bottom, label=process,
+                               color=color, width=bar_width, edgecolor="white", linewidth=linewidth_bar_outline)
+                        bottom += values_plot
+            
+            # Plot total capacity line
+            if product_col is not None:
+                cap_years = cap_df.index.values
+                cap_mask = (cap_years >= 2025) & (cap_years <= 2050)
+                capacity_values = cap_df[product_col].values[cap_mask] / 1e6
+                if np.any(capacity_values > 0.001):
+                    ax.plot(x_positions, capacity_values, color="#000000", linestyle="--",
+                            linewidth=1, marker="", label="Capacity", zorder=4)
+            
+            ax.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
+            
+            # Formatting
+            ax.set_xlim(-1, len(years_plot))
+            ax.set_ylim(row_ylim_min[row], row_ylim_max[row])
+            ax.grid(True, alpha=0.3, which="both", axis="both", zorder=0)
+            ax.set_axisbelow(True)
+            
+            # X-axis: No labels on results rows (impacts will have x labels at bottom)
+            ax.tick_params(labelbottom=False)
+            
+            # Y-axis: Only first column gets labels
+            if col == 0:
+                label_suffix = " *" if is_intermediate else ""
+                ax.set_ylabel(f"{product_label}{label_suffix}\n[$10^6$ kg]")
+                
+                if product_label == "Captured CO₂":
+                    ax.yaxis.set_major_locator(MultipleLocator(0.5))
+            else:
+                ax.tick_params(labelleft=False)
+            
+            # Column titles only on first row
+            if row == 0:
+                ax.set_title(scenario_label)
+    
+    # ===== PART 2: IMPACTS (Rows 4-6) =====
+    
+    start_year, end_year = 2025, 2050
+    full_year_index = np.arange(start_year, end_year + 1)
+    
+    rf_scenario_data = {}
+    all_activities = set()
+    
+    # Process Radiative Forcing data
+    for scenario in SCENARIOS.keys():
+        df = load_characterized_inventory(scenario)
+        df_years = df[(df.index.year >= start_year) & (df.index.year <= end_year)].copy()
+        df_years.index = df_years.index.year
+        df_aligned = df_years.reindex(full_year_index).fillna(0)
+        rf_scenario_data[scenario] = df_aligned
+        all_activities.update(df_aligned.columns.tolist())
+    
+    # Sorting for DAC
+    all_activities_list = sorted(list(all_activities))
+    target_comp = 'DAC'
+    if target_comp in all_activities_list:
+        all_activities_list.remove(target_comp)
+        all_activities_list.insert(0, target_comp)
+    
+    activity_colors = {act: PROCESS_COLORS.get(act, 'gray') for act in all_activities_list}
+    
+    # Scaling Pre-calculations
+    crf_bar_max, crf_bar_min = 0, 0
+    for scenario in scenarios_data.keys():
+        impacts = load_impacts_properly(scenario)
+        if "climate_change" in impacts:
+            data = impacts["climate_change"].loc[(impacts["climate_change"].index >= start_year) & (impacts["climate_change"].index <= end_year)]
+            crf_bar_max = max(crf_bar_max, data.clip(lower=0).sum(axis=1).max())
+            crf_bar_min = min(crf_bar_min, data.clip(upper=0).sum(axis=1).min())
+    scaling_factor_crf_bar = 10**int(np.floor(np.log10(max(abs(crf_bar_max), abs(crf_bar_min))))) if max(abs(crf_bar_max), abs(crf_bar_min)) > 0 else 1
+    
+    inst_max, inst_min = 0, 0
+    for df in rf_scenario_data.values():
+        inst_max = max(inst_max, df.clip(lower=0).sum(axis=1).max())
+        inst_min = min(inst_min, df.clip(upper=0).sum(axis=1).min())
+    scaling_factor_inst = 10**int(np.floor(np.log10(max(abs(inst_max), abs(inst_min))))) if max(abs(inst_max), abs(inst_min)) > 0 else 1
+    
+    water_max = 0
+    for scenario in scenarios_data.keys():
+        impacts = load_impacts_properly(scenario)
+        if "water_use" in impacts:
+            data = impacts["water_use"].loc[(impacts["water_use"].index >= start_year) & (impacts["water_use"].index <= end_year)]
+            water_max = max(water_max, data.clip(lower=0).sum(axis=1).max())
+    scaling_factor_water = 10**int(np.floor(np.log10(water_max))) if water_max > 0 else 1
+    
+    xtick_positions_impacts = [y for y in full_year_index if y % 5 == 0]
+    
+    # Plotting impacts rows
+    for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
+        
+        # ROW 4: AGGREGATED RF (Bars)
+        ax0 = fig.add_subplot(gs[4, col], sharey=axes_matrix[4, 0] if col > 0 else None)
+        axes_matrix[4, col] = ax0
+        impacts = load_impacts_properly(scenario)
+        if "climate_change" in impacts:
+            data = impacts["climate_change"].reindex(full_year_index).fillna(0)
+            bottom_pos, bottom_neg = np.zeros(len(data)), np.zeros(len(data))
+            for proc in all_activities_list:
+                if proc in data.columns:
+                    vals = data[proc].values / scaling_factor_crf_bar
+                    color = activity_colors.get(proc, "gray")
+                    pv, nv = np.maximum(vals, 0), np.minimum(vals, 0)
+                    if np.any(pv > 0):
+                        ax0.bar(data.index, pv, bottom=bottom_pos, color=color, width=0.8, edgecolor="white", linewidth=1)
+                        bottom_pos += pv
+                    if np.any(nv < 0):
+                        ax0.bar(data.index, nv, bottom=bottom_neg, color=color, width=0.8, edgecolor="white", linewidth=1)
+                        bottom_neg += nv
+        
+        ax0.set_xlim(start_year - 1, end_year + 1)
+        ax0.set_ylim(-1.6, 3.1)
+        ax0.set_xticks(xtick_positions_impacts)
+        ax0.set_xticklabels([])
+        if col == 0:
+            ax0.set_ylabel(f"Aggregated RF\n[$10^{{{int(np.log10(scaling_factor_crf_bar))}}}$ W/m²]")
+        else:
+            ax0.tick_params(labelleft=False)
+        ax0.grid(True, alpha=0.3, zorder=0)
+        ax0.set_axisbelow(True)
+        
+        # ROW 5: INSTANTANEOUS RF (Manual Stacked Area)
+        ax1 = fig.add_subplot(gs[5, col], sharey=axes_matrix[5, 0] if col > 0 else None)
+        axes_matrix[5, col] = ax1
+        df_plot = rf_scenario_data[scenario]
+        if not df_plot.empty:
+            y_pos, y_neg = np.zeros(len(full_year_index)), np.zeros(len(full_year_index))
+            for act in all_activities_list:
+                if act in df_plot.columns:
+                    vals = df_plot[act].values / scaling_factor_inst
+                    color = activity_colors.get(act, "gray")
+                    vals_pos, vals_neg = np.maximum(vals, 0), np.minimum(vals, 0)
+                    if np.any(vals_pos > 0):
+                        ax1.fill_between(full_year_index, y_pos, y_pos + vals_pos, color=color, alpha=1, edgecolor="white", linewidth=1)
+                        y_pos += vals_pos
+                    if np.any(vals_neg < 0):
+                        ax1.fill_between(full_year_index, y_neg, y_neg + vals_neg, color=color, alpha=1, edgecolor="white", linewidth=1)
+                        y_neg += vals_neg
+        
+        ax1.axhline(0, color='gray', linewidth=1, zorder=0)
+        ax1.set_xlim(start_year - 1, end_year + 1)
+        ax1.set_ylim((inst_min/scaling_factor_inst)*1.1, (inst_max/scaling_factor_inst)*1.1)
+        ax1.set_xticks(xtick_positions_impacts)
+        ax1.set_xticklabels([])
+        if col == 0:
+            ax1.set_ylabel(f"Instantaneous RF\n[$10^{{{int(np.log10(scaling_factor_inst))}}}$ W m$^{{-2}}$]")
+        else:
+            ax1.tick_params(labelleft=False)
+        ax1.grid(True, alpha=0.3, zorder=0)
+        ax1.set_axisbelow(True)
+    
+    # ROW 6: WATER USE
+    for col, (scenario, _) in enumerate(SCENARIOS.items()):
+        ax2 = fig.add_subplot(gs[6, col], sharey=axes_matrix[6, 0] if col > 0 else None)
+        axes_matrix[6, col] = ax2
+        impacts = load_impacts_properly(scenario)
+        if "water_use" in impacts:
+            data = impacts["water_use"].reindex(full_year_index).fillna(0)
+            bottom_pos = np.zeros(len(data))
+            for proc in data.columns:
+                vals = data[proc].values / scaling_factor_water
+                if np.any(vals > 1e-12):
+                    ax2.bar(data.index, vals, bottom=bottom_pos, color=PROCESS_COLORS.get(proc, "gray"), width=0.8, edgecolor="white", linewidth=1)
+                    bottom_pos += vals
+        
+        ax2.set_xlim(start_year - 1, end_year + 1)
+        ax2.set_xticks(xtick_positions_impacts)
+        ax2.set_xticklabels([str(y) for y in xtick_positions_impacts])
+        ax2.set_ylim(0, (water_max/scaling_factor_water)*1.15)
+        ax2.set_xlabel("Year")
+        if col == 0:
+            ax2.set_ylabel(f"Water Use\n[$10^{{{int(np.log10(scaling_factor_water))}}}$ m³-eq]")
+        else:
+            ax2.tick_params(labelleft=False)
+        ax2.grid(True, alpha=0.3, zorder=0)
+        ax2.set_axisbelow(True)
+    
+    # ===== SUBPLOT LABELS =====
+    labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)', '(g)', '(h)', '(i)', '(j)', '(k)', '(l)',
+              '(m)', '(n)', '(o)', '(p)', '(q)', '(r)', '(s)', '(t)', '(u)']
+    label_idx = 0
+    for row in range(7):
+        for col in range(3):
+            ax = axes_matrix[row, col]
+            ax.text(0.02, 0.95, labels[label_idx], transform=ax.transAxes,
+                   va='top', fontsize=10,
+                   bbox=dict(boxstyle='square,pad=0.1', fc='white', ec='none'))
+            label_idx += 1
+    
+    # ===== CREATE SHARED LEGEND =====
+    all_handles = []
+    all_labels_legend = []
+    
+    # Add process colors from results
+    for process, color in PROCESS_COLORS.items():
+        all_handles.append(Patch(facecolor=color, edgecolor="white", linewidth=0.5))
+        all_labels_legend.append(process)
+    
+    # Add capacity line
+    all_handles.append(plt.Line2D([0], [0], color="#000000", linestyle="--", linewidth=1))
+    all_labels_legend.append("Available capacity")
+    
+    fig.legend(all_handles, all_labels_legend, loc="lower center", bbox_to_anchor=(0.5, 0.01),
+               ncol=4, frameon=False, fontsize=9)
+    
+    return fig
+
+
 def main():
     """Generate all paper figures."""
     print("Loading scenario data...")
@@ -1090,15 +1435,10 @@ def main():
     # fig_water.savefig(OUTPUT_DIR / "impacts_water_comparison.pdf")
     # plt.close(fig_water)
 
-    print("Creating combined results figure...")
-    fig_combined = create_combined_results_figure(scenarios_data)
-    fig_combined.savefig(OUTPUT_DIR / "operation.pdf")
+    print("Creating combined results and impacts figure...")
+    fig_combined = create_combined_results_and_impacts_figure(scenarios_data)
+    fig_combined.savefig(OUTPUT_DIR / "results_and_impacts.pdf")
     plt.close(fig_combined)
-
-    print("Creating combined forcing and impacts figure...")
-    fig_combined_forcing_impacts = create_combined_forcing_and_impacts_figure(scenarios_data)
-    fig_combined_forcing_impacts.savefig(OUTPUT_DIR / "forcing_and_impacts.pdf")
-    plt.close(fig_combined_forcing_impacts)
 
     # print("Creating capacity balance figure...")
     # fig_capacity = create_capacity_balance_figure(scenarios_data)
