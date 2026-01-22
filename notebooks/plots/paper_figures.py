@@ -964,7 +964,7 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
         ax0.set_xticks(xtick_positions)
         ax0.set_xticklabels([])
         if col == 0: 
-            ax0.set_ylabel(f"Aggregated RF\n[$10^{{{int(np.log10(scaling_factor_crf_bar))}}}$ W/m²]")
+            ax0.set_ylabel(f"AGWP until 2125\n[$10^{{{int(np.log10(scaling_factor_crf_bar))}}}$ W/m²]")
         else: 
             ax0.tick_params(labelleft=False)
         ax0.grid(True, alpha=0.3, zorder=0)
@@ -994,7 +994,7 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
         ax1.set_xticks(xtick_positions)
         ax1.set_xticklabels([])
         if col == 0: 
-            ax1.set_ylabel(f"Instantaneous RF\n[$10^{{{int(np.log10(scaling_factor_inst))}}}$ W m$^{{-2}}$]")
+            ax1.set_ylabel(f"Instantaneous Radiative\n Forcing[$10^{{{int(np.log10(scaling_factor_inst))}}}$ W m$^{{-2}}$]")
         else: 
             ax1.tick_params(labelleft=False)
         ax1.grid(True, alpha=0.3, zorder=0)
@@ -1076,7 +1076,9 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
     
     Axes: Shared Y per row, Shared X per column. Labels only on outer edges.
     """
-    fig = plt.figure(figsize=(14, 17))
+    fig = plt.figure(figsize=(12, 18))
+    
+    fig.subplots_adjust(left=0.1, right=0.98, top=0.95, bottom=0.12)
     
     # GridSpec for 7 rows x 3 columns
     gs = fig.add_gridspec(7, 3, hspace=0.08, wspace=0.06)
@@ -1236,7 +1238,7 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
             
             # Column titles only on first row
             if row == 0:
-                ax.set_title(scenario_label)
+                ax.set_title(scenario_label, fontdict={"fontsize": 12}, pad=10)
     
     # ===== PART 2: IMPACTS (Rows 4-6) =====
     
@@ -1317,7 +1319,7 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
         ax0.set_xticks(xtick_positions_impacts)
         ax0.set_xticklabels([])
         if col == 0:
-            ax0.set_ylabel(f"Aggregated RF\n[$10^{{{int(np.log10(scaling_factor_crf_bar))}}}$ W/m²]")
+            ax0.set_ylabel(f"AGWP until 2125\n[$10^{{{int(np.log10(scaling_factor_crf_bar))}}}$ W/m²]")
         else:
             ax0.tick_params(labelleft=False)
         ax0.grid(True, alpha=0.3, zorder=0)
@@ -1347,7 +1349,7 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
         ax1.set_xticks(xtick_positions_impacts)
         ax1.set_xticklabels([])
         if col == 0:
-            ax1.set_ylabel(f"Instantaneous RF\n[$10^{{{int(np.log10(scaling_factor_inst))}}}$ W m$^{{-2}}$]")
+            ax1.set_ylabel(f"Radiative Forcing\n[$10^{{{int(np.log10(scaling_factor_inst))}}}$ W m$^{{-2}}$]")
         else:
             ax1.tick_params(labelleft=False)
         ax1.grid(True, alpha=0.3, zorder=0)
@@ -1379,8 +1381,54 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
         ax2.grid(True, alpha=0.3, zorder=0)
         ax2.set_axisbelow(True)
     
+    # ===== NEW SECTION: CATEGORY LABELS & BRACKETS =====
+    
+    def add_row_group_label(start_row, end_row, label_text):
+        """
+        Draws a vertical label and a bracket next to a range of rows.
+        """
+        # Get the bounding boxes of the top-left and bottom-left subplots in the group
+        top_pos = axes_matrix[start_row, 0].get_position()
+        bottom_pos = axes_matrix[end_row, 0].get_position()
+        
+        # Calculate vertical center and bounds in figure coordinates
+        y_top = top_pos.y1
+        y_bottom = bottom_pos.y0
+        y_mid = (y_top + y_bottom) / 2
+        
+        # X positions in figure coordinates (0 to 1 scale)
+        # We place the label far left and the bracket between label and Y-axis
+        text_x = 0.02
+        bracket_x = 0.032 
+        
+        # 1. Add the vertical rotated text
+        fig.text(text_x, y_mid, label_text, 
+                 rotation='vertical', va='center', ha='center',
+                 fontsize=12)
+        
+        # 2. Add the bracket (Main vertical line)
+        line = plt.Line2D([bracket_x, bracket_x], [y_bottom, y_top],
+                          transform=fig.transFigure, color='black', linewidth=1)
+        fig.lines.append(line)
+        
+        # 3. Add horizontal ticks at the ends of the bracket
+        tick_width = 0.008
+        t_top = plt.Line2D([bracket_x, bracket_x + tick_width], [y_top, y_top],
+                           transform=fig.transFigure, color='black', linewidth=1)
+        t_bottom = plt.Line2D([bracket_x, bracket_x + tick_width], [y_bottom, y_bottom],
+                              transform=fig.transFigure, color='black', linewidth=1)
+        fig.lines.extend([t_top, t_bottom])
+
+    # Apply the labels to the specific row ranges
+    # Rows 0-3 (Methanol to Hydrogen)
+    add_row_group_label(0, 3, "Deployment and Operation")
+    
+    # Rows 4-6 (RF and Water Use)
+    add_row_group_label(4, 6, "Environmental Impacts")
+    
     # ===== SUBPLOT LABELS =====
-    labels = [f'({chr(ord("a") + i)})' for i in range(7 * 3)]
+    labels = ['(a-1)', '(a-2)', '(a-3)', '(b-1)', '(b-2)', '(b-3)', '(c-1)', '(c-2)', '(c-3)', '(d-1)', '(d-2)', '(d-3)',
+              '(e-1)', '(e-2)', '(e-3)', '(f-1)', '(f-2)', '(f-3)', '(g-1)', '(g-2)', '(g-3)']
     label_idx = 0
     for row in range(7):
         for col in range(3):
@@ -1403,7 +1451,7 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
     all_handles.append(plt.Line2D([0], [0], color="#000000", linestyle="--", linewidth=1))
     all_labels_legend.append("Available capacity")
     
-    fig.legend(all_handles, all_labels_legend, loc="lower center", bbox_to_anchor=(0.5, 0.01),
+    fig.legend(all_handles, all_labels_legend, loc="lower center", bbox_to_anchor=(0.5, 0.07),
                ncol=4, frameon=False, fontsize=9)
     
     return fig
