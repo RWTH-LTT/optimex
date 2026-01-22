@@ -870,13 +870,17 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
     and impacts (CRF and water use). All plots show data from 2025-2050.
     
     Structure:
-    - Row 0: Instantaneous radiative forcing (2025-2050) - line plots
-    - Row 1: Cumulative radiative forcing (2025-2050) - stacked area plots
-    - Row 2: Cumulative radiative forcing (2025-2050) - bar plots from impacts data
+    Subfigure a) Climate Change:
+    - Row 0: Cumulative radiative forcing (2025-2050) - bar plots from impacts data
+    - Row 1: Instantaneous radiative forcing (2025-2050) - line plots
+    - Row 2: Cumulative radiative forcing (2025-2050) - stacked area plots
+    Subfigure b) Water Use:
     - Row 3: Water use (2025-2050) - bar plots
     """
-    fig = plt.figure(figsize=(14, 11))
-    gs = fig.add_gridspec(4, 3, hspace=0.08, wspace=0.06)
+    fig = plt.figure(figsize=(14, 11.5))
+    # Create gridspec with 4 rows, adding extra space before water use row
+    gs = fig.add_gridspec(4, 3, wspace=0.06, height_ratios=[1, 1, 1, 1.3],
+                         hspace=0.08, top=0.96, bottom=0.08)
     
     # Load radiative forcing data for each scenario
     rf_scenario_data = {}
@@ -993,72 +997,7 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
     # Create axes array
     axes = np.empty((4, 3), dtype=object)
     
-    # ===== PLOT RADIATIVE FORCING (Rows 0 and 1) =====
-    for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
-        df = rf_scenario_data[scenario]
-        # Filter to 2025-2050
-        df_filtered = df[(df.index >= datetime(2025, 1, 1)) & (df.index <= datetime(2050, 12, 31))]
-        dates = df_filtered.index
-        
-        # Row 0: Instantaneous radiative forcing (scaled)
-        sharex_ax = axes[0, 0] if col > 0 else None
-        sharey_ax = axes[0, 0] if col > 0 else None
-        ax_inst = fig.add_subplot(gs[0, col], sharex=sharex_ax, sharey=sharey_ax)
-        axes[0, col] = ax_inst
-        
-        for activity in df_filtered.columns:
-            color = activity_colors.get(activity, 'gray')
-            values_scaled = df_filtered[activity].fillna(0).values / scaling_factor_inst
-            ax_inst.plot(dates, values_scaled, linewidth=1.2, 
-                        color=color, label=activity)
-        
-        ax_inst.set_xlim(datetime(2025, 1, 1), datetime(2050, 12, 31))
-        ax_inst.set_ylim(row_ylim_min_rf[0], row_ylim_max_rf[0])
-        ax_inst.grid(which="both", alpha=0.3, axis="both", zorder=0)
-        ax_inst.set_axisbelow(True)
-        
-        if col == 0:
-            ax_inst.set_ylabel(f"Instantaneous radiative forcing\n[$10^{{{exponent_inst}}}$ W m$^{{-2}}$]")
-        else:
-            ax_inst.tick_params(labelleft=False)
-        
-        ax_inst.set_title(scenario_label)
-        ax_inst.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
-        ax_inst.tick_params(labelbottom=False)
-        
-        # Row 1: Cumulative radiative forcing (scaled)
-        sharex_ax = axes[0, col]
-        sharey_ax = axes[1, 0] if col > 0 else None
-        ax_cum = fig.add_subplot(gs[1, col], sharex=sharex_ax, sharey=sharey_ax)
-        axes[1, col] = ax_cum
-        
-        cumsum_df = df_filtered.cumsum()
-        
-        activities_in_df = [a for a in all_activities if a in cumsum_df.columns]
-        stack_data = [cumsum_df[a].fillna(0).values / scaling_factor_cum for a in activities_in_df]
-        stack_colors = [activity_colors[a] for a in activities_in_df]
-        
-        if stack_data:
-            ax_cum.stackplot(dates, *stack_data, 
-                            labels=activities_in_df,
-                            colors=stack_colors,
-                            edgecolor="white",
-                            linewidth=0.5)
-        
-        ax_cum.set_xlim(datetime(2025, 1, 1), datetime(2050, 12, 31))
-        ax_cum.set_ylim(row_ylim_min_rf[1], row_ylim_max_rf[1])
-        ax_cum.grid(which="both", alpha=0.3, axis="both", zorder=0)
-        ax_cum.set_axisbelow(True)
-        
-        ax_cum.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
-        ax_cum.tick_params(labelbottom=False)
-        
-        if col == 0:
-            ax_cum.set_ylabel(f"Cumulative radiative forcing\n[$10^{{{exponent_cum}}}$ W m$^{{-2}}$]")
-        else:
-            ax_cum.tick_params(labelleft=False)
-    
-    # ===== PLOT CRF BAR PLOTS (Row 2) =====
+    # ===== PLOT CRF BAR PLOTS (Row 0 - first row of Climate Change subfigure) =====
     years_plot = np.arange(2025, 2051)
     x_positions = np.arange(len(years_plot))
     xtick_positions = [i for i, y in enumerate(years_plot) if y % 5 == 0]
@@ -1067,10 +1006,10 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
     y_label_crf_bar = f"Cumulative Radiative Forcing\n[$10^{{{exponent_crf_bar}}}$ W/m²]"
     
     for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
-        sharey_ax = axes[2, 0] if col > 0 else None
+        sharey_ax = axes[0, 0] if col > 0 else None
         
-        ax = fig.add_subplot(gs[2, col], sharey=sharey_ax)
-        axes[2, col] = ax
+        ax = fig.add_subplot(gs[0, col], sharey=sharey_ax)
+        axes[0, col] = ax
         
         impacts = load_impacts_properly(scenario)
         if "climate_change" in impacts:
@@ -1116,8 +1055,80 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
         ax.grid(True, which="both", alpha=0.3, axis="both", zorder=0)
         ax.set_axisbelow(True)
         
+        ax.set_title(scenario_label)
         if col == 0:
             ax.set_ylabel(y_label_crf_bar)
+    
+    # ===== PLOT INSTANTANEOUS RF (Row 1 - second row of Climate Change subfigure) =====
+    for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
+        df = rf_scenario_data[scenario]
+        # Filter to 2025-2050
+        df_filtered = df[(df.index >= datetime(2025, 1, 1)) & (df.index <= datetime(2050, 12, 31))]
+        dates = df_filtered.index
+        
+        # Row 1: Instantaneous radiative forcing (scaled)
+        sharex_ax = axes[0, col]
+        sharey_ax = axes[1, 0] if col > 0 else None
+        ax_inst = fig.add_subplot(gs[1, col], sharex=sharex_ax, sharey=sharey_ax)
+        axes[1, col] = ax_inst
+        
+        for activity in df_filtered.columns:
+            color = activity_colors.get(activity, 'gray')
+            values_scaled = df_filtered[activity].fillna(0).values / scaling_factor_inst
+            ax_inst.plot(dates, values_scaled, linewidth=1.2, 
+                        color=color, label=activity)
+        
+        ax_inst.set_xlim(datetime(2025, 1, 1), datetime(2050, 12, 31))
+        ax_inst.set_ylim(row_ylim_min_rf[0], row_ylim_max_rf[0])
+        ax_inst.grid(which="both", alpha=0.3, axis="both", zorder=0)
+        ax_inst.set_axisbelow(True)
+        
+        if col == 0:
+            ax_inst.set_ylabel(f"Instantaneous radiative forcing\n[$10^{{{exponent_inst}}}$ W m$^{{-2}}$]")
+        else:
+            ax_inst.tick_params(labelleft=False)
+        
+        ax_inst.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
+        ax_inst.tick_params(labelbottom=False)
+        
+    # ===== PLOT CUMULATIVE RF STACKED AREA (Row 2 - third row of Climate Change subfigure) =====
+    for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
+        df = rf_scenario_data[scenario]
+        # Filter to 2025-2050
+        df_filtered = df[(df.index >= datetime(2025, 1, 1)) & (df.index <= datetime(2050, 12, 31))]
+        dates = df_filtered.index
+        
+        # Row 2: Cumulative radiative forcing (scaled)
+        sharex_ax = axes[0, col]
+        sharey_ax = axes[2, 0] if col > 0 else None
+        ax_cum = fig.add_subplot(gs[2, col], sharex=sharex_ax, sharey=sharey_ax)
+        axes[2, col] = ax_cum
+        
+        cumsum_df = df_filtered.cumsum()
+        
+        activities_in_df = [a for a in all_activities if a in cumsum_df.columns]
+        stack_data = [cumsum_df[a].fillna(0).values / scaling_factor_cum for a in activities_in_df]
+        stack_colors = [activity_colors[a] for a in activities_in_df]
+        
+        if stack_data:
+            ax_cum.stackplot(dates, *stack_data, 
+                            labels=activities_in_df,
+                            colors=stack_colors,
+                            edgecolor="white",
+                            linewidth=0.5)
+        
+        ax_cum.set_xlim(datetime(2025, 1, 1), datetime(2050, 12, 31))
+        ax_cum.set_ylim(row_ylim_min_rf[1], row_ylim_max_rf[1])
+        ax_cum.grid(which="both", alpha=0.3, axis="both", zorder=0)
+        ax_cum.set_axisbelow(True)
+        
+        ax_cum.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
+        ax_cum.tick_params(labelbottom=False)
+        
+        if col == 0:
+            ax_cum.set_ylabel(f"Cumulative radiative forcing\n[$10^{{{exponent_cum}}}$ W m$^{{-2}}$]")
+        else:
+            ax_cum.tick_params(labelleft=False)
     
     # ===== PLOT WATER USE (Row 3) =====
     years_plot = np.arange(2025, 2051)
@@ -1180,16 +1191,24 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
         if col == 0:
             ax.set_ylabel(y_label_water)
     
-    # ===== SUBPLOT LABELS =====
-    labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)', '(g)', '(h)', '(i)', '(j)', '(k)', '(l)']
-    label_idx = 0
+    # ===== SUBFIGURE AND SUBPLOT LABELS =====
+    # Add subfigure labels
+    # a) Climate Change - top left of row 0
+    axes[0, 0].text(-0.15, 1.15, 'a) Climate Change', transform=axes[0, 0].transAxes,
+                    fontsize=12, fontweight='bold', va='top', ha='left')
+    
+    # b) Water Use - top left of row 3
+    axes[3, 0].text(-0.15, 1.15, 'b) Water Use', transform=axes[3, 0].transAxes,
+                    fontsize=12, fontweight='bold', va='top', ha='left')
+    
+    # Add scenario labels (i, ii, iii) for each subplot
+    scenario_labels = ['i)', 'ii)', 'iii)']
     for row in range(4):
         for col in range(3):
             ax = axes[row, col]
-            ax.text(0.95, 0.95, labels[label_idx], transform=ax.transAxes,
+            ax.text(0.95, 0.95, scenario_labels[col], transform=ax.transAxes,
                    ha='right', va='top', fontsize=10,
                    bbox=dict(boxstyle='square,pad=0.1', fc='white', ec='none'))
-            label_idx += 1
     
     # ===== LEGENDS =====
     # Collect all unique processes from impacts (CRF and water use bar plots)
