@@ -1380,8 +1380,7 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
         ax2.set_axisbelow(True)
     
     # ===== SUBPLOT LABELS =====
-    labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)', '(g)', '(h)', '(i)', '(j)', '(k)', '(l)',
-              '(m)', '(n)', '(o)', '(p)', '(q)', '(r)', '(s)', '(t)', '(u)']
+    labels = [f'({chr(ord("a") + i)})' for i in range(7 * 3)]
     label_idx = 0
     for row in range(7):
         for col in range(3):
