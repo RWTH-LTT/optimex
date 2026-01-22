@@ -877,10 +877,11 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
     Subfigure b) Water Use:
     - Row 3: Water use (2025-2050) - bar plots
     """
-    fig = plt.figure(figsize=(14, 11.5))
+    fig = plt.figure(figsize=(14, 12))
     # Create gridspec with 4 rows, adding extra space before water use row
-    gs = fig.add_gridspec(4, 3, wspace=0.06, height_ratios=[1, 1, 1, 1.3],
-                         hspace=0.08, top=0.96, bottom=0.08)
+    # Using hspace array to add more space specifically before row 3 (water use)
+    gs = fig.add_gridspec(4, 3, wspace=0.06, height_ratios=[1, 1, 1, 1.5],
+                         hspace=0.25, top=0.96, bottom=0.08)
     
     # Load radiative forcing data for each scenario
     rf_scenario_data = {}
@@ -1003,7 +1004,7 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
     xtick_positions = [i for i, y in enumerate(years_plot) if y % 5 == 0]
     xtick_labels = [str(y) for y in years_plot if y % 5 == 0]
     
-    y_label_crf_bar = f"Cumulative Radiative Forcing\n[$10^{{{exponent_crf_bar}}}$ W/m²]"
+    y_label_crf_bar = f"Aggregated Radiative Forcing\n[$10^{{{exponent_crf_bar}}}$ W/m²]"
     
     for col, (scenario, scenario_label) in enumerate(SCENARIOS.items()):
         sharey_ax = axes[0, 0] if col > 0 else None
@@ -1041,9 +1042,9 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
         ax.set_xticklabels(xtick_labels)
         ax.set_xlim(-1, len(years_plot))
         
-        # Custom tick spacing and limits for CRF bar plots
+        # Use calculated limits for CRF bar plots
         ax.yaxis.set_major_locator(MultipleLocator(0.5))
-        ax.set_ylim(-1.6, 3.1)
+        ax.set_ylim(crf_bar_ylim_min, crf_bar_ylim_max)
         
         # Simple float formatter
         ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
