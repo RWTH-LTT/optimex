@@ -26,9 +26,9 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Scenario names and labels
 SCENARIOS = {
-    "no_evolution": "No Evolution",
-    "fg_bg_evolution": "Foreground & Background Evolution",
-    "iridium_constraint": "Evolution + Constraints",
+    "no_evolution": "Baseline",
+    "fg_bg_evolution": "Evolution",
+    "iridium_constraint": "Constrained Evolution",
 }
 
 # Impact categories of interest
@@ -788,7 +788,7 @@ def create_radiative_forcing_figure():
         # ax_inst.plot(dates, total_inst, color='black', linestyle='--', 
         #             linewidth=1.5, label='Total', zorder=0.6)
         
-        ax_inst.set_xlim(datetime(2020, 1, 1), datetime(2126, 1, 1))
+        ax_inst.set_xlim(datetime(2025, 1, 1), datetime(2051, 1, 1))
         ax_inst.set_ylim(row_ylim_min[0], row_ylim_max[0])
         ax_inst.grid(which="both", alpha=0.3, axis="both", zorder=0)
         ax_inst.set_axisbelow(True)
@@ -816,7 +816,7 @@ def create_radiative_forcing_figure():
                             edgecolor="white",
                             linewidth=0.5)
         
-        ax_cum.set_xlim(datetime(2020, 1, 1), datetime(2126, 1, 1))
+        ax_cum.set_xlim(datetime(2025, 1, 1), datetime(2051, 1, 1))
         ax_cum.set_ylim(row_ylim_min[1], row_ylim_max[1])
         ax_cum.grid(which="both", alpha=0.3, axis="both", zorder=0)
         ax_cum.set_axisbelow(True)
@@ -1486,6 +1486,10 @@ def main():
     fig_combined = create_combined_results_and_impacts_figure(scenarios_data)
     fig_combined.savefig(OUTPUT_DIR / "results_and_impacts.pdf")
     plt.close(fig_combined)
+    
+    fig_forcing = create_radiative_forcing_figure()
+    fig_forcing.savefig(OUTPUT_DIR / "radiative_forcing.pdf")
+    plt.close(fig_forcing)
 
     # print("Creating capacity balance figure...")
     # fig_capacity = create_capacity_balance_figure(scenarios_data)
