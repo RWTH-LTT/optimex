@@ -287,7 +287,91 @@ These are independent dimensions:
 
 Both are operating in 2035, but have different efficiency based on when they were built.
 
-### Approach 1: Explicit Vintage Values
+### Defining Vintage Parameters
+
+There are **two ways** to specify vintage-dependent parameters:
+
+1. **In the database** (recommended): Store vintage data as exchange attributes
+2. **During optimization setup**: Pass vintage dictionaries to `OptimizationModelInputs`
+
+#### Method 1: Database-Level Definition (Recommended)
+
+Define vintage parameters directly in the Brightway database as exchange attributes. This approach keeps all process-specific data in one place.
+
+**Using `vintage_values` attribute:**
+
+```python
+from bw_temporalis import TemporalDistribution
+import numpy as np
+
+foreground_data = {
+    ("foreground", "EV"): {
+        "name": "Electric Vehicle",
+        "operation_time_limits": (1, 2),
+        "exchanges": [
+            # Production exchange (no vintage variation)
+            {
+                "amount": 1,
+                "type": "production",
+                "input": ("foreground", "vkm"),
+                "temporal_distribution": TemporalDistribution(...),
+                "operation": True,
+            },
+            # Electricity consumption with vintage-dependent efficiency
+            {
+                "amount": 60,  # Base amount (2020 technology)
+                "type": "technosphere",
+                "input": ("db_2020", "electricity"),
+                "temporal_distribution": TemporalDistribution(
+                    date=np.array([1, 2], dtype="timedelta64[Y]"),
+                    amount=np.array([0.5, 0.5]),
+                ),
+                "operation": True,
+                # NEW: Vintage-specific values
+                "vintage_values": {
+                    # Format: {vintage_year: amount} OR {(process_time, vintage_year): amount}
+                    (1, 2020): 30,  # τ=1, 2020 vintage: 30 MJ/vkm
+                    (2, 2020): 30,  # τ=2, 2020 vintage: 30 MJ/vkm
+                    (1, 2030): 22.5,  # τ=1, 2030 vintage: 22.5 MJ/vkm (25% improvement)
+                    (2, 2030): 22.5,  # τ=2, 2030 vintage: 22.5 MJ/vkm
+                    (1, 2040): 18,  # τ=1, 2040 vintage: 18 MJ/vkm (40% improvement)
+                    (2, 2040): 18,  # τ=2, 2040 vintage: 18 MJ/vkm
+                },
+            },
+        ],
+    }
+}
+```
+
+**Using `technology_evolution` attribute:**
+
+For uniform scaling across all process times:
+
+```python
+{
+    "amount": 60,  # Base amount
+    "type": "technosphere",
+    "input": ("db_2020", "electricity"),
+    "temporal_distribution": TemporalDistribution(...),
+    "operation": True,
+    # NEW: Technology evolution scaling factors
+    "technology_evolution": {
+        2020: 1.0,   # 100% of base (60 MJ)
+        2030: 0.75,  # 75% of base (45 MJ)
+        2040: 0.6,   # 60% of base (36 MJ)
+    },
+}
+```
+
+**Key points:**
+- Values are linearly interpolated for years between specified vintages
+- Works for production, technosphere, and biosphere exchanges
+- Extracted automatically by `LCADataProcessor`
+- No need to pass vintage dictionaries to `OptimizationModelInputs`
+
+#### Method 2: Optimization-Level Definition
+
+### Approach 1: Explicit Vintage Values (Optimization-Level)
 
 Specify exact values at reference vintage years. Values are linearly interpolated for installation years between references. The reference vintages are **automatically inferred** from the years in your vintage dictionaries.
 
@@ -317,7 +401,7 @@ model_inputs = converter.OptimizationModelInputs(
 An EV installed in 2025 (halfway between 2020 and 2030) gets:
 `60 + 0.5 × (45 - 60) = 52.5 MJ/unit`
 
-### Approach 2: Technology Evolution Scaling
+### Approach 2: Technology Evolution Scaling (Optimization-Level)
 
 Apply scaling factors to base foreground tensors. More compact when all exchanges for a process scale uniformly.
 

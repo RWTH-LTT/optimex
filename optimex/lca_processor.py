@@ -239,6 +239,13 @@ class LCADataProcessor:
         self._characterization = {}
         self._operation_flow = {}
         self._operation_time_limits = {}
+        
+        # Vintage-dependent parameters extracted from exchange attributes
+        self._foreground_technosphere_vintages = {}
+        self._foreground_biosphere_vintages = {}
+        self._foreground_production_vintages = {}
+        self._technology_evolution = {}
+        self._reference_vintages = set()
 
         self._parse_demand()
         self._construct_foreground_tensors()
@@ -336,6 +343,31 @@ class LCADataProcessor:
         """Read-only access to the internal demand technosphere tensor."""
         return self._internal_demand_technosphere
 
+    @property
+    def foreground_technosphere_vintages(self) -> dict:
+        """Read-only access to vintage-specific technosphere values."""
+        return self._foreground_technosphere_vintages if self._foreground_technosphere_vintages else None
+
+    @property
+    def foreground_biosphere_vintages(self) -> dict:
+        """Read-only access to vintage-specific biosphere values."""
+        return self._foreground_biosphere_vintages if self._foreground_biosphere_vintages else None
+
+    @property
+    def foreground_production_vintages(self) -> dict:
+        """Read-only access to vintage-specific production values."""
+        return self._foreground_production_vintages if self._foreground_production_vintages else None
+
+    @property
+    def technology_evolution(self) -> dict:
+        """Read-only access to technology evolution scaling factors."""
+        return self._technology_evolution if self._technology_evolution else None
+
+    @property
+    def reference_vintages(self) -> list:
+        """Read-only access to reference vintage years."""
+        return sorted(list(self._reference_vintages)) if self._reference_vintages else None
+
     def _parse_demand(self) -> None:
         """
         Parse and process the demand dictionary from the configuration.
@@ -397,6 +429,12 @@ class LCADataProcessor:
         It processes only process nodes (type=process_node_default) and handles
         three types of edges: production edges (to product nodes), consumption edges
         (from background or foreground products), and biosphere edges (emissions).
+        
+        Additionally, this method extracts vintage-dependent parameters from exchange
+        attributes when present:
+        - vintage_values: Dict mapping vintage years or (process_time, vintage_year) 
+          tuples to amounts
+        - technology_evolution: Dict mapping vintage years to scaling factors
 
         Side Effects
         -----------
@@ -418,6 +456,15 @@ class LCADataProcessor:
               indicating if the flow occurs during the operation phase.
             - self._operation_time_limits: dict mapping process codes to their
               operation time limits, if defined.
+            - self._foreground_technosphere_vintages: dict mapping (process_code, 
+              flow_code, process_time, vintage_year) to vintage-specific amounts.
+            - self._foreground_biosphere_vintages: dict mapping (process_code, 
+              flow_code, process_time, vintage_year) to vintage-specific amounts.
+            - self._foreground_production_vintages: dict mapping (process_code, 
+              product_code, process_time, vintage_year) to vintage-specific amounts.
+            - self._technology_evolution: dict mapping (process_code, flow_code, 
+              vintage_year) to scaling factors.
+            - self._reference_vintages: set of reference vintage years.
         """
         technosphere_tensor = {}
         internal_demand_technosphere = {}
@@ -459,6 +506,52 @@ class LCADataProcessor:
                 input_code = exc.input["code"]
                 input_name = exc.input["name"]
                 input_db = exc.input["database"]
+                
+                # Extract vintage parameters if present in exchange
+                vintage_values = exc.get("vintage_values")
+                technology_evolution_factors = exc.get("technology_evolution")
+                
+                # If vintage data is present, extract it
+                if vintage_values is not None and isinstance(vintage_values, dict):
+                    # vintage_values should be a dict: {vintage_year: amount}
+                    # or {(process_time, vintage_year): amount}
+                    for vintage_key, vintage_amount in vintage_values.items():
+                        if isinstance(vintage_key, tuple):
+                            # Explicit (process_time, vintage_year) format
+                            process_time_vintage, vintage_year = vintage_key
+                        elif isinstance(vintage_key, int):
+                            # Just vintage year - use all process times from temporal distribution
+                            vintage_year = vintage_key
+                            process_time_vintage = None  # Will be expanded for all years
+                        else:
+                            continue
+                        
+                        self._reference_vintages.add(vintage_year)
+                        
+                        # Determine which process times to apply this vintage value to
+                        if process_time_vintage is not None:
+                            process_times_to_update = [process_time_vintage]
+                        else:
+                            # Apply to all process times in temporal distribution
+                            process_times_to_update = years
+                        
+                        for tau in process_times_to_update:
+                            # Store in appropriate vintage dictionary based on edge type
+                            if edge_type == bd.labels.production_edge_default:
+                                self._foreground_production_vintages[(act["code"], input_code, tau, vintage_year)] = vintage_amount
+                            elif edge_type == bd.labels.consumption_edge_default:
+                                if input_db != self.foreground_db.name:
+                                    # Only for background consumption (technosphere)
+                                    self._foreground_technosphere_vintages[(act["code"], input_code, tau, vintage_year)] = vintage_amount
+                            elif edge_type == bd.labels.biosphere_edge_default:
+                                self._foreground_biosphere_vintages[(act["code"], input_code, tau, vintage_year)] = vintage_amount
+                
+                # Extract technology evolution scaling factors
+                if technology_evolution_factors is not None and isinstance(technology_evolution_factors, dict):
+                    # technology_evolution_factors should be a dict: {vintage_year: scaling_factor}
+                    for vintage_year, scaling_factor in technology_evolution_factors.items():
+                        self._reference_vintages.add(vintage_year)
+                        self._technology_evolution[(act["code"], input_code, vintage_year)] = scaling_factor
 
                 # Handle production edges
                 if edge_type == bd.labels.production_edge_default:
