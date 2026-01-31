@@ -97,7 +97,7 @@ def setup_monthly_resolution_databases():
                 "name": "process P1",
                 "location": "somewhere",
                 "type": bd.labels.process_node_default,
-                "operation_time_limits": (0, 11),  # 12 months of operation (0-11)
+                "operation_time_limits": (0, 11),  # 12 months: indices 0-11 inclusive
                 "exchanges": [
                     {
                         "amount": 1,
@@ -195,9 +195,9 @@ class TestMonthlyResolution:
         processor = mock_monthly_lca_data_processor
         system_time = processor.system_time
         
-        # For monthly resolution starting Jan 2020, indices should be month-based
-        # Jan 2020 = 2020*12 + 0 = 24240
-        expected_start = 2020 * 12  # 24240
+        # For monthly resolution starting Jan 2020, index = year*12 + (month-1)
+        # Jan 2020: 2020 * 12 + 0 = 24240 (months since year 0)
+        expected_start = 2020 * 12
         
         assert min(system_time) == expected_start
         # Should have at least 12 months

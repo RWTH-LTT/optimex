@@ -384,6 +384,13 @@ class LCADataProcessor:
             - self._demand: dict with keys (product_code, time_index) and values as amounts.
             - self._products: dict mapping product codes to product names.
             - self._system_time: range of time indices covering the longest demand interval.
+        
+        Notes
+        -----
+        Time indexing schemes vary by resolution:
+            - year: Uses calendar year (e.g., 2020, 2021, ...)
+            - month: Uses months since year 0 (e.g., 2020*12 + 0 = 24240 for Jan 2020)
+            - day: Uses days since Unix epoch (1970-01-01), consistent with numpy datetime64[D]
         """
         raw_demand = self.config.demand
         resolution = self.config.temporal.temporal_resolution
@@ -391,11 +398,12 @@ class LCADataProcessor:
         longest_demand_interval = 0
 
         # Compute the start index based on resolution
+        # Year: calendar year, Month: months since year 0, Day: days since Unix epoch
         if resolution == TemporalResolutionEnum.year:
             start_index = start_date.year
         elif resolution == TemporalResolutionEnum.month:
             start_index = start_date.year * 12 + start_date.month - 1
-        else:  # day
+        else:  # day - uses days since Unix epoch (1970-01-01)
             start_index = int(np.datetime64(start_date, 'D').astype(int))
 
         for product_node, td in raw_demand.items():
@@ -418,10 +426,10 @@ class LCADataProcessor:
             if resolution == TemporalResolutionEnum.year:
                 time_indices = td.date.astype(f"datetime64[{numpy_unit}]").astype(int) + 1970
             elif resolution == TemporalResolutionEnum.month:
-                # Convert to months since epoch, then add offset to get absolute month index
+                # Convert to months since epoch, then add offset to get months since year 0
                 dates_as_months = td.date.astype("datetime64[M]").astype(int)
-                time_indices = dates_as_months + 1970 * 12  # months since year 0
-            else:  # day
+                time_indices = dates_as_months + 1970 * 12
+            else:  # day - uses days since Unix epoch, consistent with numpy datetime64[D]
                 time_indices = td.date.astype("datetime64[D]").astype(int)
             
             if time_indices[-1] - start_index > longest_demand_interval:
@@ -953,22 +961,26 @@ class LCADataProcessor:
 
                     for time_idx in system_time_list:
                         # Compute cutoff based on resolution
+                        # The cutoff determines how many years of radiative forcing to sum
                         if resolution == TemporalResolutionEnum.year:
                             cutoff = start_date.year + time_horizon - time_idx - 1
                         elif resolution == TemporalResolutionEnum.month:
-                            # Convert time_idx to year for cutoff calculation
+                            # Convert time_idx to elapsed years for cutoff calculation
                             start_month_idx = start_date.year * 12 + start_date.month - 1
                             months_elapsed = time_idx - start_month_idx
-                            years_elapsed = months_elapsed / 12.0
-                            cutoff = int(time_horizon - years_elapsed - 1)
+                            # Use integer division to avoid floating-point precision issues
+                            years_elapsed = months_elapsed // 12
+                            cutoff = time_horizon - years_elapsed - 1
                         else:  # day
+                            # Note: 365.25 is used as an approximation for average days per year
+                            # This may accumulate small errors over very long time horizons
                             start_day_idx = int(np.datetime64(start_date, 'D').astype(int))
                             days_elapsed = time_idx - start_day_idx
-                            years_elapsed = days_elapsed / 365.25
-                            cutoff = int(time_horizon - years_elapsed - 1)
+                            years_elapsed = days_elapsed // 365  # Use integer division
+                            cutoff = time_horizon - years_elapsed - 1
                         
                         cutoff = max(0, cutoff)  # Ensure non-negative
-                        cumulative_rf = rf_series[:cutoff].sum() if cutoff > 0 else 0.0
+                        cumulative_rf = rf_series[:cutoff].sum()
                         characterization_tensor[(category_name, flow_code, time_idx)] = (
                             cumulative_rf
                         )
