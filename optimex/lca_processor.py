@@ -110,33 +110,12 @@ class TemporalResolutionEnum(str, Enum):
         """Return the finest (most granular) resolution from a list of resolutions."""
         return max(resolutions, key=lambda r: r.priority)
 
-    def convert_to(self, value: int, target: "TemporalResolutionEnum") -> int:
-        """
-        Convert a time index from this resolution to target resolution.
-        
-        Note: Conversion from coarser to finer resolution maps to the start of the period.
-        For example, year 1 -> month 12 (start of year 1 in months).
-        """
-        if self == target:
-            return value
-        
-        # Convert to days as intermediate representation, then to target
-        if self == TemporalResolutionEnum.year:
-            days = value * 365  # Approximate
-            months = value * 12
-        elif self == TemporalResolutionEnum.month:
-            days = value * 30  # Approximate
-            months = value
-        else:  # day
-            days = value
-            months = value // 30  # Approximate
-        
-        if target == TemporalResolutionEnum.day:
-            return days
-        elif target == TemporalResolutionEnum.month:
-            return months
-        else:  # year
-            return days // 365 if self == TemporalResolutionEnum.day else value // 12
+
+# Conversion constants used throughout the module for consistency
+# These are approximations - exact calendar calculations are not used for simplicity
+DAYS_PER_YEAR = 365  # Approximate (ignores leap years)
+DAYS_PER_MONTH = 30  # Approximate average
+MONTHS_PER_YEAR = 12  # Exact
 
 
 def detect_temporal_resolution(td: TemporalDistribution) -> TemporalResolutionEnum:
@@ -528,21 +507,25 @@ class LCADataProcessor:
         -------
         Tuple[np.ndarray, np.ndarray]
             Converted time indices and amounts in target resolution.
+        
+        Notes
+        -----
+        Conversion uses approximate factors defined in module constants:
+        - MONTHS_PER_YEAR = 12 (exact)
+        - DAYS_PER_MONTH = 30 (approximate average)
+        - DAYS_PER_YEAR = 365 (approximate, ignores leap years)
         """
         if source_resolution == target_resolution:
             return time_indices, amounts
         
-        # Define conversion factors
-        # year -> month: multiply by 12
-        # month -> day: multiply by 30 (approximate)
-        # year -> day: multiply by 365 (approximate)
+        # Define conversion factors using module constants
         conversion_factors = {
-            (TemporalResolutionEnum.year, TemporalResolutionEnum.month): 12,
-            (TemporalResolutionEnum.year, TemporalResolutionEnum.day): 365,
-            (TemporalResolutionEnum.month, TemporalResolutionEnum.day): 30,
-            (TemporalResolutionEnum.month, TemporalResolutionEnum.year): 1/12,
-            (TemporalResolutionEnum.day, TemporalResolutionEnum.month): 1/30,
-            (TemporalResolutionEnum.day, TemporalResolutionEnum.year): 1/365,
+            (TemporalResolutionEnum.year, TemporalResolutionEnum.month): MONTHS_PER_YEAR,
+            (TemporalResolutionEnum.year, TemporalResolutionEnum.day): DAYS_PER_YEAR,
+            (TemporalResolutionEnum.month, TemporalResolutionEnum.day): DAYS_PER_MONTH,
+            (TemporalResolutionEnum.month, TemporalResolutionEnum.year): 1 / MONTHS_PER_YEAR,
+            (TemporalResolutionEnum.day, TemporalResolutionEnum.month): 1 / DAYS_PER_MONTH,
+            (TemporalResolutionEnum.day, TemporalResolutionEnum.year): 1 / DAYS_PER_YEAR,
         }
         
         factor = conversion_factors.get((source_resolution, target_resolution))
