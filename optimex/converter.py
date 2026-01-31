@@ -1115,7 +1115,7 @@ class ModelInputManager:
             "foreground_technosphere_vintages": lca_processor.foreground_technosphere_vintages,
             "foreground_biosphere_vintages": lca_processor.foreground_biosphere_vintages,
             "foreground_production_vintages": lca_processor.foreground_production_vintages,
-            "technology_evolution": lca_processor.technology_evolution,
+            "technology_evolution": lca_processor.vintage_improvements,
             # Optional constraints not populated by default
             "category_impact_limits": None,
             "cumulative_category_impact_limits": None,

@@ -1139,7 +1139,7 @@ class TestDatabaseVintageParameterExtraction:
                         "operation": True,
                     },
                     {
-                        "amount": 60,  # Base amount (will be overridden by vintage_values)
+                        "amount": 60,  # Base amount (will be overridden by vintage_amounts)
                         "type": bd.labels.consumption_edge_default,
                         "input": ("db_2020", "electricity"),
                         "temporal_distribution": TemporalDistribution(
@@ -1148,7 +1148,7 @@ class TestDatabaseVintageParameterExtraction:
                         ),
                         "operation": True,
                         # NEW: Vintage-specific values
-                        "vintage_values": {
+                        "vintage_amounts": {
                             (1, 2020): 30,  # τ=1, 2020 vintage: 30 MJ/vkm
                             (2, 2020): 30,  # τ=2, 2020 vintage: 30 MJ/vkm
                             (1, 2030): 22.5,  # τ=1, 2030 vintage: 22.5 MJ/vkm
@@ -1163,8 +1163,8 @@ class TestDatabaseVintageParameterExtraction:
                             date=np.array([0], dtype="timedelta64[Y]"),
                             amount=np.array([1.0]),
                         ),
-                        # Technology evolution scaling
-                        "technology_evolution": {
+                        # Vintage improvement scaling
+                        "vintage_improvements": {
                             2020: 1.0,   # 100% of base (5000 kg)
                             2030: 0.8,   # 80% of base (4000 kg)
                         },
@@ -1181,8 +1181,8 @@ class TestDatabaseVintageParameterExtraction:
 
         return fg_db
 
-    def test_lca_processor_extracts_vintage_values(self, database_with_vintage_params):
-        """Test that LCADataProcessor extracts vintage_values from exchanges."""
+    def test_lca_processor_extracts_vintage_amounts(self, database_with_vintage_params):
+        """Test that LCADataProcessor extracts vintage_amounts from exchanges."""
         from datetime import datetime
         import bw2data as bd
         import numpy as np
@@ -1230,8 +1230,8 @@ class TestDatabaseVintageParameterExtraction:
         assert ("EV", "electricity", 1, 2030) in processor.foreground_technosphere_vintages
         assert processor.foreground_technosphere_vintages[("EV", "electricity", 1, 2030)] == 22.5
 
-    def test_lca_processor_extracts_technology_evolution(self, database_with_vintage_params):
-        """Test that LCADataProcessor extracts technology_evolution from exchanges."""
+    def test_lca_processor_extracts_vintage_improvements(self, database_with_vintage_params):
+        """Test that LCADataProcessor extracts vintage_improvements from exchanges."""
         from datetime import datetime
         import bw2data as bd
         import numpy as np
@@ -1269,15 +1269,15 @@ class TestDatabaseVintageParameterExtraction:
         # Run processor
         processor = lca_processor.LCADataProcessor(config)
 
-        # Verify technology evolution was extracted
-        assert processor.technology_evolution is not None
-        assert len(processor.technology_evolution) > 0
+        # Verify vintage improvements were extracted
+        assert processor.vintage_improvements is not None
+        assert len(processor.vintage_improvements) > 0
         
-        # Check specific technology evolution values
-        assert ("EV", "CO2", 2020) in processor.technology_evolution
-        assert processor.technology_evolution[("EV", "CO2", 2020)] == 1.0
-        assert ("EV", "CO2", 2030) in processor.technology_evolution
-        assert processor.technology_evolution[("EV", "CO2", 2030)] == 0.8
+        # Check specific vintage improvement values
+        assert ("EV", "CO2", 2020) in processor.vintage_improvements
+        assert processor.vintage_improvements[("EV", "CO2", 2020)] == 1.0
+        assert ("EV", "CO2", 2030) in processor.vintage_improvements
+        assert processor.vintage_improvements[("EV", "CO2", 2030)] == 0.8
 
     def test_model_input_manager_uses_database_vintages(self, database_with_vintage_params):
         """Test that ModelInputManager includes vintage parameters from database."""

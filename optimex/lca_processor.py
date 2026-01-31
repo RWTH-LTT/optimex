@@ -244,7 +244,7 @@ class LCADataProcessor:
         self._foreground_technosphere_vintages = {}
         self._foreground_biosphere_vintages = {}
         self._foreground_production_vintages = {}
-        self._technology_evolution = {}
+        self._vintage_improvements = {}
         self._reference_vintages = set()
 
         self._parse_demand()
@@ -359,9 +359,9 @@ class LCADataProcessor:
         return self._foreground_production_vintages if self._foreground_production_vintages else None
 
     @property
-    def technology_evolution(self) -> Optional[dict]:
-        """Read-only access to technology evolution scaling factors."""
-        return self._technology_evolution if self._technology_evolution else None
+    def vintage_improvements(self) -> Optional[dict]:
+        """Read-only access to vintage improvement scaling factors."""
+        return self._vintage_improvements if self._vintage_improvements else None
 
     @property
     def reference_vintages(self) -> Optional[list]:
@@ -432,9 +432,9 @@ class LCADataProcessor:
         
         Additionally, this method extracts vintage-dependent parameters from exchange
         attributes when present:
-        - vintage_values: Dict mapping vintage years or (process_time, vintage_year) 
+        - vintage_improvements: Dict mapping vintage years to scaling factors
+        - vintage_amounts: Dict mapping vintage years or (process_time, vintage_year) 
           tuples to amounts
-        - technology_evolution: Dict mapping vintage years to scaling factors
 
         Side Effects
         -----------
@@ -462,7 +462,7 @@ class LCADataProcessor:
               flow_code, process_time, vintage_year) to vintage-specific amounts.
             - self._foreground_production_vintages: dict mapping (process_code, 
               product_code, process_time, vintage_year) to vintage-specific amounts.
-            - self._technology_evolution: dict mapping (process_code, flow_code, 
+            - self._vintage_improvements: dict mapping (process_code, flow_code, 
               vintage_year) to scaling factors.
             - self._reference_vintages: set of reference vintage years.
         """
@@ -511,27 +511,39 @@ class LCADataProcessor:
                 # Vintage parameters allow foreground exchanges to vary based on installation year.
                 # Two attributes are supported on exchanges:
                 #
-                # 1. vintage_values: Dict mapping vintage years to amounts
-                #    Format: {vintage_year: amount} OR {(process_time, vintage_year): amount}
-                #    Example: {2020: 60, 2030: 45} or {(1, 2020): 60, (1, 2030): 45}
-                #
-                # 2. technology_evolution: Dict mapping vintage years to scaling factors
+                # 1. vintage_improvements: Dict mapping vintage years to scaling factors
                 #    Format: {vintage_year: scaling_factor}
                 #    Example: {2020: 1.0, 2030: 0.75}
+                #
+                # 2. vintage_amounts: Dict mapping vintage years to amounts
+                #    Format: {vintage_year: amount} OR {(process_time, vintage_year): amount}
+                #    Example: {2020: 60, 2030: 45} or {(1, 2020): 60, (1, 2030): 45}
                 # ==========================================================================
                 
-                vintage_values = exc.get("vintage_values")
-                technology_evolution_factors = exc.get("technology_evolution")
+                vintage_amounts = exc.get("vintage_amounts")
+                vintage_improvements = exc.get("vintage_improvements")
                 
-                # Process vintage_values attribute if present
-                if vintage_values is not None:
-                    if not isinstance(vintage_values, dict):
+                # Process vintage_improvements attribute if present
+                if vintage_improvements is not None:
+                    if not isinstance(vintage_improvements, dict):
                         logger.warning(
-                            f"vintage_values on exchange {exc.input} must be a dict, "
-                            f"got {type(vintage_values).__name__}. Skipping vintage extraction."
+                            f"vintage_improvements on exchange {exc.input} must be a dict, "
+                            f"got {type(vintage_improvements).__name__}. Skipping."
                         )
                     else:
-                        for vintage_key, vintage_amount in vintage_values.items():
+                        for vintage_year, scaling_factor in vintage_improvements.items():
+                            self._reference_vintages.add(vintage_year)
+                            self._vintage_improvements[(act["code"], input_code, vintage_year)] = scaling_factor
+                
+                # Process vintage_amounts attribute if present
+                if vintage_amounts is not None:
+                    if not isinstance(vintage_amounts, dict):
+                        logger.warning(
+                            f"vintage_amounts on exchange {exc.input} must be a dict, "
+                            f"got {type(vintage_amounts).__name__}. Skipping vintage extraction."
+                        )
+                    else:
+                        for vintage_key, vintage_amount in vintage_amounts.items():
                             if isinstance(vintage_key, tuple):
                                 # Explicit (process_time, vintage_year) format
                                 process_time_vintage, vintage_year = vintage_key
@@ -541,7 +553,7 @@ class LCADataProcessor:
                                 process_time_vintage = None  # Will be expanded for all years
                             else:
                                 logger.warning(
-                                    f"Invalid vintage_values key {vintage_key} on exchange {exc.input}. "
+                                    f"Invalid vintage_amounts key {vintage_key} on exchange {exc.input}. "
                                     f"Must be int (vintage year) or tuple (process_time, vintage_year)."
                                 )
                                 continue
@@ -565,18 +577,6 @@ class LCADataProcessor:
                                         self._foreground_technosphere_vintages[(act["code"], input_code, tau, vintage_year)] = vintage_amount
                                 elif edge_type == bd.labels.biosphere_edge_default:
                                     self._foreground_biosphere_vintages[(act["code"], input_code, tau, vintage_year)] = vintage_amount
-                
-                # Process technology_evolution attribute if present
-                if technology_evolution_factors is not None:
-                    if not isinstance(technology_evolution_factors, dict):
-                        logger.warning(
-                            f"technology_evolution on exchange {exc.input} must be a dict, "
-                            f"got {type(technology_evolution_factors).__name__}. Skipping."
-                        )
-                    else:
-                        for vintage_year, scaling_factor in technology_evolution_factors.items():
-                            self._reference_vintages.add(vintage_year)
-                            self._technology_evolution[(act["code"], input_code, vintage_year)] = scaling_factor
 
                 # Handle production edges
                 if edge_type == bd.labels.production_edge_default:
