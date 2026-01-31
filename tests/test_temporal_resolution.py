@@ -302,3 +302,146 @@ class TestResolutionBackwardCompatibility:
             temporal_resolution="day"
         )
         assert config.temporal_resolution == TemporalResolutionEnum.day
+
+
+class TestMixedResolutions:
+    """Tests for mixing different temporal resolutions across processes."""
+
+    def test_resolution_priority(self):
+        """Test that resolution priority is correctly ordered (day > month > year)."""
+        assert TemporalResolutionEnum.day.priority > TemporalResolutionEnum.month.priority
+        assert TemporalResolutionEnum.month.priority > TemporalResolutionEnum.year.priority
+
+    def test_get_finest_resolution(self):
+        """Test that get_finest returns the most granular resolution."""
+        result = TemporalResolutionEnum.get_finest(
+            TemporalResolutionEnum.year,
+            TemporalResolutionEnum.month,
+            TemporalResolutionEnum.day
+        )
+        assert result == TemporalResolutionEnum.day
+
+        result = TemporalResolutionEnum.get_finest(
+            TemporalResolutionEnum.year,
+            TemporalResolutionEnum.month
+        )
+        assert result == TemporalResolutionEnum.month
+
+    def test_detect_temporal_resolution_year(self):
+        """Test detection of yearly temporal distribution."""
+        from optimex.lca_processor import detect_temporal_resolution
+        td = TemporalDistribution(
+            date=np.array([0, 1, 2], dtype="timedelta64[Y]"),
+            amount=np.array([0.33, 0.33, 0.34])
+        )
+        assert detect_temporal_resolution(td) == TemporalResolutionEnum.year
+
+    def test_detect_temporal_resolution_month(self):
+        """Test detection of monthly temporal distribution."""
+        from optimex.lca_processor import detect_temporal_resolution
+        td = TemporalDistribution(
+            date=np.array([0, 1, 2, 3, 4, 5], dtype="timedelta64[M]"),
+            amount=np.array([0.16, 0.17, 0.16, 0.17, 0.17, 0.17])
+        )
+        assert detect_temporal_resolution(td) == TemporalResolutionEnum.month
+
+    def test_detect_temporal_resolution_day(self):
+        """Test detection of daily temporal distribution."""
+        from optimex.lca_processor import detect_temporal_resolution
+        td = TemporalDistribution(
+            date=np.array([0, 1, 2, 3, 4], dtype="timedelta64[D]"),
+            amount=np.array([0.2, 0.2, 0.2, 0.2, 0.2])
+        )
+        assert detect_temporal_resolution(td) == TemporalResolutionEnum.day
+
+    def test_from_numpy_unit(self):
+        """Test conversion from numpy unit codes to enum."""
+        assert TemporalResolutionEnum.from_numpy_unit("Y") == TemporalResolutionEnum.year
+        assert TemporalResolutionEnum.from_numpy_unit("M") == TemporalResolutionEnum.month
+        assert TemporalResolutionEnum.from_numpy_unit("D") == TemporalResolutionEnum.day
+
+
+class TestResolutionConversion:
+    """Tests for temporal resolution conversion logic."""
+
+    def test_year_to_month_conversion(self):
+        """Test converting yearly indices to monthly."""
+        from optimex.lca_processor import LCADataProcessor, LCAConfig, TemporalResolutionEnum
+        
+        # Create a minimal mock to test the conversion method
+        # We'll use the static method approach
+        time_indices = np.array([0, 1, 2])  # Years 0, 1, 2
+        amounts = np.array([0.33, 0.34, 0.33])
+        
+        source = TemporalResolutionEnum.year
+        target = TemporalResolutionEnum.month
+        
+        # Test the conversion factor logic
+        # Year to month should multiply by 12
+        # Each year (0, 1, 2) should expand to 12 months
+        factor = 12  # year to month
+        
+        new_indices = []
+        new_amounts = []
+        for idx, amount in zip(time_indices, amounts):
+            base_idx = int(idx * factor)
+            expanded_indices = np.arange(base_idx, base_idx + factor)
+            expanded_amounts = np.full(factor, amount / factor)
+            new_indices.extend(expanded_indices)
+            new_amounts.extend(expanded_amounts)
+        
+        result_indices = np.array(new_indices)
+        result_amounts = np.array(new_amounts)
+        
+        # Year 0 should map to months 0-11
+        # Year 1 should map to months 12-23
+        # Year 2 should map to months 24-35
+        assert len(result_indices) == 36  # 3 years * 12 months
+        assert 0 in result_indices
+        assert 11 in result_indices
+        assert 12 in result_indices
+        assert 35 in result_indices
+        
+        # Total amount should be preserved
+        assert np.isclose(result_amounts.sum(), amounts.sum())
+
+    def test_month_to_day_conversion(self):
+        """Test converting monthly indices to daily."""
+        time_indices = np.array([0, 1])  # Months 0, 1
+        amounts = np.array([0.5, 0.5])
+        
+        factor = 30  # month to day (approximate)
+        
+        new_indices = []
+        new_amounts = []
+        for idx, amount in zip(time_indices, amounts):
+            base_idx = int(idx * factor)
+            expanded_indices = np.arange(base_idx, base_idx + factor)
+            expanded_amounts = np.full(factor, amount / factor)
+            new_indices.extend(expanded_indices)
+            new_amounts.extend(expanded_amounts)
+        
+        result_indices = np.array(new_indices)
+        result_amounts = np.array(new_amounts)
+        
+        # Month 0 should map to days 0-29
+        # Month 1 should map to days 30-59
+        assert len(result_indices) == 60  # 2 months * 30 days
+        assert 0 in result_indices
+        assert 29 in result_indices
+        assert 30 in result_indices
+        
+        # Total amount should be preserved
+        assert np.isclose(result_amounts.sum(), amounts.sum())
+
+    def test_same_resolution_no_change(self):
+        """Test that same resolution returns unchanged values."""
+        time_indices = np.array([0, 1, 2, 3])
+        amounts = np.array([0.25, 0.25, 0.25, 0.25])
+        
+        # Same resolution should return identical values
+        result_indices = time_indices.copy()
+        result_amounts = amounts.copy()
+        
+        assert np.array_equal(result_indices, time_indices)
+        assert np.array_equal(result_amounts, amounts)

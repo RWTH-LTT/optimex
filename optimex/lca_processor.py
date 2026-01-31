@@ -83,6 +83,132 @@ class TemporalResolutionEnum(str, Enum):
         }
         return mapping[self.value]
 
+    @property
+    def priority(self) -> int:
+        """Return priority for resolution comparison (higher = finer granularity)."""
+        mapping = {
+            "year": 1,
+            "month": 2,
+            "day": 3,
+        }
+        return mapping[self.value]
+
+    @staticmethod
+    def from_numpy_unit(unit: str) -> "TemporalResolutionEnum":
+        """Convert numpy timedelta64 unit code to TemporalResolutionEnum."""
+        mapping = {
+            "Y": TemporalResolutionEnum.year,
+            "M": TemporalResolutionEnum.month,
+            "D": TemporalResolutionEnum.day,
+        }
+        if unit not in mapping:
+            raise ValueError(f"Unsupported numpy unit: {unit}. Supported: Y, M, D")
+        return mapping[unit]
+
+    @staticmethod
+    def get_finest(*resolutions: "TemporalResolutionEnum") -> "TemporalResolutionEnum":
+        """Return the finest (most granular) resolution from a list of resolutions."""
+        return max(resolutions, key=lambda r: r.priority)
+
+    def convert_to(self, value: int, target: "TemporalResolutionEnum") -> int:
+        """
+        Convert a time index from this resolution to target resolution.
+        
+        Note: Conversion from coarser to finer resolution maps to the start of the period.
+        For example, year 1 -> month 12 (start of year 1 in months).
+        """
+        if self == target:
+            return value
+        
+        # Convert to days as intermediate representation, then to target
+        if self == TemporalResolutionEnum.year:
+            days = value * 365  # Approximate
+            months = value * 12
+        elif self == TemporalResolutionEnum.month:
+            days = value * 30  # Approximate
+            months = value
+        else:  # day
+            days = value
+            months = value // 30  # Approximate
+        
+        if target == TemporalResolutionEnum.day:
+            return days
+        elif target == TemporalResolutionEnum.month:
+            return months
+        else:  # year
+            return days // 365 if self == TemporalResolutionEnum.day else value // 12
+
+
+def detect_temporal_resolution(td: TemporalDistribution) -> TemporalResolutionEnum:
+    """
+    Detect the temporal resolution of a TemporalDistribution based on its date values.
+    
+    Since bw_temporalis converts all timedelta64 to seconds internally, we infer
+    the resolution from the value patterns:
+    - 1 year ≈ 31,556,952 seconds
+    - 1 month ≈ 2,629,746 seconds
+    - 1 day = 86,400 seconds
+    
+    Parameters
+    ----------
+    td : TemporalDistribution
+        The temporal distribution to analyze.
+    
+    Returns
+    -------
+    TemporalResolutionEnum
+        The detected resolution (year, month, or day).
+    """
+    if td.date.size == 0:
+        return TemporalResolutionEnum.year  # Default
+    
+    # Constants for time conversions (in seconds)
+    SECONDS_PER_DAY = 86400
+    SECONDS_PER_MONTH = 2629746  # ~30.44 days
+    SECONDS_PER_YEAR = 31556952  # 365.2425 days
+    
+    # Get the values in seconds
+    values = td.date.astype('timedelta64[s]').astype(int)
+    
+    # If only one value (possibly 0), check the dtype string as fallback
+    dtype_str = str(td.date.dtype)
+    if "[Y]" in dtype_str:
+        return TemporalResolutionEnum.year
+    elif "[M]" in dtype_str:
+        return TemporalResolutionEnum.month
+    elif "[D]" in dtype_str:
+        return TemporalResolutionEnum.day
+    
+    # Get non-zero values to analyze the step size
+    non_zero = values[values != 0]
+    if len(non_zero) == 0:
+        # All zeros or single zero, try to infer from dtype or default
+        return TemporalResolutionEnum.year
+    
+    # Get the minimum non-zero value or the GCD of differences
+    if len(values) > 1:
+        # Calculate differences between consecutive values
+        diffs = np.diff(values)
+        non_zero_diffs = diffs[diffs != 0]
+        if len(non_zero_diffs) > 0:
+            step = np.min(np.abs(non_zero_diffs))
+        else:
+            step = np.min(np.abs(non_zero))
+    else:
+        step = np.min(np.abs(non_zero))
+    
+    # Determine resolution based on step size
+    # Allow 10% tolerance for rounding
+    if step >= SECONDS_PER_YEAR * 0.9:
+        return TemporalResolutionEnum.year
+    elif step >= SECONDS_PER_MONTH * 0.9:
+        return TemporalResolutionEnum.month
+    elif step >= SECONDS_PER_DAY * 0.9:
+        return TemporalResolutionEnum.day
+    else:
+        # Sub-day resolution not supported, default to day
+        return TemporalResolutionEnum.day
+
 
 class CharacterizationMethodConfig(BaseModel):
     """
@@ -370,6 +496,88 @@ class LCADataProcessor:
         """Read-only access to the internal demand technosphere tensor."""
         return self._internal_demand_technosphere
 
+    def _convert_temporal_resolution(
+        self,
+        time_indices: np.ndarray,
+        amounts: np.ndarray,
+        source_resolution: TemporalResolutionEnum,
+        target_resolution: TemporalResolutionEnum,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Convert time indices and amounts from one temporal resolution to another.
+        
+        When converting from coarser to finer resolution (e.g., year to month),
+        each time point is expanded. The amount is distributed uniformly across
+        the expanded time points.
+        
+        When converting from finer to coarser resolution (e.g., month to year),
+        time points are aggregated. This scenario is less common but supported.
+        
+        Parameters
+        ----------
+        time_indices : np.ndarray
+            Array of time indices in source resolution.
+        amounts : np.ndarray
+            Array of amounts corresponding to each time index.
+        source_resolution : TemporalResolutionEnum
+            The resolution of the input time indices.
+        target_resolution : TemporalResolutionEnum
+            The desired output resolution.
+        
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            Converted time indices and amounts in target resolution.
+        """
+        if source_resolution == target_resolution:
+            return time_indices, amounts
+        
+        # Define conversion factors
+        # year -> month: multiply by 12
+        # month -> day: multiply by 30 (approximate)
+        # year -> day: multiply by 365 (approximate)
+        conversion_factors = {
+            (TemporalResolutionEnum.year, TemporalResolutionEnum.month): 12,
+            (TemporalResolutionEnum.year, TemporalResolutionEnum.day): 365,
+            (TemporalResolutionEnum.month, TemporalResolutionEnum.day): 30,
+            (TemporalResolutionEnum.month, TemporalResolutionEnum.year): 1/12,
+            (TemporalResolutionEnum.day, TemporalResolutionEnum.month): 1/30,
+            (TemporalResolutionEnum.day, TemporalResolutionEnum.year): 1/365,
+        }
+        
+        factor = conversion_factors.get((source_resolution, target_resolution))
+        if factor is None:
+            raise ValueError(
+                f"Unsupported resolution conversion: {source_resolution} -> {target_resolution}"
+            )
+        
+        if factor >= 1:
+            # Expanding: coarser to finer resolution
+            factor = int(factor)
+            new_time_indices = []
+            new_amounts = []
+            
+            for idx, amount in zip(time_indices, amounts):
+                # Create expanded time points
+                base_idx = int(idx * factor)
+                expanded_indices = np.arange(base_idx, base_idx + factor)
+                # Distribute amount uniformly across expanded time points
+                expanded_amounts = np.full(factor, amount / factor)
+                new_time_indices.extend(expanded_indices)
+                new_amounts.extend(expanded_amounts)
+            
+            return np.array(new_time_indices), np.array(new_amounts)
+        else:
+            # Aggregating: finer to coarser resolution (less common)
+            inverse_factor = int(1 / factor)
+            aggregated = {}
+            
+            for idx, amount in zip(time_indices, amounts):
+                target_idx = int(idx // inverse_factor)
+                aggregated[target_idx] = aggregated.get(target_idx, 0) + amount
+            
+            return np.array(list(aggregated.keys())), np.array(list(aggregated.values()))
+
     def _parse_demand(self) -> None:
         """
         Parse and process the demand dictionary from the configuration.
@@ -460,6 +668,11 @@ class LCADataProcessor:
         three types of edges: production edges (to product nodes), consumption edges
         (from background or foreground products), and biosphere edges (emissions).
 
+        Mixed temporal resolutions are supported: exchanges can have different temporal
+        resolutions (year, month, day), and the system will convert them to the configured
+        resolution. When an exchange uses a coarser resolution than configured, its values
+        are expanded to the finer resolution.
+
         Side Effects
         -----------
         Updates the following instance attributes:
@@ -486,8 +699,8 @@ class LCADataProcessor:
         production_tensor = {}
         biosphere_tensor = {}
         
-        resolution = self.config.temporal.temporal_resolution
-        numpy_unit = resolution.numpy_unit
+        target_resolution = self.config.temporal.temporal_resolution
+        target_numpy_unit = target_resolution.numpy_unit
 
         for act in self.foreground_db:
             # Only process nodes (not product nodes)
@@ -504,16 +717,31 @@ class LCADataProcessor:
                 temporal_dist = exc.get(
                     "temporal_distribution",
                     TemporalDistribution(
-                        date=np.array([0], dtype=f"timedelta64[{numpy_unit}]"), amount=np.array([1])
+                        date=np.array([0], dtype=f"timedelta64[{target_numpy_unit}]"), amount=np.array([1])
                     ),
-                )                
-                # Convert timedelta to process time indices based on resolution
-                time_indices = temporal_dist.date.astype(f"timedelta64[{numpy_unit}]").astype(int)
+                )
+                
+                # Detect the resolution of this temporal distribution
+                source_resolution = detect_temporal_resolution(temporal_dist)
+                source_numpy_unit = source_resolution.numpy_unit
+                
+                # Convert timedelta to process time indices
+                # First convert to source resolution, then to target if needed
+                raw_time_indices = temporal_dist.date.astype(f"timedelta64[{source_numpy_unit}]").astype(int)
+                temporal_factor = temporal_dist.amount
+                
+                # Convert to target resolution if different
+                if source_resolution != target_resolution:
+                    time_indices, temporal_factor = self._convert_temporal_resolution(
+                        raw_time_indices, temporal_factor, source_resolution, target_resolution
+                    )
+                else:
+                    time_indices = raw_time_indices
+                
                 # Ensure all time indices are included in process time
                 self._process_time.update(
                     idx for idx in time_indices if idx not in self._process_time
                 )
-                temporal_factor = temporal_dist.amount
 
                 # Skip if temporal distribution is missing or invalid (empty arrays)
                 if time_indices.size == 0 or temporal_factor.size == 0:
