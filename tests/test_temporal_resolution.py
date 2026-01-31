@@ -445,3 +445,45 @@ class TestResolutionConversion:
         
         assert np.array_equal(result_indices, time_indices)
         assert np.array_equal(result_amounts, amounts)
+
+
+class TestSeasonalCharacterization:
+    """Tests for seasonal/dynamic characterization factors."""
+
+    def test_seasonal_metric_enum_exists(self):
+        """Test that SEASONAL metric is available in the enum."""
+        from optimex.lca_processor import MetricEnum
+        assert MetricEnum.SEASONAL == "SEASONAL"
+
+    def test_seasonal_factors_config_accepted(self):
+        """Test that seasonal_factors config is accepted."""
+        from optimex.lca_processor import CharacterizationMethodConfig
+        
+        seasonal_factors = {
+            1: 0.6, 2: 0.7, 3: 0.8, 4: 1.0, 5: 1.2, 6: 1.5,
+            7: 1.8, 8: 1.8, 9: 1.3, 10: 1.0, 11: 0.8, 12: 0.6,
+        }
+        
+        config = CharacterizationMethodConfig(
+            category_name="water_scarcity",
+            brightway_method=("water", "test"),
+            metric="SEASONAL",
+            seasonal_factors=seasonal_factors,
+        )
+        
+        assert config.metric.value == "SEASONAL"
+        assert config.seasonal_factors == seasonal_factors
+        assert config.dynamic is True
+
+    def test_static_method_no_seasonal_factors(self):
+        """Test that static methods don't require seasonal_factors."""
+        from optimex.lca_processor import CharacterizationMethodConfig
+        
+        config = CharacterizationMethodConfig(
+            category_name="climate_change",
+            brightway_method=("GWP", "test"),
+            metric=None,
+        )
+        
+        assert config.seasonal_factors is None
+        assert config.dynamic is False

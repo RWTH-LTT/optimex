@@ -33,10 +33,12 @@ class MetricEnum(str, Enum):
     Attributes:
         GWP: Global Warming Potential - time-dependent radiative forcing metric
         CRF: Cumulative Radiative Forcing - integrated radiative forcing over time horizon
+        SEASONAL: Seasonal/time-varying characterization factors provided by user
     """
 
     GWP = "GWP"
     CRF = "CRF"
+    SEASONAL = "SEASONAL"
 
 
 class TemporalResolutionEnum(str, Enum):
@@ -200,7 +202,10 @@ class CharacterizationMethodConfig(BaseModel):
             (e.g., ('GWP', 'example') or ('IPCC', 'climate change', 'GWP 100a')).
         metric: Impact metric used for dynamic characterization.
             None implies static method.
-            Supported values: 'GWP', 'CRF'.
+            Supported values: 'GWP', 'CRF', 'SEASONAL'.
+        seasonal_factors: Optional dict mapping month number (1-12) to characterization 
+            factor multipliers. Required when metric='SEASONAL'. Applied multiplicatively 
+            to base characterization factors from brightway_method.
     """
 
     category_name: str = Field(
@@ -220,7 +225,13 @@ class CharacterizationMethodConfig(BaseModel):
     metric: Optional[MetricEnum] = Field(
         None,
         description="Impact metric for dynamic characterization. "
-        "Use None for static methods.",
+        "Use None for static methods. 'SEASONAL' for user-provided time-varying factors.",
+    )
+    seasonal_factors: Optional[Dict[int, float]] = Field(
+        None,
+        description="Optional dict mapping month number (1-12) to characterization "
+        "factor multipliers. Required when metric='SEASONAL'. Applied multiplicatively "
+        "to base characterization factors from brightway_method.",
     )
 
     @property
@@ -1197,6 +1208,46 @@ class LCADataProcessor:
                         )
                 logger.info(
                     f"Dynamic CRF characterization for {category_name} completed."
+                )
+
+            elif metric == MetricEnum.SEASONAL:
+                # Seasonal/time-varying characterization factors
+                # Get base characterization factors from the method
+                method_data = bd.Method(method).load()
+                method_dict = {flow: value for flow, value in method_data if value != 0}
+                
+                # Get seasonal factors from config
+                seasonal_factors = config.seasonal_factors
+                if seasonal_factors is None:
+                    raise ValueError(
+                        f"seasonal_factors must be provided when metric='SEASONAL' "
+                        f"for category '{category_name}'"
+                    )
+                
+                for _, row in df.iterrows():
+                    flow_code, flow_id = row["code"], row["flow"]
+                    if flow_id in method_dict:
+                        base_cf = method_dict[flow_id]
+                        
+                        for time_idx in system_time_list:
+                            # Get the corresponding date for this time index
+                            date = time_index_to_date.get(time_idx)
+                            if date is not None:
+                                # Extract month (1-12) from the date
+                                month = date.month
+                                # Get seasonal factor, default to 1.0 if not specified
+                                seasonal_factor = seasonal_factors.get(month, 1.0)
+                                cf = base_cf * seasonal_factor
+                            else:
+                                cf = base_cf
+                            
+                            characterization_tensor[
+                                (category_name, flow_code, time_idx)
+                            ] = cf
+                
+                logger.info(
+                    f"Seasonal characterization for {category_name} completed "
+                    f"with {len(seasonal_factors)} monthly factors."
                 )
 
             else:
