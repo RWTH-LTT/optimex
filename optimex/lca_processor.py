@@ -28,7 +28,7 @@ from tqdm import tqdm
 
 class MetricEnum(str, Enum):
     """
-    Supported metrics for dynamic impact characterization.
+    Supported metrics for dynamic impact characterization using the dynamic_characterization package.
 
     Attributes:
         GWP: Global Warming Potential - time-dependent radiative forcing metric
@@ -44,24 +44,181 @@ class TemporalResolutionEnum(str, Enum):
     Supported temporal resolutions for the optimization model.
 
     Attributes:
-        year: Annual time steps (currently the only supported resolution)
+        year: Annual time steps
+        month: Monthly time steps
+        day: Daily time steps
     """
 
     year = "year"
+    month = "month"
+    day = "day"
+
+    @property
+    def numpy_unit(self) -> str:
+        """Return the numpy timedelta64/datetime64 unit code for this resolution."""
+        mapping = {
+            "year": "Y",
+            "month": "M",
+            "day": "D",
+        }
+        return mapping[self.value]
+
+    @property
+    def pandas_freq(self) -> str:
+        """Return the pandas frequency string for date_range with this resolution."""
+        mapping = {
+            "year": "YE",
+            "month": "ME",
+            "day": "D",
+        }
+        return mapping[self.value]
+
+    @property
+    def pandas_offset(self) -> str:
+        """Return the pandas DateOffset attribute name for this resolution."""
+        mapping = {
+            "year": "year",
+            "month": "month",
+            "day": "day",
+        }
+        return mapping[self.value]
+
+    @property
+    def priority(self) -> int:
+        """Return priority for resolution comparison (higher = finer granularity)."""
+        mapping = {
+            "year": 1,
+            "month": 2,
+            "day": 3,
+        }
+        return mapping[self.value]
+
+    @staticmethod
+    def from_numpy_unit(unit: str) -> "TemporalResolutionEnum":
+        """Convert numpy timedelta64 unit code to TemporalResolutionEnum."""
+        mapping = {
+            "Y": TemporalResolutionEnum.year,
+            "M": TemporalResolutionEnum.month,
+            "D": TemporalResolutionEnum.day,
+        }
+        if unit not in mapping:
+            raise ValueError(f"Unsupported numpy unit: {unit}. Supported: Y, M, D")
+        return mapping[unit]
+
+    @staticmethod
+    def get_finest(*resolutions: "TemporalResolutionEnum") -> "TemporalResolutionEnum":
+        """Return the finest (most granular) resolution from a list of resolutions."""
+        return max(resolutions, key=lambda r: r.priority)
+
+
+# Conversion constants used throughout the module for consistency
+# These are approximations - exact calendar calculations are not used for simplicity
+DAYS_PER_YEAR = 365  # Approximate (ignores leap years)
+DAYS_PER_MONTH = 30  # Approximate average
+MONTHS_PER_YEAR = 12  # Exact
+
+
+def detect_temporal_resolution(td: TemporalDistribution) -> TemporalResolutionEnum:
+    """
+    Detect the temporal resolution of a TemporalDistribution based on its date values.
+    
+    Since bw_temporalis converts all timedelta64 to seconds internally, we infer
+    the resolution from the value patterns:
+    - 1 year ≈ 31,556,952 seconds
+    - 1 month ≈ 2,629,746 seconds
+    - 1 day = 86,400 seconds
+    
+    Parameters
+    ----------
+    td : TemporalDistribution
+        The temporal distribution to analyze.
+    
+    Returns
+    -------
+    TemporalResolutionEnum
+        The detected resolution (year, month, or day).
+    """
+    if td.date.size == 0:
+        return TemporalResolutionEnum.year  # Default
+    
+    # Constants for time conversions (in seconds)
+    SECONDS_PER_DAY = 86400
+    SECONDS_PER_MONTH = 2629746  # ~30.44 days
+    SECONDS_PER_YEAR = 31556952  # 365.2425 days
+    
+    # Get the values in seconds
+    values = td.date.astype('timedelta64[s]').astype(int)
+    
+    # If only one value (possibly 0), check the dtype string as fallback
+    dtype_str = str(td.date.dtype)
+    if "[Y]" in dtype_str:
+        return TemporalResolutionEnum.year
+    elif "[M]" in dtype_str:
+        return TemporalResolutionEnum.month
+    elif "[D]" in dtype_str:
+        return TemporalResolutionEnum.day
+    
+    # Get non-zero values to analyze the step size
+    non_zero = values[values != 0]
+    if len(non_zero) == 0:
+        # All zeros or single zero, try to infer from dtype or default
+        return TemporalResolutionEnum.year
+    
+    # Get the minimum non-zero value or the GCD of differences
+    if len(values) > 1:
+        # Calculate differences between consecutive values
+        diffs = np.diff(values)
+        non_zero_diffs = diffs[diffs != 0]
+        if len(non_zero_diffs) > 0:
+            step = np.min(np.abs(non_zero_diffs))
+        else:
+            step = np.min(np.abs(non_zero))
+    else:
+        step = np.min(np.abs(non_zero))
+    
+    # Determine resolution based on step size
+    # Allow 10% tolerance for rounding
+    if step >= SECONDS_PER_YEAR * 0.9:
+        return TemporalResolutionEnum.year
+    elif step >= SECONDS_PER_MONTH * 0.9:
+        return TemporalResolutionEnum.month
+    elif step >= SECONDS_PER_DAY * 0.9:
+        return TemporalResolutionEnum.day
+    else:
+        # Sub-day resolution not supported, default to day
+        return TemporalResolutionEnum.day
 
 
 class CharacterizationMethodConfig(BaseModel):
     """
     Configuration for a single LCIA characterization method.
 
+    Users can specify characterization factors in three ways:
+    
+    1. **Static Brightway method**: Provide `brightway_method` with `metric=None`
+       - Uses constant characterization factors from the Brightway method
+    
+    2. **Dynamic characterization (GWP/CRF)**: Provide `brightway_method` with `metric="GWP"` or `"CRF"`
+       - Uses the `dynamic_characterization` package to compute time-varying factors
+    
+    3. **User-provided factors**: Provide `characterization_factors` directly
+       - Dict mapping (flow_code, time_index) tuples to characterization factor values
+       - Allows full flexibility for any time-varying characterization (e.g., seasonal water scarcity)
+       - Can be combined with `brightway_method` (factors override/supplement method values)
+
     Attributes:
         category_name: User-defined identifier for the impact category
             (e.g., 'climate_change_dynamic_gwp').
-        brightway_method: Brightway method identifier tuple, either 2 or 3 elements
-            (e.g., ('GWP', 'example') or ('IPCC', 'climate change', 'GWP 100a')).
-        metric: Impact metric used for dynamic characterization.
-            None implies static method.
+        brightway_method: Optional Brightway method identifier tuple.
+            Required for static methods and dynamic GWP/CRF. Optional when providing
+            characterization_factors directly.
+        metric: Impact metric used for dynamic characterization via dynamic_characterization package.
+            None implies static method or user-provided factors.
             Supported values: 'GWP', 'CRF'.
+        characterization_factors: Optional dict mapping (flow_code, time_index) tuples to 
+            characterization factor values. Provides full flexibility for time-varying 
+            characterization without using the dynamic_characterization package.
+            Example: {("CO2", 24240): 1.0, ("CO2", 24241): 1.1, ...} for monthly indices.
     """
 
     category_name: str = Field(
@@ -69,25 +226,32 @@ class CharacterizationMethodConfig(BaseModel):
         description="User-defined name for the impact category "
         "(e.g., 'climate_change_dynamic_gwp').",
     )
-    brightway_method: Union[
+    brightway_method: Optional[Union[
         Tuple[str, str], Tuple[str, str, str], Tuple[str, str, str, str]
-    ] = Field(
-        ...,
+    ]] = Field(
+        None,
         description=(
-            "The Brightway method tuple with 2 to 4 elements "
-            "(e.g., ('IPCC', 'climate change', 'GWP 100a'))."
+            "Optional Brightway method tuple with 2 to 4 elements "
+            "(e.g., ('IPCC', 'climate change', 'GWP 100a')). "
+            "Required for static methods and dynamic GWP/CRF."
         ),
     )
     metric: Optional[MetricEnum] = Field(
         None,
-        description="Impact metric for dynamic characterization. "
-        "Use None for static methods.",
+        description="Impact metric for dynamic characterization using dynamic_characterization package. "
+        "Use None for static methods or when providing characterization_factors directly.",
+    )
+    characterization_factors: Optional[Dict[Tuple[str, int], float]] = Field(
+        None,
+        description="Optional dict mapping (flow_code, time_index) tuples to characterization "
+        "factor values. Allows user-provided time-varying characterization factors. "
+        "Example: {('CO2', 24240): 1.0, ('water', 24243): 1.5}",
     )
 
     @property
     def dynamic(self) -> bool:
         """Indicates whether this is a dynamic characterization method."""
-        return self.metric is not None
+        return self.metric is not None or self.characterization_factors is not None
 
 
 class TemporalConfig(BaseModel):
@@ -336,24 +500,127 @@ class LCADataProcessor:
         """Read-only access to the internal demand technosphere tensor."""
         return self._internal_demand_technosphere
 
+    def _convert_temporal_resolution(
+        self,
+        time_indices: np.ndarray,
+        amounts: np.ndarray,
+        source_resolution: TemporalResolutionEnum,
+        target_resolution: TemporalResolutionEnum,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Convert time indices and amounts from one temporal resolution to another.
+        
+        When converting from coarser to finer resolution (e.g., year to month),
+        each time point is expanded. The amount is distributed uniformly across
+        the expanded time points.
+        
+        When converting from finer to coarser resolution (e.g., month to year),
+        time points are aggregated. This scenario is less common but supported.
+        
+        Parameters
+        ----------
+        time_indices : np.ndarray
+            Array of time indices in source resolution.
+        amounts : np.ndarray
+            Array of amounts corresponding to each time index.
+        source_resolution : TemporalResolutionEnum
+            The resolution of the input time indices.
+        target_resolution : TemporalResolutionEnum
+            The desired output resolution.
+        
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            Converted time indices and amounts in target resolution.
+        
+        Notes
+        -----
+        Conversion uses approximate factors defined in module constants:
+        - MONTHS_PER_YEAR = 12 (exact)
+        - DAYS_PER_MONTH = 30 (approximate average)
+        - DAYS_PER_YEAR = 365 (approximate, ignores leap years)
+        """
+        if source_resolution == target_resolution:
+            return time_indices, amounts
+        
+        # Define conversion factors using module constants
+        conversion_factors = {
+            (TemporalResolutionEnum.year, TemporalResolutionEnum.month): MONTHS_PER_YEAR,
+            (TemporalResolutionEnum.year, TemporalResolutionEnum.day): DAYS_PER_YEAR,
+            (TemporalResolutionEnum.month, TemporalResolutionEnum.day): DAYS_PER_MONTH,
+            (TemporalResolutionEnum.month, TemporalResolutionEnum.year): 1 / MONTHS_PER_YEAR,
+            (TemporalResolutionEnum.day, TemporalResolutionEnum.month): 1 / DAYS_PER_MONTH,
+            (TemporalResolutionEnum.day, TemporalResolutionEnum.year): 1 / DAYS_PER_YEAR,
+        }
+        
+        factor = conversion_factors.get((source_resolution, target_resolution))
+        if factor is None:
+            raise ValueError(
+                f"Unsupported resolution conversion: {source_resolution} -> {target_resolution}"
+            )
+        
+        if factor >= 1:
+            # Expanding: coarser to finer resolution
+            factor = int(factor)
+            new_time_indices = []
+            new_amounts = []
+            
+            for idx, amount in zip(time_indices, amounts):
+                # Create expanded time points
+                base_idx = int(idx * factor)
+                expanded_indices = np.arange(base_idx, base_idx + factor)
+                # Distribute amount uniformly across expanded time points
+                expanded_amounts = np.full(factor, amount / factor)
+                new_time_indices.extend(expanded_indices)
+                new_amounts.extend(expanded_amounts)
+            
+            return np.array(new_time_indices), np.array(new_amounts)
+        else:
+            # Aggregating: finer to coarser resolution (less common)
+            inverse_factor = int(1 / factor)
+            aggregated = {}
+            
+            for idx, amount in zip(time_indices, amounts):
+                target_idx = int(idx // inverse_factor)
+                aggregated[target_idx] = aggregated.get(target_idx, 0) + amount
+            
+            return np.array(list(aggregated.keys())), np.array(list(aggregated.values()))
+
     def _parse_demand(self) -> None:
         """
         Parse and process the demand dictionary from the configuration.
 
-        This method transforms the demand data into a dictionary mapping (product_code, year)
+        This method transforms the demand data into a dictionary mapping (product_code, time_index)
         tuples to their corresponding amounts. It validates that demand is specified on
         foreground product nodes.
 
         Side Effects
         ------------
         Updates the following instance attributes:
-            - self._demand: dict with keys (product_code, year) and values as amounts.
+            - self._demand: dict with keys (product_code, time_index) and values as amounts.
             - self._products: dict mapping product codes to product names.
-            - self._system_time: range of years covering the longest demand interval.
+            - self._system_time: range of time indices covering the longest demand interval.
+        
+        Notes
+        -----
+        Time indexing schemes vary by resolution:
+            - year: Uses calendar year (e.g., 2020, 2021, ...)
+            - month: Uses months since year 0 (e.g., 2020*12 + 0 = 24240 for Jan 2020)
+            - day: Uses days since Unix epoch (1970-01-01), consistent with numpy datetime64[D]
         """
         raw_demand = self.config.demand
-        start_year = self.config.temporal.start_date.year
+        resolution = self.config.temporal.temporal_resolution
+        start_date = self.config.temporal.start_date
         longest_demand_interval = 0
+
+        # Compute the start index based on resolution
+        # Year: calendar year, Month: months since year 0, Day: days since Unix epoch
+        if resolution == TemporalResolutionEnum.year:
+            start_index = start_date.year
+        elif resolution == TemporalResolutionEnum.month:
+            start_index = start_date.year * 12 + start_date.month - 1
+        else:  # day - uses days since Unix epoch (1970-01-01)
+            start_index = int(np.datetime64(start_date, 'D').astype(int))
 
         for product_node, td in raw_demand.items():
             # Validate demand is on product nodes
@@ -369,19 +636,30 @@ class LCADataProcessor:
                 )
 
             product_code = product_node['code']
-            years = td.date.astype("datetime64[Y]").astype(int) + 1970
-            if years[-1] - start_year > longest_demand_interval:
-                longest_demand_interval = years[-1] - start_year
+            
+            # Convert datetime64 to time indices based on resolution
+            numpy_unit = resolution.numpy_unit
+            if resolution == TemporalResolutionEnum.year:
+                time_indices = td.date.astype(f"datetime64[{numpy_unit}]").astype(int) + 1970
+            elif resolution == TemporalResolutionEnum.month:
+                # Convert to months since epoch, then add offset to get months since year 0
+                dates_as_months = td.date.astype("datetime64[M]").astype(int)
+                time_indices = dates_as_months + 1970 * 12
+            else:  # day - uses days since Unix epoch, consistent with numpy datetime64[D]
+                time_indices = td.date.astype("datetime64[D]").astype(int)
+            
+            if time_indices[-1] - start_index > longest_demand_interval:
+                longest_demand_interval = time_indices[-1] - start_index
             amounts = td.amount
 
             self._demand.update(
-                {(product_code, year): amount for year, amount in zip(years, amounts)}
+                {(product_code, idx): amount for idx, amount in zip(time_indices, amounts)}
             )
 
             # Store product information
             self._products[product_code] = product_node['name']
 
-        self._system_time = range(start_year, start_year + longest_demand_interval + 1)
+        self._system_time = range(start_index, start_index + longest_demand_interval + 1)
         logger.info(
             "Identified demand in system time range of %s for products %s",
             self._system_time,
@@ -398,16 +676,21 @@ class LCADataProcessor:
         three types of edges: production edges (to product nodes), consumption edges
         (from background or foreground products), and biosphere edges (emissions).
 
+        Mixed temporal resolutions are supported: exchanges can have different temporal
+        resolutions (year, month, day), and the system will convert them to the configured
+        resolution. When an exchange uses a coarser resolution than configured, its values
+        are expanded to the finer resolution.
+
         Side Effects
         -----------
         Updates the following instance attributes:
-            - self._foreground_technosphere: dict mapping (process_code, flow_code, year)
+            - self._foreground_technosphere: dict mapping (process_code, flow_code, time_index)
               to amount for external intermediate flows (background consumption).
-            - self._internal_demand_technosphere: dict mapping (process_code, product_code, year)
+            - self._internal_demand_technosphere: dict mapping (process_code, product_code, time_index)
               to amount for internal product consumption (foreground products).
-            - self._foreground_biosphere: dict mapping (process_code, flow_code, year)
+            - self._foreground_biosphere: dict mapping (process_code, flow_code, time_index)
               to amount for biosphere flows (emissions).
-            - self._foreground_production: dict mapping (process_code, product_code, year)
+            - self._foreground_production: dict mapping (process_code, product_code, time_index)
               to amount for product production.
             - self._products: dict mapping product codes to their names.
             - self._intermediate_flows: dict mapping background intermediate flow codes
@@ -423,6 +706,9 @@ class LCADataProcessor:
         internal_demand_technosphere = {}
         production_tensor = {}
         biosphere_tensor = {}
+        
+        target_resolution = self.config.temporal.temporal_resolution
+        target_numpy_unit = target_resolution.numpy_unit
 
         for act in self.foreground_db:
             # Only process nodes (not product nodes)
@@ -439,18 +725,34 @@ class LCADataProcessor:
                 temporal_dist = exc.get(
                     "temporal_distribution",
                     TemporalDistribution(
-                        date=np.array([0], dtype="timedelta64[Y]"), amount=np.array([1])
+                        date=np.array([0], dtype=f"timedelta64[{target_numpy_unit}]"), amount=np.array([1])
                     ),
-                )                
-                years = temporal_dist.date.astype("timedelta64[Y]").astype(int)
-                # Ensure all years are included in process time
-                self._process_time.update(
-                    year for year in years if year not in self._process_time
                 )
+                
+                # Detect the resolution of this temporal distribution
+                source_resolution = detect_temporal_resolution(temporal_dist)
+                source_numpy_unit = source_resolution.numpy_unit
+                
+                # Convert timedelta to process time indices
+                # First convert to source resolution, then to target if needed
+                raw_time_indices = temporal_dist.date.astype(f"timedelta64[{source_numpy_unit}]").astype(int)
                 temporal_factor = temporal_dist.amount
+                
+                # Convert to target resolution if different
+                if source_resolution != target_resolution:
+                    time_indices, temporal_factor = self._convert_temporal_resolution(
+                        raw_time_indices, temporal_factor, source_resolution, target_resolution
+                    )
+                else:
+                    time_indices = raw_time_indices
+                
+                # Ensure all time indices are included in process time
+                self._process_time.update(
+                    idx for idx in time_indices if idx not in self._process_time
+                )
 
                 # Skip if temporal distribution is missing or invalid (empty arrays)
-                if years.size == 0 or temporal_factor.size == 0:
+                if time_indices.size == 0 or temporal_factor.size == 0:
                     logger.debug(
                         f"Skipping exchange {exc.input} due to missing or invalid temporal distribution.")
                     continue
@@ -464,8 +766,8 @@ class LCADataProcessor:
                 if edge_type == bd.labels.production_edge_default:
                     product_code = input_code
                     production_tensor.update({
-                        (act["code"], product_code, year): exc["amount"] * factor
-                        for year, factor in zip(years, temporal_factor)
+                        (act["code"], product_code, idx): exc["amount"] * factor
+                        for idx, factor in zip(time_indices, temporal_factor)
                     })
                     if exc.get("operation"):
                         self._operation_flow.update({(act["code"], product_code): True})
@@ -476,8 +778,8 @@ class LCADataProcessor:
                     if input_db == self.foreground_db.name:
                         # Internal demand: foreground product consumed
                         internal_demand_technosphere.update({
-                            (act["code"], input_code, year): exc["amount"] * factor
-                            for year, factor in zip(years, temporal_factor)
+                            (act["code"], input_code, idx): exc["amount"] * factor
+                            for idx, factor in zip(time_indices, temporal_factor)
                         })
                         if exc.get("operation"):
                             self._operation_flow.update({(act["code"], input_code): True})
@@ -485,8 +787,8 @@ class LCADataProcessor:
                     else:
                         # External intermediate: background consumption
                         technosphere_tensor.update({
-                            (act["code"], input_code, year): exc["amount"] * factor
-                            for year, factor in zip(years, temporal_factor)
+                            (act["code"], input_code, idx): exc["amount"] * factor
+                            for idx, factor in zip(time_indices, temporal_factor)
                         })
                         if exc.get("operation"):
                             self._operation_flow.update({(act["code"], input_code): True})
@@ -495,8 +797,8 @@ class LCADataProcessor:
                 # Handle biosphere edges
                 elif edge_type == bd.labels.biosphere_edge_default:
                     biosphere_tensor.update({
-                        (act["code"], input_code, year): exc["amount"] * factor
-                        for year, factor in zip(years, temporal_factor)
+                        (act["code"], input_code, idx): exc["amount"] * factor
+                        for idx, factor in zip(time_indices, temporal_factor)
                     })
                     if exc.get("operation"):
                         self._operation_flow.update({(act["code"], input_code): True})
@@ -512,10 +814,10 @@ class LCADataProcessor:
         def log_tensor_dimensions(tensor, name):
             processes = {k[0] for k in tensor}
             flows = {k[1] for k in tensor}
-            years = {k[2] for k in tensor}
+            time_points = {k[2] for k in tensor}
             logger.info(
                 f"{name} shape: ({len(processes)} processes, {len(flows)} flows, "
-                f"{len(years)} years) with {len(tensor)} total entries."
+                f"{len(time_points)} time points) with {len(tensor)} total entries."
             )
 
         logger.info("Constructed foreground tensors.")
@@ -784,7 +1086,7 @@ class LCADataProcessor:
         Construct the characterization tensor for LCIA methods over system time points.
 
         This method computes characterization factors for elementary flows across all
-        system years, supporting both static and dynamic methods. It handles metrics
+        system time points, supporting both static and dynamic methods. It handles metrics
         like Global Warming Potential (GWP) and Cumulative Radiative Forcing (CRF)
         when dynamic characterization is requested.
 
@@ -792,13 +1094,21 @@ class LCADataProcessor:
         -----------
         Updates the following instance attribute:
             - self._characterization: dict mapping (method_name, elementary_flow_code,
-            system_year) to characterization factor values.
+            system_time_index) to characterization factor values.
         """
         start_date = self.config.temporal.start_date
         time_horizon = self.config.temporal.time_horizon
+        resolution = self.config.temporal.temporal_resolution
+        pandas_freq = resolution.pandas_freq
+        
         dates = pd.date_range(
-            start=start_date, periods=len(self._system_time), freq="YE"
+            start=start_date, periods=len(self._system_time), freq=pandas_freq
         )
+        
+        # Create mapping from system time indices to dates
+        system_time_list = sorted(self._system_time)
+        time_index_to_date = dict(zip(system_time_list, dates))
+        
         flow_codes = list(self.elementary_flows.keys())
 
         # Pre-map flow codes to Brightway flow IDs
@@ -814,29 +1124,46 @@ class LCADataProcessor:
             self._category.add(category_name)
             method = config.brightway_method
             metric = config.metric
+            user_factors = config.characterization_factors
 
             df = flow_df.copy()
             df["amount"] = 1
             df["activity"] = np.nan
 
-            if metric is None:
-                # Static LCIA
+            # Case 1: User-provided characterization factors (most flexible)
+            if user_factors is not None:
+                # User provides dict mapping (flow_code, time_index) -> CF value
+                for (flow_code, time_idx), cf_value in user_factors.items():
+                    if flow_code in flow_codes and time_idx in system_time_list:
+                        characterization_tensor[(category_name, flow_code, time_idx)] = cf_value
+                
+                logger.info(
+                    f"User-provided characterization for {category_name} completed "
+                    f"with {len(user_factors)} factors."
+                )
+
+            # Case 2: Static LCIA from Brightway method
+            elif metric is None and method is not None:
                 method_data = bd.Method(method).load()
                 method_dict = {flow: value for flow, value in method_data if value != 0}
 
                 for _, row in df.iterrows():
                     flow_code, flow_id = row["code"], row["flow"]
                     if flow_id in method_dict:
-                        for year in dates.year:
+                        for time_idx in system_time_list:
                             characterization_tensor[
-                                (category_name, flow_code, year)
+                                (category_name, flow_code, time_idx)
                             ] = method_dict[flow_id]
                 logger.info(
                     f"Static characterization for method {category_name} completed."
                 )
 
-            elif metric == "GWP":
-                # Dynamic GWP (year-specific values)
+            # Case 3: Dynamic GWP from dynamic_characterization package
+            elif metric == MetricEnum.GWP:
+                if method is None:
+                    raise ValueError(
+                        f"brightway_method required for GWP metric in category '{category_name}'"
+                    )
                 df = df.loc[np.repeat(df.index, len(dates))].reset_index(drop=True)
                 df["date"] = np.tile(dates, len(flow_codes))
                 df["date"] = df["date"].astype("datetime64[s]")
@@ -848,19 +1175,30 @@ class LCADataProcessor:
                     base_lcia_method=method,
                     time_horizon=time_horizon,
                 )
-                df_char["date"] = df_char["date"].dt.year
+                
+                # Map dates back to system time indices based on resolution
+                if resolution == TemporalResolutionEnum.year:
+                    df_char["time_idx"] = df_char["date"].dt.year
+                elif resolution == TemporalResolutionEnum.month:
+                    df_char["time_idx"] = df_char["date"].dt.year * 12 + df_char["date"].dt.month - 1
+                else:  # day
+                    df_char["time_idx"] = (df_char["date"] - pd.Timestamp("1970-01-01")).dt.days
 
                 for _, row in df_char.iterrows():
                     flow_code = df.loc[df["flow"] == row["flow"], "code"].values[0]
-                    characterization_tensor[(category_name, flow_code, row["date"])] = (
+                    characterization_tensor[(category_name, flow_code, row["time_idx"])] = (
                         row["amount"]
                     )
                 logger.info(
                     f"Dynamic GWP characterization for {category_name} completed."
                 )
 
-            elif metric == "CRF":
-                # Dynamic CRF (cumulative RF over time horizon)
+            # Case 4: Dynamic CRF from dynamic_characterization package
+            elif metric == MetricEnum.CRF:
+                if method is None:
+                    raise ValueError(
+                        f"brightway_method required for CRF metric in category '{category_name}'"
+                    )
                 df["date"] = pd.Timestamp(self.config.temporal.start_date)
 
                 for _, row in df.iterrows():
@@ -878,10 +1216,29 @@ class LCADataProcessor:
                     )
                     rf_series = df_char["amount"].values
 
-                    for year in self.system_time:
-                        cutoff = start_date.year + time_horizon - year - 1
+                    for time_idx in system_time_list:
+                        # Compute cutoff based on resolution
+                        # The cutoff determines how many years of radiative forcing to sum
+                        if resolution == TemporalResolutionEnum.year:
+                            cutoff = start_date.year + time_horizon - time_idx - 1
+                        elif resolution == TemporalResolutionEnum.month:
+                            # Convert time_idx to elapsed years for cutoff calculation
+                            start_month_idx = start_date.year * 12 + start_date.month - 1
+                            months_elapsed = time_idx - start_month_idx
+                            # Use integer division to avoid floating-point precision issues
+                            years_elapsed = months_elapsed // 12
+                            cutoff = time_horizon - years_elapsed - 1
+                        else:  # day
+                            # Note: 365.25 is used as an approximation for average days per year
+                            # This may accumulate small errors over very long time horizons
+                            start_day_idx = int(np.datetime64(start_date, 'D').astype(int))
+                            days_elapsed = time_idx - start_day_idx
+                            years_elapsed = days_elapsed // 365  # Use integer division
+                            cutoff = time_horizon - years_elapsed - 1
+                        
+                        cutoff = max(0, cutoff)  # Ensure non-negative
                         cumulative_rf = rf_series[:cutoff].sum()
-                        characterization_tensor[(category_name, flow_code, year)] = (
+                        characterization_tensor[(category_name, flow_code, time_idx)] = (
                             cumulative_rf
                         )
                 logger.info(
@@ -889,6 +1246,9 @@ class LCADataProcessor:
                 )
 
             else:
-                raise ValueError(f"Unsupported dynamic metric: {metric}")
+                raise ValueError(
+                    f"Invalid characterization config for '{category_name}': "
+                    f"provide either brightway_method (with optional metric) or characterization_factors"
+                )
 
         self._characterization.update(characterization_tensor)
