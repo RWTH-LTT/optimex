@@ -1058,7 +1058,6 @@ class TestDatabaseVintageParameterExtraction:
     """Tests for extracting vintage parameters from Brightway database."""
 
     @pytest.fixture
-    @pytest.mark.usefixtures("setup_brightway_databases")
     def database_with_vintage_params(self):
         """Create a test database with vintage parameter attributes."""
         from datetime import datetime
@@ -1174,12 +1173,13 @@ class TestDatabaseVintageParameterExtraction:
     def test_lca_processor_extracts_vintage_values(self, database_with_vintage_params):
         """Test that LCADataProcessor extracts vintage_values from exchanges."""
         from datetime import datetime
+        import bw2data as bd
+        import numpy as np
+        from bw_temporalis import TemporalDistribution
         from optimex import lca_processor
 
         # Create demand
         product_node = bd.get_node(database="foreground", code="vkm")
-        from bw_temporalis import TemporalDistribution
-        import numpy as np
         
         demand = {
             product_node: TemporalDistribution(
@@ -1222,12 +1222,13 @@ class TestDatabaseVintageParameterExtraction:
     def test_lca_processor_extracts_technology_evolution(self, database_with_vintage_params):
         """Test that LCADataProcessor extracts technology_evolution from exchanges."""
         from datetime import datetime
+        import bw2data as bd
+        import numpy as np
+        from bw_temporalis import TemporalDistribution
         from optimex import lca_processor
 
         # Create demand
         product_node = bd.get_node(database="foreground", code="vkm")
-        from bw_temporalis import TemporalDistribution
-        import numpy as np
         
         demand = {
             product_node: TemporalDistribution(
@@ -1270,12 +1271,13 @@ class TestDatabaseVintageParameterExtraction:
     def test_model_input_manager_uses_database_vintages(self, database_with_vintage_params):
         """Test that ModelInputManager includes vintage parameters from database."""
         from datetime import datetime
+        import bw2data as bd
+        import numpy as np
+        from bw_temporalis import TemporalDistribution
         from optimex import lca_processor, converter
 
         # Create demand
         product_node = bd.get_node(database="foreground", code="vkm")
-        from bw_temporalis import TemporalDistribution
-        import numpy as np
         
         demand = {
             product_node: TemporalDistribution(
