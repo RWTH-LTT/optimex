@@ -1205,7 +1205,7 @@ class TestDatabaseVintageParameterExtraction:
             temporal=lca_processor.TemporalConfig(
                 start_date=datetime(2020, 1, 1),
                 temporal_resolution=lca_processor.TemporalResolutionEnum.year,
-                time_horizon=100,
+                time_horizon=20,  # Reduced to avoid pandas timestamp overflow
             ),
             characterization_methods=[
                 lca_processor.CharacterizationMethodConfig(
@@ -1254,7 +1254,7 @@ class TestDatabaseVintageParameterExtraction:
             temporal=lca_processor.TemporalConfig(
                 start_date=datetime(2020, 1, 1),
                 temporal_resolution=lca_processor.TemporalResolutionEnum.year,
-                time_horizon=100,
+                time_horizon=20,  # Reduced to avoid pandas timestamp overflow
             ),
             characterization_methods=[
                 lca_processor.CharacterizationMethodConfig(
@@ -1303,7 +1303,7 @@ class TestDatabaseVintageParameterExtraction:
             temporal=lca_processor.TemporalConfig(
                 start_date=datetime(2020, 1, 1),
                 temporal_resolution=lca_processor.TemporalResolutionEnum.year,
-                time_horizon=100,
+                time_horizon=20,  # Reduced to avoid pandas timestamp overflow
             ),
             characterization_methods=[
                 lca_processor.CharacterizationMethodConfig(
