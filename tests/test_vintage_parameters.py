@@ -1202,19 +1202,17 @@ class TestDatabaseVintageParameterExtraction:
         # Configure LCA processor
         config = lca_processor.LCAConfig(
             demand=demand,
-            temporal=lca_processor.TemporalConfig(
-                start_date=datetime(2020, 1, 1),
-                temporal_resolution=lca_processor.TemporalResolutionEnum.year,
-                time_horizon=20,  # Reduced to avoid pandas timestamp overflow
-            ),
+            temporal={
+                "start_date": datetime(2020, 1, 1),
+                "temporal_resolution": "year",
+                "time_horizon": 20,
+            },
             characterization_methods=[
-                lca_processor.CharacterizationMethodConfig(
-                    category_name="climate_change",
-                    brightway_method=("GWP", "example"),
-                    metric=None,
-                )
+                {
+                    "category_name": "climate_change",
+                    "brightway_method": ("GWP", "example"),
+                },
             ],
-            background_inventory=lca_processor.BackgroundInventoryConfig(),
         )
 
         # Run processor
@@ -1251,19 +1249,17 @@ class TestDatabaseVintageParameterExtraction:
         # Configure LCA processor
         config = lca_processor.LCAConfig(
             demand=demand,
-            temporal=lca_processor.TemporalConfig(
-                start_date=datetime(2020, 1, 1),
-                temporal_resolution=lca_processor.TemporalResolutionEnum.year,
-                time_horizon=20,  # Reduced to avoid pandas timestamp overflow
-            ),
+            temporal={
+                "start_date": datetime(2020, 1, 1),
+                "temporal_resolution": "year",
+                "time_horizon": 20,
+            },
             characterization_methods=[
-                lca_processor.CharacterizationMethodConfig(
-                    category_name="climate_change",
-                    brightway_method=("GWP", "example"),
-                    metric=None,
-                )
+                {
+                    "category_name": "climate_change",
+                    "brightway_method": ("GWP", "example"),
+                },
             ],
-            background_inventory=lca_processor.BackgroundInventoryConfig(),
         )
 
         # Run processor
@@ -1300,19 +1296,17 @@ class TestDatabaseVintageParameterExtraction:
         # Configure LCA processor
         config = lca_processor.LCAConfig(
             demand=demand,
-            temporal=lca_processor.TemporalConfig(
-                start_date=datetime(2020, 1, 1),
-                temporal_resolution=lca_processor.TemporalResolutionEnum.year,
-                time_horizon=20,  # Reduced to avoid pandas timestamp overflow
-            ),
+            temporal={
+                "start_date": datetime(2020, 1, 1),
+                "temporal_resolution": "year",
+                "time_horizon": 20,
+            },
             characterization_methods=[
-                lca_processor.CharacterizationMethodConfig(
-                    category_name="climate_change",
-                    brightway_method=("GWP", "example"),
-                    metric=None,
-                )
+                {
+                    "category_name": "climate_change",
+                    "brightway_method": ("GWP", "example"),
+                },
             ],
-            background_inventory=lca_processor.BackgroundInventoryConfig(),
         )
 
         # Run processor and convert to model inputs
