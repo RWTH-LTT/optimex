@@ -28,17 +28,15 @@ from tqdm import tqdm
 
 class MetricEnum(str, Enum):
     """
-    Supported metrics for dynamic impact characterization.
+    Supported metrics for dynamic impact characterization using the dynamic_characterization package.
 
     Attributes:
         GWP: Global Warming Potential - time-dependent radiative forcing metric
         CRF: Cumulative Radiative Forcing - integrated radiative forcing over time horizon
-        SEASONAL: Seasonal/time-varying characterization factors provided by user
     """
 
     GWP = "GWP"
     CRF = "CRF"
-    SEASONAL = "SEASONAL"
 
 
 class TemporalResolutionEnum(str, Enum):
@@ -195,17 +193,32 @@ class CharacterizationMethodConfig(BaseModel):
     """
     Configuration for a single LCIA characterization method.
 
+    Users can specify characterization factors in three ways:
+    
+    1. **Static Brightway method**: Provide `brightway_method` with `metric=None`
+       - Uses constant characterization factors from the Brightway method
+    
+    2. **Dynamic characterization (GWP/CRF)**: Provide `brightway_method` with `metric="GWP"` or `"CRF"`
+       - Uses the `dynamic_characterization` package to compute time-varying factors
+    
+    3. **User-provided factors**: Provide `characterization_factors` directly
+       - Dict mapping (flow_code, time_index) tuples to characterization factor values
+       - Allows full flexibility for any time-varying characterization (e.g., seasonal water scarcity)
+       - Can be combined with `brightway_method` (factors override/supplement method values)
+
     Attributes:
         category_name: User-defined identifier for the impact category
             (e.g., 'climate_change_dynamic_gwp').
-        brightway_method: Brightway method identifier tuple, either 2 or 3 elements
-            (e.g., ('GWP', 'example') or ('IPCC', 'climate change', 'GWP 100a')).
-        metric: Impact metric used for dynamic characterization.
-            None implies static method.
-            Supported values: 'GWP', 'CRF', 'SEASONAL'.
-        seasonal_factors: Optional dict mapping month number (1-12) to characterization 
-            factor multipliers. Required when metric='SEASONAL'. Applied multiplicatively 
-            to base characterization factors from brightway_method.
+        brightway_method: Optional Brightway method identifier tuple.
+            Required for static methods and dynamic GWP/CRF. Optional when providing
+            characterization_factors directly.
+        metric: Impact metric used for dynamic characterization via dynamic_characterization package.
+            None implies static method or user-provided factors.
+            Supported values: 'GWP', 'CRF'.
+        characterization_factors: Optional dict mapping (flow_code, time_index) tuples to 
+            characterization factor values. Provides full flexibility for time-varying 
+            characterization without using the dynamic_characterization package.
+            Example: {("CO2", 24240): 1.0, ("CO2", 24241): 1.1, ...} for monthly indices.
     """
 
     category_name: str = Field(
@@ -213,31 +226,32 @@ class CharacterizationMethodConfig(BaseModel):
         description="User-defined name for the impact category "
         "(e.g., 'climate_change_dynamic_gwp').",
     )
-    brightway_method: Union[
+    brightway_method: Optional[Union[
         Tuple[str, str], Tuple[str, str, str], Tuple[str, str, str, str]
-    ] = Field(
-        ...,
+    ]] = Field(
+        None,
         description=(
-            "The Brightway method tuple with 2 to 4 elements "
-            "(e.g., ('IPCC', 'climate change', 'GWP 100a'))."
+            "Optional Brightway method tuple with 2 to 4 elements "
+            "(e.g., ('IPCC', 'climate change', 'GWP 100a')). "
+            "Required for static methods and dynamic GWP/CRF."
         ),
     )
     metric: Optional[MetricEnum] = Field(
         None,
-        description="Impact metric for dynamic characterization. "
-        "Use None for static methods. 'SEASONAL' for user-provided time-varying factors.",
+        description="Impact metric for dynamic characterization using dynamic_characterization package. "
+        "Use None for static methods or when providing characterization_factors directly.",
     )
-    seasonal_factors: Optional[Dict[int, float]] = Field(
+    characterization_factors: Optional[Dict[Tuple[str, int], float]] = Field(
         None,
-        description="Optional dict mapping month number (1-12) to characterization "
-        "factor multipliers. Required when metric='SEASONAL'. Applied multiplicatively "
-        "to base characterization factors from brightway_method.",
+        description="Optional dict mapping (flow_code, time_index) tuples to characterization "
+        "factor values. Allows user-provided time-varying characterization factors. "
+        "Example: {('CO2', 24240): 1.0, ('water', 24243): 1.5}",
     )
 
     @property
     def dynamic(self) -> bool:
         """Indicates whether this is a dynamic characterization method."""
-        return self.metric is not None
+        return self.metric is not None or self.characterization_factors is not None
 
 
 class TemporalConfig(BaseModel):
@@ -1110,13 +1124,26 @@ class LCADataProcessor:
             self._category.add(category_name)
             method = config.brightway_method
             metric = config.metric
+            user_factors = config.characterization_factors
 
             df = flow_df.copy()
             df["amount"] = 1
             df["activity"] = np.nan
 
-            if metric is None:
-                # Static LCIA
+            # Case 1: User-provided characterization factors (most flexible)
+            if user_factors is not None:
+                # User provides dict mapping (flow_code, time_index) -> CF value
+                for (flow_code, time_idx), cf_value in user_factors.items():
+                    if flow_code in flow_codes and time_idx in system_time_list:
+                        characterization_tensor[(category_name, flow_code, time_idx)] = cf_value
+                
+                logger.info(
+                    f"User-provided characterization for {category_name} completed "
+                    f"with {len(user_factors)} factors."
+                )
+
+            # Case 2: Static LCIA from Brightway method
+            elif metric is None and method is not None:
                 method_data = bd.Method(method).load()
                 method_dict = {flow: value for flow, value in method_data if value != 0}
 
@@ -1131,8 +1158,12 @@ class LCADataProcessor:
                     f"Static characterization for method {category_name} completed."
                 )
 
-            elif metric == "GWP":
-                # Dynamic GWP (time-specific values)
+            # Case 3: Dynamic GWP from dynamic_characterization package
+            elif metric == MetricEnum.GWP:
+                if method is None:
+                    raise ValueError(
+                        f"brightway_method required for GWP metric in category '{category_name}'"
+                    )
                 df = df.loc[np.repeat(df.index, len(dates))].reset_index(drop=True)
                 df["date"] = np.tile(dates, len(flow_codes))
                 df["date"] = df["date"].astype("datetime64[s]")
@@ -1162,8 +1193,12 @@ class LCADataProcessor:
                     f"Dynamic GWP characterization for {category_name} completed."
                 )
 
-            elif metric == "CRF":
-                # Dynamic CRF (cumulative RF over time horizon)
+            # Case 4: Dynamic CRF from dynamic_characterization package
+            elif metric == MetricEnum.CRF:
+                if method is None:
+                    raise ValueError(
+                        f"brightway_method required for CRF metric in category '{category_name}'"
+                    )
                 df["date"] = pd.Timestamp(self.config.temporal.start_date)
 
                 for _, row in df.iterrows():
@@ -1210,47 +1245,10 @@ class LCADataProcessor:
                     f"Dynamic CRF characterization for {category_name} completed."
                 )
 
-            elif metric == MetricEnum.SEASONAL:
-                # Seasonal/time-varying characterization factors
-                # Get base characterization factors from the method
-                method_data = bd.Method(method).load()
-                method_dict = {flow: value for flow, value in method_data if value != 0}
-                
-                # Get seasonal factors from config
-                seasonal_factors = config.seasonal_factors
-                if seasonal_factors is None:
-                    raise ValueError(
-                        f"seasonal_factors must be provided when metric='SEASONAL' "
-                        f"for category '{category_name}'"
-                    )
-                
-                for _, row in df.iterrows():
-                    flow_code, flow_id = row["code"], row["flow"]
-                    if flow_id in method_dict:
-                        base_cf = method_dict[flow_id]
-                        
-                        for time_idx in system_time_list:
-                            # Get the corresponding date for this time index
-                            date = time_index_to_date.get(time_idx)
-                            if date is not None:
-                                # Extract month (1-12) from the date
-                                month = date.month
-                                # Get seasonal factor, default to 1.0 if not specified
-                                seasonal_factor = seasonal_factors.get(month, 1.0)
-                                cf = base_cf * seasonal_factor
-                            else:
-                                cf = base_cf
-                            
-                            characterization_tensor[
-                                (category_name, flow_code, time_idx)
-                            ] = cf
-                
-                logger.info(
-                    f"Seasonal characterization for {category_name} completed "
-                    f"with {len(seasonal_factors)} monthly factors."
-                )
-
             else:
-                raise ValueError(f"Unsupported dynamic metric: {metric}")
+                raise ValueError(
+                    f"Invalid characterization config for '{category_name}': "
+                    f"provide either brightway_method (with optional metric) or characterization_factors"
+                )
 
         self._characterization.update(characterization_tensor)

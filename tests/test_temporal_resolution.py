@@ -447,36 +447,33 @@ class TestResolutionConversion:
         assert np.array_equal(result_amounts, amounts)
 
 
-class TestSeasonalCharacterization:
-    """Tests for seasonal/dynamic characterization factors."""
+class TestUserProvidedCharacterization:
+    """Tests for user-provided characterization factors."""
 
-    def test_seasonal_metric_enum_exists(self):
-        """Test that SEASONAL metric is available in the enum."""
-        from optimex.lca_processor import MetricEnum
-        assert MetricEnum.SEASONAL == "SEASONAL"
-
-    def test_seasonal_factors_config_accepted(self):
-        """Test that seasonal_factors config is accepted."""
+    def test_characterization_factors_config_accepted(self):
+        """Test that characterization_factors config is accepted."""
         from optimex.lca_processor import CharacterizationMethodConfig
         
-        seasonal_factors = {
-            1: 0.6, 2: 0.7, 3: 0.8, 4: 1.0, 5: 1.2, 6: 1.5,
-            7: 1.8, 8: 1.8, 9: 1.3, 10: 1.0, 11: 0.8, 12: 0.6,
+        # User-provided factors mapping (flow_code, time_index) -> CF value
+        user_factors = {
+            ("water", 24240): 0.6,  # Jan 2020
+            ("water", 24241): 0.7,  # Feb 2020
+            ("water", 24242): 0.8,  # Mar 2020
+            ("water", 24246): 1.5,  # Jul 2020 (peak scarcity)
         }
         
         config = CharacterizationMethodConfig(
             category_name="water_scarcity",
-            brightway_method=("water", "test"),
-            metric="SEASONAL",
-            seasonal_factors=seasonal_factors,
+            characterization_factors=user_factors,
         )
         
-        assert config.metric.value == "SEASONAL"
-        assert config.seasonal_factors == seasonal_factors
-        assert config.dynamic is True
+        assert config.characterization_factors == user_factors
+        assert config.brightway_method is None
+        assert config.metric is None
+        assert config.dynamic is True  # User factors make it dynamic
 
-    def test_static_method_no_seasonal_factors(self):
-        """Test that static methods don't require seasonal_factors."""
+    def test_static_method_config(self):
+        """Test that static Brightway methods work."""
         from optimex.lca_processor import CharacterizationMethodConfig
         
         config = CharacterizationMethodConfig(
@@ -485,5 +482,19 @@ class TestSeasonalCharacterization:
             metric=None,
         )
         
-        assert config.seasonal_factors is None
+        assert config.brightway_method == ("GWP", "test")
+        assert config.characterization_factors is None
         assert config.dynamic is False
+
+    def test_dynamic_gwp_metric_config(self):
+        """Test that dynamic GWP metric config works."""
+        from optimex.lca_processor import CharacterizationMethodConfig, MetricEnum
+        
+        config = CharacterizationMethodConfig(
+            category_name="climate_change_dynamic",
+            brightway_method=("GWP", "test"),
+            metric="GWP",
+        )
+        
+        assert config.metric == MetricEnum.GWP
+        assert config.dynamic is True
