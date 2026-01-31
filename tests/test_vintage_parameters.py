@@ -1194,7 +1194,7 @@ class TestDatabaseVintageParameterExtraction:
         
         demand = {
             product_node: TemporalDistribution(
-                date=np.array([2025], dtype="datetime64[Y]"),
+                date=np.array([datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"),
                 amount=np.array([100]),
             )
         }
@@ -1241,7 +1241,7 @@ class TestDatabaseVintageParameterExtraction:
         
         demand = {
             product_node: TemporalDistribution(
-                date=np.array([2025], dtype="datetime64[Y]"),
+                date=np.array([datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"),
                 amount=np.array([100]),
             )
         }
@@ -1288,7 +1288,7 @@ class TestDatabaseVintageParameterExtraction:
         
         demand = {
             product_node: TemporalDistribution(
-                date=np.array([2025], dtype="datetime64[Y]"),
+                date=np.array([datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"),
                 amount=np.array([100]),
             )
         }
