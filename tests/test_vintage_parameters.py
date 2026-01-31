@@ -1058,7 +1058,7 @@ class TestDatabaseVintageParameterExtraction:
     """Tests for extracting vintage parameters from Brightway database."""
 
     @pytest.fixture
-    def database_with_vintage_params(self):
+    def database_with_vintage_params(self, request):
         """Create a test database with vintage parameter attributes."""
         from datetime import datetime
         import bw2data as bd
@@ -1066,7 +1066,18 @@ class TestDatabaseVintageParameterExtraction:
         from bw2data.tests import bw2test
         from bw_temporalis import TemporalDistribution
 
-        bd.projects.set_current("__test_vintage_db__")
+        # Set up test project
+        project_name = "__test_vintage_db__"
+        bd.projects.set_current(project_name)
+        
+        # Register cleanup to delete project after test
+        def cleanup():
+            try:
+                bd.projects.delete_project(project_name, delete_dir=True)
+            except:
+                pass  # Ignore cleanup errors
+        
+        request.addfinalizer(cleanup)
         
         # Create biosphere database
         bio_db = bd.Database("biosphere3")
