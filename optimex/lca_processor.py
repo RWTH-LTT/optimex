@@ -44,10 +44,44 @@ class TemporalResolutionEnum(str, Enum):
     Supported temporal resolutions for the optimization model.
 
     Attributes:
-        year: Annual time steps (currently the only supported resolution)
+        year: Annual time steps
+        month: Monthly time steps
+        day: Daily time steps
     """
 
     year = "year"
+    month = "month"
+    day = "day"
+
+    @property
+    def numpy_unit(self) -> str:
+        """Return the numpy timedelta64/datetime64 unit code for this resolution."""
+        mapping = {
+            "year": "Y",
+            "month": "M",
+            "day": "D",
+        }
+        return mapping[self.value]
+
+    @property
+    def pandas_freq(self) -> str:
+        """Return the pandas frequency string for date_range with this resolution."""
+        mapping = {
+            "year": "YE",
+            "month": "ME",
+            "day": "D",
+        }
+        return mapping[self.value]
+
+    @property
+    def pandas_offset(self) -> str:
+        """Return the pandas DateOffset attribute name for this resolution."""
+        mapping = {
+            "year": "year",
+            "month": "month",
+            "day": "day",
+        }
+        return mapping[self.value]
 
 
 class CharacterizationMethodConfig(BaseModel):
@@ -340,20 +374,29 @@ class LCADataProcessor:
         """
         Parse and process the demand dictionary from the configuration.
 
-        This method transforms the demand data into a dictionary mapping (product_code, year)
+        This method transforms the demand data into a dictionary mapping (product_code, time_index)
         tuples to their corresponding amounts. It validates that demand is specified on
         foreground product nodes.
 
         Side Effects
         ------------
         Updates the following instance attributes:
-            - self._demand: dict with keys (product_code, year) and values as amounts.
+            - self._demand: dict with keys (product_code, time_index) and values as amounts.
             - self._products: dict mapping product codes to product names.
-            - self._system_time: range of years covering the longest demand interval.
+            - self._system_time: range of time indices covering the longest demand interval.
         """
         raw_demand = self.config.demand
-        start_year = self.config.temporal.start_date.year
+        resolution = self.config.temporal.temporal_resolution
+        start_date = self.config.temporal.start_date
         longest_demand_interval = 0
+
+        # Compute the start index based on resolution
+        if resolution == TemporalResolutionEnum.year:
+            start_index = start_date.year
+        elif resolution == TemporalResolutionEnum.month:
+            start_index = start_date.year * 12 + start_date.month - 1
+        else:  # day
+            start_index = int(np.datetime64(start_date, 'D').astype(int))
 
         for product_node, td in raw_demand.items():
             # Validate demand is on product nodes
@@ -369,19 +412,30 @@ class LCADataProcessor:
                 )
 
             product_code = product_node['code']
-            years = td.date.astype("datetime64[Y]").astype(int) + 1970
-            if years[-1] - start_year > longest_demand_interval:
-                longest_demand_interval = years[-1] - start_year
+            
+            # Convert datetime64 to time indices based on resolution
+            numpy_unit = resolution.numpy_unit
+            if resolution == TemporalResolutionEnum.year:
+                time_indices = td.date.astype(f"datetime64[{numpy_unit}]").astype(int) + 1970
+            elif resolution == TemporalResolutionEnum.month:
+                # Convert to months since epoch, then add offset to get absolute month index
+                dates_as_months = td.date.astype("datetime64[M]").astype(int)
+                time_indices = dates_as_months + 1970 * 12  # months since year 0
+            else:  # day
+                time_indices = td.date.astype("datetime64[D]").astype(int)
+            
+            if time_indices[-1] - start_index > longest_demand_interval:
+                longest_demand_interval = time_indices[-1] - start_index
             amounts = td.amount
 
             self._demand.update(
-                {(product_code, year): amount for year, amount in zip(years, amounts)}
+                {(product_code, idx): amount for idx, amount in zip(time_indices, amounts)}
             )
 
             # Store product information
             self._products[product_code] = product_node['name']
 
-        self._system_time = range(start_year, start_year + longest_demand_interval + 1)
+        self._system_time = range(start_index, start_index + longest_demand_interval + 1)
         logger.info(
             "Identified demand in system time range of %s for products %s",
             self._system_time,
@@ -401,13 +455,13 @@ class LCADataProcessor:
         Side Effects
         -----------
         Updates the following instance attributes:
-            - self._foreground_technosphere: dict mapping (process_code, flow_code, year)
+            - self._foreground_technosphere: dict mapping (process_code, flow_code, time_index)
               to amount for external intermediate flows (background consumption).
-            - self._internal_demand_technosphere: dict mapping (process_code, product_code, year)
+            - self._internal_demand_technosphere: dict mapping (process_code, product_code, time_index)
               to amount for internal product consumption (foreground products).
-            - self._foreground_biosphere: dict mapping (process_code, flow_code, year)
+            - self._foreground_biosphere: dict mapping (process_code, flow_code, time_index)
               to amount for biosphere flows (emissions).
-            - self._foreground_production: dict mapping (process_code, product_code, year)
+            - self._foreground_production: dict mapping (process_code, product_code, time_index)
               to amount for product production.
             - self._products: dict mapping product codes to their names.
             - self._intermediate_flows: dict mapping background intermediate flow codes
@@ -423,6 +477,9 @@ class LCADataProcessor:
         internal_demand_technosphere = {}
         production_tensor = {}
         biosphere_tensor = {}
+        
+        resolution = self.config.temporal.temporal_resolution
+        numpy_unit = resolution.numpy_unit
 
         for act in self.foreground_db:
             # Only process nodes (not product nodes)
@@ -439,18 +496,19 @@ class LCADataProcessor:
                 temporal_dist = exc.get(
                     "temporal_distribution",
                     TemporalDistribution(
-                        date=np.array([0], dtype="timedelta64[Y]"), amount=np.array([1])
+                        date=np.array([0], dtype=f"timedelta64[{numpy_unit}]"), amount=np.array([1])
                     ),
                 )                
-                years = temporal_dist.date.astype("timedelta64[Y]").astype(int)
-                # Ensure all years are included in process time
+                # Convert timedelta to process time indices based on resolution
+                time_indices = temporal_dist.date.astype(f"timedelta64[{numpy_unit}]").astype(int)
+                # Ensure all time indices are included in process time
                 self._process_time.update(
-                    year for year in years if year not in self._process_time
+                    idx for idx in time_indices if idx not in self._process_time
                 )
                 temporal_factor = temporal_dist.amount
 
                 # Skip if temporal distribution is missing or invalid (empty arrays)
-                if years.size == 0 or temporal_factor.size == 0:
+                if time_indices.size == 0 or temporal_factor.size == 0:
                     logger.debug(
                         f"Skipping exchange {exc.input} due to missing or invalid temporal distribution.")
                     continue
@@ -464,8 +522,8 @@ class LCADataProcessor:
                 if edge_type == bd.labels.production_edge_default:
                     product_code = input_code
                     production_tensor.update({
-                        (act["code"], product_code, year): exc["amount"] * factor
-                        for year, factor in zip(years, temporal_factor)
+                        (act["code"], product_code, idx): exc["amount"] * factor
+                        for idx, factor in zip(time_indices, temporal_factor)
                     })
                     if exc.get("operation"):
                         self._operation_flow.update({(act["code"], product_code): True})
@@ -476,8 +534,8 @@ class LCADataProcessor:
                     if input_db == self.foreground_db.name:
                         # Internal demand: foreground product consumed
                         internal_demand_technosphere.update({
-                            (act["code"], input_code, year): exc["amount"] * factor
-                            for year, factor in zip(years, temporal_factor)
+                            (act["code"], input_code, idx): exc["amount"] * factor
+                            for idx, factor in zip(time_indices, temporal_factor)
                         })
                         if exc.get("operation"):
                             self._operation_flow.update({(act["code"], input_code): True})
@@ -485,8 +543,8 @@ class LCADataProcessor:
                     else:
                         # External intermediate: background consumption
                         technosphere_tensor.update({
-                            (act["code"], input_code, year): exc["amount"] * factor
-                            for year, factor in zip(years, temporal_factor)
+                            (act["code"], input_code, idx): exc["amount"] * factor
+                            for idx, factor in zip(time_indices, temporal_factor)
                         })
                         if exc.get("operation"):
                             self._operation_flow.update({(act["code"], input_code): True})
@@ -495,8 +553,8 @@ class LCADataProcessor:
                 # Handle biosphere edges
                 elif edge_type == bd.labels.biosphere_edge_default:
                     biosphere_tensor.update({
-                        (act["code"], input_code, year): exc["amount"] * factor
-                        for year, factor in zip(years, temporal_factor)
+                        (act["code"], input_code, idx): exc["amount"] * factor
+                        for idx, factor in zip(time_indices, temporal_factor)
                     })
                     if exc.get("operation"):
                         self._operation_flow.update({(act["code"], input_code): True})
@@ -512,10 +570,10 @@ class LCADataProcessor:
         def log_tensor_dimensions(tensor, name):
             processes = {k[0] for k in tensor}
             flows = {k[1] for k in tensor}
-            years = {k[2] for k in tensor}
+            time_points = {k[2] for k in tensor}
             logger.info(
                 f"{name} shape: ({len(processes)} processes, {len(flows)} flows, "
-                f"{len(years)} years) with {len(tensor)} total entries."
+                f"{len(time_points)} time points) with {len(tensor)} total entries."
             )
 
         logger.info("Constructed foreground tensors.")
@@ -784,7 +842,7 @@ class LCADataProcessor:
         Construct the characterization tensor for LCIA methods over system time points.
 
         This method computes characterization factors for elementary flows across all
-        system years, supporting both static and dynamic methods. It handles metrics
+        system time points, supporting both static and dynamic methods. It handles metrics
         like Global Warming Potential (GWP) and Cumulative Radiative Forcing (CRF)
         when dynamic characterization is requested.
 
@@ -792,13 +850,21 @@ class LCADataProcessor:
         -----------
         Updates the following instance attribute:
             - self._characterization: dict mapping (method_name, elementary_flow_code,
-            system_year) to characterization factor values.
+            system_time_index) to characterization factor values.
         """
         start_date = self.config.temporal.start_date
         time_horizon = self.config.temporal.time_horizon
+        resolution = self.config.temporal.temporal_resolution
+        pandas_freq = resolution.pandas_freq
+        
         dates = pd.date_range(
-            start=start_date, periods=len(self._system_time), freq="YE"
+            start=start_date, periods=len(self._system_time), freq=pandas_freq
         )
+        
+        # Create mapping from system time indices to dates
+        system_time_list = sorted(self._system_time)
+        time_index_to_date = dict(zip(system_time_list, dates))
+        
         flow_codes = list(self.elementary_flows.keys())
 
         # Pre-map flow codes to Brightway flow IDs
@@ -827,16 +893,16 @@ class LCADataProcessor:
                 for _, row in df.iterrows():
                     flow_code, flow_id = row["code"], row["flow"]
                     if flow_id in method_dict:
-                        for year in dates.year:
+                        for time_idx in system_time_list:
                             characterization_tensor[
-                                (category_name, flow_code, year)
+                                (category_name, flow_code, time_idx)
                             ] = method_dict[flow_id]
                 logger.info(
                     f"Static characterization for method {category_name} completed."
                 )
 
             elif metric == "GWP":
-                # Dynamic GWP (year-specific values)
+                # Dynamic GWP (time-specific values)
                 df = df.loc[np.repeat(df.index, len(dates))].reset_index(drop=True)
                 df["date"] = np.tile(dates, len(flow_codes))
                 df["date"] = df["date"].astype("datetime64[s]")
@@ -848,11 +914,18 @@ class LCADataProcessor:
                     base_lcia_method=method,
                     time_horizon=time_horizon,
                 )
-                df_char["date"] = df_char["date"].dt.year
+                
+                # Map dates back to system time indices based on resolution
+                if resolution == TemporalResolutionEnum.year:
+                    df_char["time_idx"] = df_char["date"].dt.year
+                elif resolution == TemporalResolutionEnum.month:
+                    df_char["time_idx"] = df_char["date"].dt.year * 12 + df_char["date"].dt.month - 1
+                else:  # day
+                    df_char["time_idx"] = (df_char["date"] - pd.Timestamp("1970-01-01")).dt.days
 
                 for _, row in df_char.iterrows():
                     flow_code = df.loc[df["flow"] == row["flow"], "code"].values[0]
-                    characterization_tensor[(category_name, flow_code, row["date"])] = (
+                    characterization_tensor[(category_name, flow_code, row["time_idx"])] = (
                         row["amount"]
                     )
                 logger.info(
@@ -878,10 +951,25 @@ class LCADataProcessor:
                     )
                     rf_series = df_char["amount"].values
 
-                    for year in self.system_time:
-                        cutoff = start_date.year + time_horizon - year - 1
-                        cumulative_rf = rf_series[:cutoff].sum()
-                        characterization_tensor[(category_name, flow_code, year)] = (
+                    for time_idx in system_time_list:
+                        # Compute cutoff based on resolution
+                        if resolution == TemporalResolutionEnum.year:
+                            cutoff = start_date.year + time_horizon - time_idx - 1
+                        elif resolution == TemporalResolutionEnum.month:
+                            # Convert time_idx to year for cutoff calculation
+                            start_month_idx = start_date.year * 12 + start_date.month - 1
+                            months_elapsed = time_idx - start_month_idx
+                            years_elapsed = months_elapsed / 12.0
+                            cutoff = int(time_horizon - years_elapsed - 1)
+                        else:  # day
+                            start_day_idx = int(np.datetime64(start_date, 'D').astype(int))
+                            days_elapsed = time_idx - start_day_idx
+                            years_elapsed = days_elapsed / 365.25
+                            cutoff = int(time_horizon - years_elapsed - 1)
+                        
+                        cutoff = max(0, cutoff)  # Ensure non-negative
+                        cumulative_rf = rf_series[:cutoff].sum() if cutoff > 0 else 0.0
+                        characterization_tensor[(category_name, flow_code, time_idx)] = (
                             cumulative_rf
                         )
                 logger.info(

@@ -8,10 +8,26 @@ import bw2data as bd
 from bw_temporalis import TemporalDistribution, easy_timedelta_distribution
 
 
-def infer_operation_td_from_limits(node: bd.backends.proxies.Activity):
+def infer_operation_td_from_limits(
+    node: bd.backends.proxies.Activity, 
+    resolution: str = "Y"
+):
     """
     Infer a temporal distribution for the operation of a process node based on its
     operation_time_limits.
+    
+    Parameters
+    ----------
+    node : bd.backends.proxies.Activity
+        The Brightway activity node with operation_time_limits attribute.
+    resolution : str, optional
+        Temporal resolution for the distribution. Options: "Y" (year), "M" (month), "D" (day).
+        Default is "Y".
+    
+    Returns
+    -------
+    TemporalDistribution or None
+        A temporal distribution object, or None if limits are not defined.
     """
     limits = node.get("operation_time_limits")
 
@@ -28,14 +44,30 @@ def infer_operation_td_from_limits(node: bd.backends.proxies.Activity):
         end=end,
         steps=num_steps,
         kind="uniform",
-        resolution="Y",
+        resolution=resolution,
     )
 
 
-def infer_eol_td_from_limits(node: bd.backends.proxies.Activity):
+def infer_eol_td_from_limits(
+    node: bd.backends.proxies.Activity,
+    resolution: str = "Y"
+):
     """
     Infer a temporal distribution for the end-of-life of a process node based on its
-    operation_time_limits, assuming EOL occurs one year after operation ends.
+    operation_time_limits, assuming EOL occurs one time unit after operation ends.
+    
+    Parameters
+    ----------
+    node : bd.backends.proxies.Activity
+        The Brightway activity node with operation_time_limits attribute.
+    resolution : str, optional
+        Temporal resolution for the distribution. Options: "Y" (year), "M" (month), "D" (day).
+        Default is "Y".
+    
+    Returns
+    -------
+    TemporalDistribution or None
+        A temporal distribution object, or None if limits are not defined.
     """
     limits = node.get("operation_time_limits")
 
@@ -45,14 +77,30 @@ def infer_eol_td_from_limits(node: bd.backends.proxies.Activity):
     _, end = limits
 
     return TemporalDistribution(
-        date=np.array([end + 1], dtype="timedelta64[Y]"), amount=np.array([1])
+        date=np.array([end + 1], dtype=f"timedelta64[{resolution}]"), amount=np.array([1])
     )
 
 
-def infer_construction_td_from_limits(node: bd.backends.proxies.Activity):
+def infer_construction_td_from_limits(
+    node: bd.backends.proxies.Activity,
+    resolution: str = "Y"
+):
     """
     Infer a temporal distribution for the construction of a process node based on its
-    operation_time_limits, assuming construction occurs one year before operation starts.
+    operation_time_limits, assuming construction occurs at the start of operation.
+    
+    Parameters
+    ----------
+    node : bd.backends.proxies.Activity
+        The Brightway activity node with operation_time_limits attribute.
+    resolution : str, optional
+        Temporal resolution for the distribution. Options: "Y" (year), "M" (month), "D" (day).
+        Default is "Y".
+    
+    Returns
+    -------
+    TemporalDistribution or None
+        A temporal distribution object, or None if limits are not defined.
     """
     limits = node.get("operation_time_limits")
 
@@ -62,5 +110,5 @@ def infer_construction_td_from_limits(node: bd.backends.proxies.Activity):
     start, _ = limits
 
     return TemporalDistribution(
-        date=np.array([start], dtype="timedelta64[Y]"), amount=np.array([1])
+        date=np.array([start], dtype=f"timedelta64[{resolution}]"), amount=np.array([1])
     )
