@@ -28,6 +28,18 @@ Here are some examples on how you can use the `optimex` package.
 
     *by @TimoDiepers & @JanTautorus*
 
+-   :lucide-sun:{ style="color: #ffd43b" } **Monthly Resolution Example**
+
+    ---
+
+    Seasonal renewable electricity with monthly temporal resolution. Demonstrates user-provided time-varying characterization factors for water scarcity.
+
+    [:lucide-arrow-right: View Example](./monthly_resolution_example.ipynb)
+
+    ---
+
+    *Monthly resolution & dynamic characterization*
+
 -   :lucide-hourglass:{ style="color: #ffa94d" } **More Examples coming soon...**
 
     ---
