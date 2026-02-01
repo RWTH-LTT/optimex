@@ -123,6 +123,82 @@ TemporalDistribution(
 !!! warning "Amounts must sum correctly"
     For production exchanges, the amounts in the temporal distribution should sum to the total production per unit. For a process producing 1 unit total over its lifetime with `amount=1`, use fractions that sum to 1.
 
+### Monthly and Daily Temporal Distributions
+
+For sub-yearly optimization, use appropriate numpy timedelta units:
+
+| Resolution | Numpy dtype | Example |
+|------------|-------------|---------|
+| Yearly | `timedelta64[Y]` | `np.array([0, 1, 2], dtype="timedelta64[Y]")` |
+| Monthly | `timedelta64[M]` | `np.array([0, 1, 2], dtype="timedelta64[M]")` |
+| Daily | `timedelta64[D]` | `np.array([0, 1, 2], dtype="timedelta64[D]")` |
+
+**Monthly production pattern (e.g., seasonal solar output):**
+```python
+# Solar PV with seasonal variation (higher in summer)
+monthly_solar_factors = np.array([
+    0.04,  # Jan - low winter output
+    0.05,  # Feb
+    0.08,  # Mar - spring increase
+    0.10,  # Apr
+    0.12,  # May
+    0.13,  # Jun - peak summer
+    0.13,  # Jul - peak summer
+    0.12,  # Aug
+    0.09,  # Sep - autumn decline
+    0.07,  # Oct
+    0.04,  # Nov
+    0.03,  # Dec - low winter output
+])
+
+solar_production_td = TemporalDistribution(
+    date=np.array(range(12), dtype="timedelta64[M]"),
+    amount=monthly_solar_factors,  # Sums to 1.0
+)
+```
+
+**Constant monthly distribution:**
+```python
+constant_monthly_td = TemporalDistribution(
+    date=np.array(range(12), dtype="timedelta64[M]"),
+    amount=np.array([1/12] * 12),  # Equal each month
+)
+```
+
+### Mixed Temporal Resolutions
+
+Processes can use different temporal resolutions in the same model. When the configured `temporal_resolution` is finer than an exchange's temporal distribution, `optimex` automatically converts:
+
+- **Yearly → Monthly**: Each year expands to 12 months (amounts divided by 12)
+- **Monthly → Daily**: Each month expands to ~30 days (amounts divided by 30)
+
+```python
+# A process with yearly distribution
+yearly_process = {
+    "operation_time_limits": (0, 2),
+    "exchanges": [{
+        "temporal_distribution": TemporalDistribution(
+            date=np.array([0, 1, 2], dtype="timedelta64[Y]"),
+            amount=np.array([0.33, 0.34, 0.33]),
+        ),
+        # ...
+    }],
+}
+
+# Combined with a monthly process in the same model
+monthly_process = {
+    "operation_time_limits": (0, 5),
+    "exchanges": [{
+        "temporal_distribution": TemporalDistribution(
+            date=np.array(range(6), dtype="timedelta64[M]"),
+            amount=np.array([1/6] * 6),
+        ),
+        # ...
+    }],
+}
+# Both work together when temporal_resolution="month"
+```
+
 ---
 
 ## The Operation Flag

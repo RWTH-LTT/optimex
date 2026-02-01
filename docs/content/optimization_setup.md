@@ -95,17 +95,78 @@ config = lca_processor.LCAConfig(
 | `temporal_resolution` | Time step granularity | `"year"`, `"month"`, `"day"` |
 | `time_horizon` | Years for impact accumulation | `100` (for GWP100) |
 
+#### Temporal Resolution Options
+
+`optimex` supports flexible temporal resolution for sub-yearly optimization:
+
+| Resolution | Use Case | Time Index Format |
+|------------|----------|-------------------|
+| `"year"` | Long-term transitions (default) | Year number (e.g., 2020, 2021) |
+| `"month"` | Seasonal variations, renewable intermittency | Year×12 + month-1 (e.g., 24240 for Jan 2020) |
+| `"day"` | Daily operations, storage optimization | Days since epoch |
+
+**Yearly resolution (default):**
+```python
+temporal={
+    "start_date": datetime(2020, 1, 1),
+    "temporal_resolution": "year",
+    "time_horizon": 100,
+}
+```
+
+**Monthly resolution:**
+```python
+temporal={
+    "start_date": datetime(2024, 1, 1),
+    "temporal_resolution": "month",
+    "time_horizon": 100,
+}
+```
+
+!!! tip "Monthly Temporal Distributions"
+    When using monthly resolution, use `timedelta64[M]` for temporal distributions:
+    ```python
+    # Monthly production pattern (e.g., seasonal solar output)
+    TemporalDistribution(
+        date=np.array(range(12), dtype="timedelta64[M]"),
+        amount=np.array([0.04, 0.05, 0.08, 0.10, 0.12, 0.13,
+                         0.13, 0.12, 0.09, 0.07, 0.04, 0.03]),
+    )
+    ```
+
+#### Mixed Temporal Resolutions
+
+Processes can use different temporal resolutions in the same model. `optimex` automatically converts coarser resolutions to the configured target:
+
+- Yearly temporal distributions are expanded to 12 monthly values
+- Monthly distributions are expanded to ~30 daily values
+- Amounts are distributed uniformly across expanded time points
+
+```python
+# Process with yearly distribution in a monthly-resolution model
+yearly_td = TemporalDistribution(
+    date=np.array([0, 1, 2], dtype="timedelta64[Y]"),  # Years
+    amount=np.array([0.33, 0.34, 0.33]),
+)
+# Automatically converted to monthly indices when temporal_resolution="month"
+```
+
+---
+
 ### Characterization Methods
 
-Each method requires:
+`optimex` supports three ways to specify characterization factors:
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `category_name` | Yes | Your name for this impact category |
-| `brightway_method` | Yes | Tuple identifying the Brightway method |
-| `metric` | No | Dynamic characterization: `"CRF"` or `"GWP"` |
+| Approach | Use Case | Required Fields |
+|----------|----------|-----------------|
+| **Static Brightway** | Constant characterization factors | `brightway_method` |
+| **Dynamic (GWP/CRF)** | Time-dependent climate impacts | `brightway_method`, `metric` |
+| **User-provided** | Custom time-varying factors | `characterization_factors` |
 
-**Static characterization** (default):
+#### Option 1: Static Brightway Method (default)
+
+Uses constant characterization factors from a Brightway LCIA method:
+
 ```python
 {
     "category_name": "land_use",
@@ -113,12 +174,15 @@ Each method requires:
 }
 ```
 
-**Dynamic characterization** (for climate change):
+#### Option 2: Dynamic Characterization (GWP/CRF)
+
+Uses the `dynamic_characterization` package for time-dependent climate impacts:
+
 ```python
 {
     "category_name": "climate_change",
     "brightway_method": ("IPCC 2021", "GWP 100a"),
-    "metric": "CRF",  # Cumulative Radiative Forcing
+    "metric": "CRF",  # or "GWP"
 }
 ```
 
@@ -127,6 +191,54 @@ Each method requires:
     - **GWP** (Global Warming Potential): Time-dependent GWP factors
 
     Dynamic metrics account for when emissions occur, not just how much.
+
+#### Option 3: User-Provided Characterization Factors
+
+Provides full flexibility for any time-varying characterization (e.g., seasonal water scarcity):
+
+```python
+{
+    "category_name": "water_scarcity",
+    "characterization_factors": {
+        # Maps (flow_code, time_index) -> characterization factor
+        ("water", 24240): 0.6,   # January 2020 - low scarcity
+        ("water", 24241): 0.7,   # February 2020
+        ("water", 24245): 1.5,   # June 2020 - high scarcity
+        ("water", 24246): 1.8,   # July 2020 - peak scarcity
+        # ... more factors
+    },
+}
+```
+
+!!! tip "No Brightway Method Needed"
+    When using `characterization_factors`, you don't need a `brightway_method`. This is useful for:
+    
+    - Seasonal impact factors (water scarcity, land use)
+    - Regionalized characterization
+    - Custom impact categories not in Brightway
+    - Scenario-specific factors
+
+**Building time-varying factors programmatically:**
+
+```python
+# Monthly water scarcity factors (higher in summer)
+monthly_cf = {
+    1: 0.6, 2: 0.7, 3: 0.8, 4: 1.0, 5: 1.2, 6: 1.5,
+    7: 1.8, 8: 1.8, 9: 1.3, 10: 1.0, 11: 0.8, 12: 0.6,
+}
+
+# Build characterization_factors dict for 24 months
+water_cf = {}
+for m in range(24):
+    year = 2024 + m // 12
+    month = (m % 12) + 1
+    time_idx = year * 12 + month - 1  # Monthly time index
+    water_cf[("water", time_idx)] = monthly_cf[month]
+
+characterization_methods=[
+    {"category_name": "water_scarcity", "characterization_factors": water_cf},
+]
+```
 
 ### Multiple Impact Categories
 
