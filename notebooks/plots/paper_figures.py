@@ -964,7 +964,7 @@ def create_combined_forcing_and_impacts_figure(scenarios_data: dict):
         ax0.set_xticks(xtick_positions)
         ax0.set_xticklabels([])
         if col == 0: 
-            ax0.set_ylabel(f"AGWP until 2125\n[$10^{{{int(np.log10(scaling_factor_crf_bar))}}}$ W/m²]")
+            ax0.set_ylabel(f"Cumulative Radiative Forcing \n until 2125 [$10^{{{int(np.log10(scaling_factor_crf_bar))}}}$ W m$^{{-2}}$ yr]")
         else: 
             ax0.tick_params(labelleft=False)
         ax0.grid(True, alpha=0.3, zorder=0)
@@ -1319,7 +1319,7 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
         ax0.set_xticks(xtick_positions_impacts)
         ax0.set_xticklabels([])
         if col == 0:
-            ax0.set_ylabel(f"AGWP until 2125\n[$10^{{{int(np.log10(scaling_factor_crf_bar))}}}$ W/m²]")
+            ax0.set_ylabel(f"Cum. Radiative Forcing \n until 2125 [$10^{{{int(np.log10(scaling_factor_crf_bar))}}}$ W m$^{{-2}}$ yr]")
         else:
             ax0.tick_params(labelleft=False)
         ax0.grid(True, alpha=0.3, zorder=0)
@@ -1349,7 +1349,7 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
         ax1.set_xticks(xtick_positions_impacts)
         ax1.set_xticklabels([])
         if col == 0:
-            ax1.set_ylabel(f"Radiative Forcing\n[$10^{{{int(np.log10(scaling_factor_inst))}}}$ W m$^{{-2}}$]")
+            ax1.set_ylabel(f"Instantaneous Radiative \n Forcing [$10^{{{int(np.log10(scaling_factor_inst))}}}$ W m$^{{-2}}$]")
         else:
             ax1.tick_params(labelleft=False)
         ax1.grid(True, alpha=0.3, zorder=0)

@@ -1052,3 +1052,273 @@ class TestVintageResultsValidation:
         assert obj == pytest.approx(133.33, rel=1e-3), \
             "Impact should be ~133.33 kg CO2 (interpolated production capacity)"
 
+
+
+class TestDatabaseVintageParameterExtraction:
+    """Tests for extracting vintage parameters from Brightway database."""
+
+    @pytest.fixture
+    def database_with_vintage_params(self, request):
+        """Create a test database with vintage parameter attributes."""
+        from datetime import datetime
+        import bw2data as bd
+        import numpy as np
+        from bw2data.tests import bw2test
+        from bw_temporalis import TemporalDistribution
+
+        # Set up test project
+        project_name = "__test_vintage_db__"
+        bd.projects.set_current(project_name)
+        
+        # Register cleanup to delete project after test
+        def cleanup():
+            try:
+                bd.projects.delete_project(project_name, delete_dir=True)
+            except:
+                pass  # Ignore cleanup errors
+        
+        request.addfinalizer(cleanup)
+        
+        # Create biosphere database
+        bio_db = bd.Database("biosphere3")
+        bio_db.write({
+            ("biosphere3", "CO2"): {
+                "type": "emission",
+                "name": "carbon dioxide",
+            },
+        })
+        bio_db.register()
+
+        # Create background database
+        bg_db = bd.Database("db_2020")
+        bg_db.write({
+            ("db_2020", "electricity"): {
+                "name": "electricity",
+                "location": "GLO",
+                "reference product": "electricity",
+                "exchanges": [
+                    {
+                        "amount": 1,
+                        "type": "production",
+                        "input": ("db_2020", "electricity"),
+                    },
+                    {
+                        "amount": 0.5,
+                        "type": "biosphere",
+                        "input": ("biosphere3", "CO2"),
+                    },
+                ],
+            },
+        })
+        bg_db.metadata["representative_time"] = datetime(2020, 1, 1).isoformat()
+        bg_db.register()
+
+        # Create foreground database with vintage parameters
+        fg_db = bd.Database("foreground")
+        fg_db.write({
+            # Product node
+            ("foreground", "vkm"): {
+                "name": "vehicle-km",
+                "type": bd.labels.product_node_default,
+                "unit": "km",
+            },
+            # Process node with vintage-dependent exchange
+            ("foreground", "EV"): {
+                "name": "Electric Vehicle",
+                "type": bd.labels.process_node_default,
+                "operation_time_limits": (1, 2),
+                "exchanges": [
+                    {
+                        "amount": 1,
+                        "type": bd.labels.production_edge_default,
+                        "input": ("foreground", "vkm"),
+                        "temporal_distribution": TemporalDistribution(
+                            date=np.array([0, 1, 2, 3], dtype="timedelta64[Y]"),
+                            amount=np.array([0, 0.5, 0.5, 0]),
+                        ),
+                        "operation": True,
+                    },
+                    {
+                        "amount": 60,  # Base amount (will be overridden by vintage_amounts)
+                        "type": bd.labels.consumption_edge_default,
+                        "input": ("db_2020", "electricity"),
+                        "temporal_distribution": TemporalDistribution(
+                            date=np.array([1, 2], dtype="timedelta64[Y]"),
+                            amount=np.array([0.5, 0.5]),
+                        ),
+                        "operation": True,
+                        # NEW: Vintage-specific values
+                        "vintage_amounts": {
+                            (1, 2020): 30,  # τ=1, 2020 vintage: 30 MJ/vkm
+                            (2, 2020): 30,  # τ=2, 2020 vintage: 30 MJ/vkm
+                            (1, 2030): 22.5,  # τ=1, 2030 vintage: 22.5 MJ/vkm
+                            (2, 2030): 22.5,  # τ=2, 2030 vintage: 22.5 MJ/vkm
+                        },
+                    },
+                    {
+                        "amount": 5000,  # Manufacturing emissions
+                        "type": bd.labels.biosphere_edge_default,
+                        "input": ("biosphere3", "CO2"),
+                        "temporal_distribution": TemporalDistribution(
+                            date=np.array([0], dtype="timedelta64[Y]"),
+                            amount=np.array([1.0]),
+                        ),
+                        # Vintage improvement scaling
+                        "vintage_improvements": {
+                            2020: 1.0,   # 100% of base (5000 kg)
+                            2030: 0.8,   # 80% of base (4000 kg)
+                        },
+                    },
+                ],
+            },
+        })
+        fg_db.register()
+
+        # Create LCIA method
+        bd.Method(("GWP", "example")).write([
+            (("biosphere3", "CO2"), 1.0),
+        ])
+
+        return fg_db
+
+    def test_lca_processor_extracts_vintage_amounts(self, database_with_vintage_params):
+        """Test that LCADataProcessor extracts vintage_amounts from exchanges."""
+        from datetime import datetime
+        import bw2data as bd
+        import numpy as np
+        from bw_temporalis import TemporalDistribution
+        from optimex import lca_processor
+
+        # Create demand
+        product_node = bd.get_node(database="foreground", code="vkm")
+        
+        demand = {
+            product_node: TemporalDistribution(
+                date=np.array([datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"),
+                amount=np.array([100]),
+            )
+        }
+
+        # Configure LCA processor
+        config = lca_processor.LCAConfig(
+            demand=demand,
+            temporal={
+                "start_date": datetime(2020, 1, 1),
+                "temporal_resolution": "year",
+                "time_horizon": 20,
+            },
+            characterization_methods=[
+                {
+                    "category_name": "climate_change",
+                    "brightway_method": ("GWP", "example"),
+                },
+            ],
+        )
+
+        # Run processor
+        processor = lca_processor.LCADataProcessor(config)
+
+        # Verify vintage parameters were extracted
+        assert processor.foreground_technosphere_vintages is not None
+        assert len(processor.foreground_technosphere_vintages) > 0
+        
+        # Check specific vintage values
+        assert ("EV", "electricity", 1, 2020) in processor.foreground_technosphere_vintages
+        assert processor.foreground_technosphere_vintages[("EV", "electricity", 1, 2020)] == 30
+        assert ("EV", "electricity", 1, 2030) in processor.foreground_technosphere_vintages
+        assert processor.foreground_technosphere_vintages[("EV", "electricity", 1, 2030)] == 22.5
+
+    def test_lca_processor_extracts_vintage_improvements(self, database_with_vintage_params):
+        """Test that LCADataProcessor extracts vintage_improvements from exchanges."""
+        from datetime import datetime
+        import bw2data as bd
+        import numpy as np
+        from bw_temporalis import TemporalDistribution
+        from optimex import lca_processor
+
+        # Create demand
+        product_node = bd.get_node(database="foreground", code="vkm")
+        
+        demand = {
+            product_node: TemporalDistribution(
+                date=np.array([datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"),
+                amount=np.array([100]),
+            )
+        }
+
+        # Configure LCA processor
+        config = lca_processor.LCAConfig(
+            demand=demand,
+            temporal={
+                "start_date": datetime(2020, 1, 1),
+                "temporal_resolution": "year",
+                "time_horizon": 20,
+            },
+            characterization_methods=[
+                {
+                    "category_name": "climate_change",
+                    "brightway_method": ("GWP", "example"),
+                },
+            ],
+        )
+
+        # Run processor
+        processor = lca_processor.LCADataProcessor(config)
+
+        # Verify vintage improvements were extracted
+        assert processor.vintage_improvements is not None
+        assert len(processor.vintage_improvements) > 0
+        
+        # Check specific vintage improvement values
+        assert ("EV", "CO2", 2020) in processor.vintage_improvements
+        assert processor.vintage_improvements[("EV", "CO2", 2020)] == 1.0
+        assert ("EV", "CO2", 2030) in processor.vintage_improvements
+        assert processor.vintage_improvements[("EV", "CO2", 2030)] == 0.8
+
+    def test_model_input_manager_uses_database_vintages(self, database_with_vintage_params):
+        """Test that ModelInputManager includes vintage parameters from database."""
+        from datetime import datetime
+        import bw2data as bd
+        import numpy as np
+        from bw_temporalis import TemporalDistribution
+        from optimex import lca_processor, converter
+
+        # Create demand
+        product_node = bd.get_node(database="foreground", code="vkm")
+        
+        demand = {
+            product_node: TemporalDistribution(
+                date=np.array([datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"),
+                amount=np.array([100]),
+            )
+        }
+
+        # Configure LCA processor
+        config = lca_processor.LCAConfig(
+            demand=demand,
+            temporal={
+                "start_date": datetime(2020, 1, 1),
+                "temporal_resolution": "year",
+                "time_horizon": 20,
+            },
+            characterization_methods=[
+                {
+                    "category_name": "climate_change",
+                    "brightway_method": ("GWP", "example"),
+                },
+            ],
+        )
+
+        # Run processor and convert to model inputs
+        processor = lca_processor.LCADataProcessor(config)
+        manager = converter.ModelInputManager()
+        model_inputs = manager.parse_from_lca_processor(processor)
+
+        # Verify vintage parameters are in model inputs
+        assert model_inputs.foreground_technosphere_vintages is not None
+        assert len(model_inputs.foreground_technosphere_vintages) > 0
+        assert ("EV", "electricity", 1, 2020) in model_inputs.foreground_technosphere_vintages
+        
+        assert model_inputs.technology_evolution is not None
+        assert len(model_inputs.technology_evolution) > 0
+        assert ("EV", "CO2", 2020) in model_inputs.technology_evolution
