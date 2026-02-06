@@ -1,0 +1,723 @@
+/* ============================================================================
+   OPTIMEX DOCUMENTATION - CUSTOM STYLES
+   ============================================================================ */
+
+/* ============================================================================
+   1. CSS VARIABLES & GLOBAL
+   ============================================================================ */
+
+html {
+    scroll-behavior: smooth;
+}
+
+[data-md-color-scheme="slate"] {
+    --md-default-bg-color: #0B0C0F;
+}
+
+/* ============================================================================
+   2. HEADER, NAVIGATION & FOOTER - GLASSMORPHISM
+   ============================================================================ */
+
+/* Light mode */
+[data-md-color-scheme="default"] .md-header,
+[data-md-color-scheme="default"] .md-tabs {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+}
+
+[data-md-color-scheme="default"] .md-footer {
+    background-color: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.87);
+}
+
+[data-md-color-scheme="default"] .md-footer a,
+[data-md-color-scheme="default"] .md-footer-nav__link,
+[data-md-color-scheme="default"] .md-footer-nav__title,
+[data-md-color-scheme="default"] .md-footer-nav__direction {
+    color: rgba(0, 0, 0, 0.87);
+}
+
+[data-md-color-scheme="default"] .md-footer-meta,
+[data-md-color-scheme="default"] .md-footer-meta * {
+    background-color: transparent !important;
+    color: rgba(0, 0, 0, 0.6) !important;
+}
+
+[data-md-color-scheme="default"] .md-footer-meta svg {
+    fill: rgba(0, 0, 0, 0.6) !important;
+}
+
+[data-md-color-scheme="default"] .md-social__link svg {
+    fill: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Dark mode */
+[data-md-color-scheme="slate"] .md-header {
+    background-color: rgba(11, 12, 15, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+    box-shadow: none !important;
+}
+
+[data-md-color-scheme="slate"] .md-tabs {
+    background-color: rgba(11, 12, 15, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+}
+
+[data-md-color-scheme="slate"] .md-footer {
+    background-color: rgba(11, 12, 15, 0.75) !important;
+    backdrop-filter: blur(8px) saturate(1.5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.5);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Header border when scrolled (tabs hidden) */
+[data-md-color-scheme="slate"] .md-header--shadow {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: none !important;
+}
+
+/* ============================================================================
+   3. HEADER ELEMENTS
+   ============================================================================ */
+
+/* Logo */
+.md-header__button.md-logo {
+    padding: 0 0.4rem !important;
+    margin: 0 !important;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+    height: 30px;
+    width: auto;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Title */
+.md-header__title {
+    margin-left: 10px !important;
+}
+
+.md-header__topic:first-child {
+    font-family: "Consolas", "Roboto Mono", monospace !important;
+    text-transform: lowercase;
+    font-weight: 700;
+}
+
+.md-header__topic:not(:first-child) {
+    font-family: var(--md-text-font-family, "Inter", sans-serif);
+    text-transform: none;
+    font-weight: normal;
+}
+
+/* Theme toggle - muted */
+[data-md-color-scheme="slate"] .md-header__button[for="__palette_0"] {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+[data-md-color-scheme="default"] .md-header__button[for="__palette_1"] {
+    color: rgba(0, 0, 0, 0.87);
+}
+
+.md-header__button.md-icon svg {
+    height: 1rem !important;
+}
+
+/* ============================================================================
+   4. NAVIGATION TABS
+   ============================================================================ */
+
+.md-tabs {
+    position: relative;
+    border-bottom: none !important;
+}
+
+/* Border line (pseudo-element for z-index control) */
+.md-tabs::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    z-index: 1;
+}
+
+[data-md-color-scheme="default"] .md-tabs::after {
+    background-color: rgba(0, 0, 0, 0.07);
+}
+
+[data-md-color-scheme="slate"] .md-tabs::after {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Tab list and items */
+.md-tabs__list {
+    display: flex;
+    align-items: stretch;
+    overflow: visible !important;
+}
+
+.md-tabs__item {
+    display: flex;
+    height: 2rem;
+    padding: 0;
+    margin: 0 0.2rem;
+    overflow: visible !important;
+}
+
+/* Tab links */
+.md-tabs__link {
+    display: flex;
+    align-items: center;
+    padding: 0 0.5rem;
+    margin: 0;
+    height: 100%;
+    position: relative;
+    z-index: 2;
+    transition: all 0.25s ease;
+    border-radius: 0.5rem;
+    overflow: visible !important;
+}
+
+/* Hover background (pseudo-element for size control) */
+.md-tabs__link::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0.3rem;
+    bottom: 0.3rem;
+    border-radius: 0.4rem;
+    background-color: transparent;
+    transition: background-color 0.25s ease;
+    z-index: -1;
+}
+
+[data-md-color-scheme="slate"] .md-tabs__link:hover::before {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-md-color-scheme="default"] .md-tabs__link:hover::before {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Active state */
+.md-tabs__item--active .md-tabs__link {
+    text-shadow: 0.5px 0 0 currentColor;
+    font-weight: 400;
+}
+
+/* Active indicator */
+.md-tabs__item--active .md-tabs__link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    border-radius: 1px;
+    background-color: var(--md-accent-fg-color);
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+/* Mobile navigation backgrounds */
+.md-nav__title,
+.md-nav__source,
+.md-nav--primary .md-nav__title,
+.md-nav--primary .md-nav__title[for="__drawer"] {
+    background-color: var(--md-default-bg-color) !important;
+}
+
+/* ============================================================================
+   5. SEARCH
+   ============================================================================ */
+
+.md-search {
+    padding: 6px 0;
+}
+
+.md-search__form,
+.md-search__input {
+    border-radius: 0.5rem;
+}
+
+.md-search__input::placeholder {
+    font-size: 0.7rem;
+}
+
+.md-search__inner {
+    border-radius: 0.5rem;
+}
+
+.md-search__output,
+.md-search__scrollwrap {
+    border-radius: 0 0 0.5rem 0.5rem;
+}
+
+/* Expanded search */
+[data-md-toggle="search"]:checked ~ .md-header .md-search__form {
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+
+[data-md-toggle="search"]:checked ~ .md-header .md-search__inner {
+    border-radius: 0.5rem;
+}
+
+/* Search field - dark mode */
+[data-md-color-scheme="slate"] .md-search__form {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Search icon - muted */
+[data-md-color-scheme="slate"] .md-search__icon {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+[data-md-color-scheme="default"] .md-search__icon {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+/* Search results */
+.md-search-result__article {
+    border-radius: 0.4rem;
+}
+
+/* ============================================================================
+   6. SEARCH OVERLAY & BLUR EFFECTS
+   ============================================================================ */
+
+/* Disable glassmorphism when search is open */
+[data-md-toggle="search"]:checked ~ .md-header,
+[data-md-toggle="search"]:checked ~ .md-header .md-tabs {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: var(--md-default-bg-color) !important;
+}
+
+/* Blur background content */
+[data-md-toggle="search"]:checked ~ .md-container,
+[data-md-toggle="search"]:checked ~ .md-main {
+    filter: blur(6px);
+    transition: filter 0.2s ease;
+}
+
+/* Blur header elements except search */
+[data-md-toggle="search"]:checked ~ .md-header .md-header__button.md-logo,
+[data-md-toggle="search"]:checked ~ .md-header .md-header__title,
+[data-md-toggle="search"]:checked ~ .md-header .md-header__option,
+[data-md-toggle="search"]:checked ~ .md-header .md-header__source {
+    filter: blur(6px);
+    transition: filter 0.2s ease;
+}
+
+/* Search overlay */
+.md-search__overlay {
+    background-color: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+/* ============================================================================
+   6.1. MOBILE DRAWER OVERLAY & BLUR EFFECTS
+   ============================================================================ */
+
+/* Blur background content when mobile drawer is open */
+[data-md-toggle="__drawer"]:checked ~ .md-container,
+[data-md-toggle="__drawer"]:checked ~ .md-main {
+    filter: blur(6px);
+    transition: filter 0.2s ease;
+}
+
+/* Mobile drawer overlay */
+.md-overlay {
+    background-color: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+/* ============================================================================
+   7. BORDER RADIUS - GLOBAL
+   ============================================================================ */
+
+/* Code blocks */
+.md-typeset pre > code,
+.md-typeset code {
+    border-radius: 0.4rem;
+}
+
+.md-typeset pre,
+.highlight {
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+/* Admonitions */
+.md-typeset .admonition,
+.md-typeset details {
+    border-radius: 0.5rem;
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+
+/* Tables */
+.md-typeset table:not([class]) {
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.md-typeset table:not([class]) th:first-child {
+    border-top-left-radius: 0.5rem;
+}
+
+.md-typeset table:not([class]) th:last-child {
+    border-top-right-radius: 0.5rem;
+}
+
+.md-typeset table:not([class]) tr:last-child td:first-child {
+    border-bottom-left-radius: 0.5rem;
+}
+
+.md-typeset table:not([class]) tr:last-child td:last-child {
+    border-bottom-right-radius: 0.5rem;
+}
+
+/* Cards and tabs */
+.md-typeset .tabbed-block,
+.tabbed-set,
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid.cards > ol > li {
+    border-radius: 0.5rem;
+}
+
+/* Card hover effect - dark mode */
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li,
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ol > li {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li:hover,
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ol > li:hover {
+    border-color: rgba(255, 255, 255, 0.05);
+    box-shadow: 0px 4px 10px 0px rgba(0, 0, 0, 0.95);
+}
+
+/* Card heading icons - add right margin */
+.md-typeset .grid.cards > ul > li > p:first-child .twemoji,
+.md-typeset .grid.cards > ol > li > p:first-child .twemoji {
+    margin-right: 0.4rem;
+}
+
+.tabbed-set > input:checked + label {
+    border-bottom-color: var(--md-accent-fg-color);
+}
+
+/* Add top margin to code blocks directly under tabs */
+.tabbed-block > .highlight:first-child,
+.tabbed-set .tabbed-content > .highlight:first-child,
+.md-typeset .tabbed-block > pre:first-child,
+.md-typeset .tabbed-block > .highlight:first-child {
+    margin-top: 1em !important;
+}
+
+/* Buttons */
+.md-typeset .md-button {
+    border-radius: 0.4rem;
+}
+
+/* Tooltips and annotations */
+.md-tooltip {
+    border-radius: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.md-annotation__index {
+    border-radius: 0.3rem;
+}
+
+/* ============================================================================
+   8. CODE BLOCKS - THEME COLORS
+   ============================================================================ */
+
+/* Dark mode */
+[data-md-color-scheme="slate"] .highlight {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-md-color-scheme="slate"] .highlight code {
+    background-color: transparent !important;
+}
+
+/* Light mode */
+[data-md-color-scheme="default"] .highlight {
+    background-color: rgba(0, 0, 0, 0.03) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-md-color-scheme="default"] .highlight code {
+    background-color: transparent !important;
+}
+
+.md-code__nav {
+    background-color: transparent !important;
+}
+
+[data-md-color-scheme="default"]
+.md-code__button {
+    color:  rgba(0, 0, 0, 0.2);
+}
+
+[data-md-color-scheme="slate"]
+.md-code__button {
+    color:  rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================================================
+   9. JUPYTER NOTEBOOKS
+   ============================================================================ */
+
+.jp-Notebook, .jp-Cell {
+    padding: 0 !important;
+}
+
+
+/* Hide prompts */
+.jp-InputPrompt,
+.jp-OutputPrompt {
+    display: none !important;
+}
+
+/* Input area */
+.jp-InputArea,
+.jp-InputArea-editor,
+.jp-OutputArea * {
+    border-radius: 0.5rem !important;
+    overflow-x: scroll !important;
+}
+
+.jp-CodeMirrorEditor pre {
+    overflow-x: scroll !important;
+}
+
+/* Dark mode */
+[data-md-color-scheme="slate"] .jp-CodeMirrorEditor {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-md-color-scheme="slate"] .jp-CodeMirrorEditor-editor,
+[data-md-color-scheme="slate"] .jp-CodeMirrorEditor .highlight-ipynb {
+    background-color: transparent !important;
+    border: none !important;
+}
+
+/* Light mode */
+[data-md-color-scheme="default"] .jp-CodeMirrorEditor {
+    background-color: rgba(0, 0, 0, 0.03) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-md-color-scheme="default"] .jp-CodeMirrorEditor-editor,
+[data-md-color-scheme="default"] .jp-CodeMirrorEditor .highlight-ipynb {
+    background-color: transparent !important;
+    border: none !important;
+}
+
+/* ============================================================================
+   10. MISC
+   ============================================================================ */
+
+/* Spacing */
+h1, h1 *, h2, h2 *, h3, h3 *, h4, h4 *, h5, h5 *, h6, h6 * {
+    letter-spacing: -0.025em !important;
+    font-weight: 700 !important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--md-primary-bg-color) !important;
+}
+
+h1 *, h2 * {
+    color: var(--md-primary-bg-color) !important;
+}
+
+.md-content__inner {
+    padding-bottom: 3rem;
+}
+
+/* Back to top button - dark mode */
+[data-md-color-scheme="slate"] .md-top {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.md-top {
+    padding: 4px 8px;
+    border-radius: 0.5rem;
+}
+
+/* ============================================================================
+   11. LUCIDE ICONS FIX
+   ============================================================================ */
+
+/* Lucide icons are stroke-based - only target SVGs with lucide class */
+svg[class*="lucide"] {
+    fill: none !important;
+    stroke: currentColor !important;
+}
+
+svg[class*="lucide"] path,
+svg[class*="lucide"] circle,
+svg[class*="lucide"] rect,
+svg[class*="lucide"] line,
+svg[class*="lucide"] polyline {
+    fill: none !important;
+}
+
+/* Navigation sidebar icons - only those with stroke attribute */
+.md-nav__link svg[stroke="currentColor"],
+.md-nav__link svg[stroke="currentColor"] path,
+.md-nav__link svg[stroke="currentColor"] circle {
+    fill: none !important;
+}
+
+/* Search icon */
+.md-search__icon {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.md-search__icon svg {
+    fill: none !important;
+    width: 1rem !important;
+    height: 1rem !important;
+}
+
+.md-header__button.md-icon[for="__search"] svg {
+    fill: none !important;
+}
+
+[data-md-color-scheme="slate"] .md-search__icon svg {
+    stroke: rgba(255, 255, 255, 0.7) !important;
+}
+
+[data-md-color-scheme="default"] .md-search__icon svg {
+    stroke: rgba(0, 0, 0, 0.87) !important;
+}
+
+/* ============================================================================
+   12. NOTEBOOK DOWNLOAD LINK (ToC Sidebar)
+   ============================================================================ */
+
+.toc-download-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+    border-radius: 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+}
+
+[data-md-color-scheme="slate"] .toc-download-link {
+    color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-md-color-scheme="slate"] .toc-download-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+[data-md-color-scheme="default"] .toc-download-link {
+    color: rgba(0, 0, 0, 0.6);
+    background-color: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-md-color-scheme="default"] .toc-download-link:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+    color: rgba(0, 0, 0, 0.8);
+}
+
+.toc-download-link svg {
+    width: 0.9rem;
+    height: 0.9rem;
+    fill: none !important;
+    stroke: currentColor !important;
+}
+
+/* ============================================================================
+   13. HOME PAGE LINKS
+   ============================================================================ */
+
+p.home-links {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 1.25rem 0;
+}
+
+p.home-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-decoration: none;
+    padding: 0.15rem 0.6rem;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+p.home-links a svg {
+    width: 0.85rem;
+    height: 0.85rem;
+    stroke: currentColor;
+    stroke-width: 2;
+    vertical-align: middle;
+}
+p.home-links a.primary {
+    background-color: var(--md-primary-bg-color);
+    color: var(--md-primary-fg-color);
+}
+
+[data-md-color-scheme="slate"] p.home-links a.primary:hover {
+    background-color: rgba(255, 255, 255, 0.8);
+}
+
+[data-md-color-scheme="default"] p.home-links a.primary:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+p.home-links a:not(.primary) {
+    background-color: transparent;
+    color: var(--md-primary-bg-color);
+}
+
+[data-md-color-scheme="slate"] p.home-links a:not(.primary):hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-md-color-scheme="default"] p.home-links a:not(.primary):hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}

@@ -71,6 +71,7 @@ docs = [
     "mkdocs-autorefs",
     "mkdocstrings[python]",
     "mkdocs-jupyter",
+    "zensical",
 ]
 
 [tool.setuptools]

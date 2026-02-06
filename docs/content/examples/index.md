@@ -10,7 +10,7 @@ Here are some examples on how you can use the `optimex` package.
 
     A simple example on how to use `optimex`, explaining its capabilities based on a dummy case.
 
-    [:lucide-arrow-right: View Example](./basic_optimex_example.ipynb)
+    [:lucide-arrow-right: View Example](./basic_optimex_example.md)
 
     ---
 
