@@ -33,7 +33,7 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
 
     In the future, processes will (hopefully) reduce their emissions. So, the time at which a process happens affects its impacts, with later occurence often resulting in lower emissions.
 
-    `optimex` reflects this by allowing process inventories to change over time.
+    `optimex` reflects this by allowing process inventories to change over time, with vintage-dependent parameters that capture technology improvements by installation year.
 
 -   :lucide-trending-up:{ style="color: #ffa94d" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Emission Accumulation</span>
 
@@ -46,6 +46,53 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
 </div>
 
 During the transition pathway optimization, `optimex` simultaneously accounts for these temporal considerations, identifying the environmentally optimal process deployment over the transition period.
+
+## Capabilities
+
+<div class="grid cards" markdown>
+
+-   :lucide-boxes:{ style="color: #4dabf7" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Modular Pipeline</span>
+
+    ---
+
+    A four-stage architecture — LCA Processor, Converter, Optimizer, and Postprocessing — connects Brightway LCA data to Pyomo optimization in a clean, extensible workflow.
+
+    [:lucide-arrow-right: API Reference](api/index.md)
+
+-   :lucide-lock:{ style="color: #69db7c" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Comprehensive Constraints</span>
+
+    ---
+
+    Deployment and operation limits, cumulative and time-specific impact budgets, flow-level constraints, process coupling, and existing capacity (brownfield) modeling.
+
+    [:lucide-arrow-right: Constraints Guide](content/constraints.md)
+
+-   :lucide-bar-chart-3:{ style="color: #ffa94d" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Rich Postprocessing</span>
+
+    ---
+
+    Extract results as DataFrames and generate publication-quality visualizations: impact stacks, installation timelines, production vs. demand, capacity balance, and utilization heatmaps.
+
+    [:lucide-arrow-right: Postprocessing Guide](content/postprocessing_guide.md)
+
+-   :lucide-hard-drive:{ style="color: #da77f2" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Model I/O & Solvers</span>
+
+    ---
+
+    Save and load model inputs in JSON or pickle format for reproducibility and scenario comparison. Compatible with GLPK, HiGHS, Gurobi, and CPLEX solvers.
+
+    [:lucide-arrow-right: Optimization Setup](content/optimization_setup.md)
+
+</div>
+
+## Use Cases
+
+`optimex` is designed for scenario analyses of transition pathways where environmental sustainability is the objective, such as:
+
+- **Energy system transitions:** Optimal deployment timing for renewable energy technologies like wind, solar, and battery storage
+- **Industrial decarbonization:** Planning the shift from conventional to cleaner production processes, e.g., hydrogen production via SMR vs. electrolysis
+- **Infrastructure planning:** Accounting for construction, operation, and decommissioning timelines when evaluating long-lived infrastructure investments
+- **Technology portfolio selection:** Determining the environmentally optimal mix of technologies over a transition horizon under resource, capacity, or emission constraints
 
 ## Support
 

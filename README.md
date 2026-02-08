@@ -21,17 +21,37 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
 
 1. **Timing within Process Life Cycles:** Environmental impacts are spread across a process’s life cycle: construction happens first, use comes later, and end-of-life impacts follow. `optimex` captures this by distributing process inputs and outputs over time.
 
-2. **Technology Evolution:** Future technologies may become more sustainable, reducing the environmental impacts later in the expansion period. `optimex` reflects this by allowing process inventories to evolve over time.
+2. **Technology Evolution:** Future technologies may become more sustainable, reducing the environmental impacts later in the expansion period. `optimex` reflects this by allowing process inventories to evolve over time, including vintage-dependent parameters that model how process characteristics change based on installation year.
 
-3.	**Accumulation of Emissions and Impacts:** Most impacts arise from the accumulation of emissions, but are typically modeled as discrete and independent pulses. `optimex` retains the timing of emissions during inventory calculations and applies dynamic characterization to account for impact accumulation.
+3. **Accumulation of Emissions and Impacts:** Most impacts arise from the accumulation of emissions, but are typically modeled as discrete and independent pulses. `optimex` retains the timing of emissions during inventory calculations and applies dynamic characterization to account for impact accumulation.
 
 During the transition pathway optimization, `optimex` simultaneously accounts for these temporal considerations, identifying the environmentally optimal process deployment over the transition period.
-  
+
+### Capabilities
+
+- **Modular pipeline architecture:** LCA Processor → Converter → Optimizer → Postprocessing, connecting Brightway LCA data to Pyomo optimization
+- **Comprehensive constraint system:** Deployment and operation limits, cumulative and time-specific impact budgets, flow-level constraints, process coupling, and existing capacity (brownfield) modeling
+- **Vintage-dependent process parameters:** Model improving technology characteristics over time using explicit vintage values or scaling factors, with automatic interpolation between reference years
+- **Dynamic impact characterization:** Support for time-dependent impact factors such as dynamic GWP and cumulative radiative forcing, alongside standard static LCIA methods
+- **Rich postprocessing:** Extract results as DataFrames and generate publication-quality visualizations including impact stacks, installation timelines, production vs. demand plots, capacity balance charts, and utilization heatmaps
+- **Model I/O:** Save and load model inputs in JSON or pickle format for reproducibility and scenario comparison
+- **Multiple solver support:** Compatible with open-source (GLPK, HiGHS) and commercial (Gurobi, CPLEX) solvers via Pyomo
+
+### Use Cases
+
+`optimex` is designed for scenario analyses of transition pathways where environmental sustainability is the objective, such as:
+
+- **Energy system transitions:** Optimal deployment timing for renewable energy technologies like wind, solar, and battery storage
+- **Industrial decarbonization:** Planning the shift from conventional to cleaner production processes, e.g., hydrogen production via SMR vs. electrolysis
+- **Infrastructure planning:** Accounting for construction, operation, and decommissioning timelines when evaluating long-lived infrastructure investments
+- **Technology portfolio selection:** Determining the environmentally optimal mix of technologies over a transition horizon under resource, capacity, or emission constraints
+
 ## First Steps
 
 - [Installation Guide](https://optimex.readthedocs.io/en/latest/content/installation/)
 - [Getting Started Tutorial](https://optimex.readthedocs.io/en/latest/content/examples/basic_optimex_example/)
 - [Example Collection](https://optimex.readthedocs.io/en/latest/content/examples/)
+- [Full Documentation](https://optimex.readthedocs.io/)
 
 ## Support
 
