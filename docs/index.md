@@ -33,7 +33,7 @@ Like other transition pathway optimization tools, `optimex` identifies the optim
 
     In the future, processes will (hopefully) reduce their emissions. So, the time at which a process happens affects its impacts, with later occurence often resulting in lower emissions.
 
-    `optimex` reflects this by allowing process inventories to change over time, with vintage-dependent parameters that capture technology improvements by installation year.
+    `optimex` reflects this by allowing process inventories to change over time, with vintage-dependent foreground parameters and dynamic linking to time-specific background databases.
 
 -   :lucide-trending-up:{ style="color: #ffa94d" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Emission Accumulation</span>
 
