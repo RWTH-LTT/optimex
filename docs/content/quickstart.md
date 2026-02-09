@@ -1,3 +1,7 @@
+---
+icon: lucide/zap
+---
+
 # Quick Start
 
 A condensed reference for using `optimex`. For the underlying framework, see the [Theory](theory.md) page. For detailed explanations, see the [User Guide](brightway_setup.md), [Examples](examples/index.md), or the [API Reference](../api/index.md).

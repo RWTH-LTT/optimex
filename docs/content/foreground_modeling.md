@@ -1,3 +1,7 @@
+---
+icon: lucide/pencil
+---
+
 # Foreground Modeling
 
 The foreground database contains the candidate processes that `optimex` will optimize — these are the processes whose capacity installation and operational dispatch are the decision variables. This guide explains the `optimex`-specific attributes you need to add to standard Brightway processes. For the underlying concepts (temporal distribution, process time vs system time, convolution), see the [Theory](theory.md) page.

@@ -1069,21 +1069,50 @@ def solve_model(
 
     # 2) Solve model
     results = solver.solve(model, tee=tee, **solve_kwargs)
+
+    termination = results.solver.termination_condition
+
+    # 3) Check termination and handle non-optimal outcomes
+    if termination != pyo.TerminationCondition.optimal:
+        msg = f"Solver [{solver_name}] termination: {termination}"
+
+        if termination == pyo.TerminationCondition.infeasible:
+            if compute_iis:
+                try:
+                    write_iis(model, iis_file_name="model_iis.ilp", solver=solver)
+                    msg += " — IIS written to model_iis.ilp"
+                except Exception as e:
+                    msg += f" — IIS generation failed: {e}"
+            else:
+                msg += " — rerun with compute_iis=True to diagnose"
+        elif termination == pyo.TerminationCondition.unbounded or (
+            termination == pyo.TerminationCondition.other
+            and "unbounded" in str(results).lower()
+        ):
+            msg += (
+                " — the model is unbounded. Common cause: installation-dependent"
+                " flows (non-operation technosphere/biosphere exchanges) that produce"
+                " a net-negative impact allow var_installation to grow without bound."
+                " Fix by setting finite process_deployment_limits_max for affected"
+                " processes, or ensure installation-dependent flows do not create"
+                " a negative-impact incentive for over-installation."
+            )
+        elif termination == pyo.TerminationCondition.other:
+            msg += (
+                " — solver returned non-standard termination. Run with tee=True"
+                " for detailed solver output. Common causes: unbounded model"
+                " (set finite process_deployment_limits_max) or numerical issues."
+            )
+
+        # Append full solver details
+        msg += f"\n\nFull solver results:\n{results}"
+
+        raise RuntimeError(msg)
+
     model.solutions.load_from(results)
     logger.info(
-        f"Solver [{solver_name}] termination: {results.solver.termination_condition}"
+        f"Solver [{solver_name}] termination: {termination}"
     )
-
-    # 3) Handle infeasibility and optional IIS
-    if (
-        results.solver.termination_condition == pyo.TerminationCondition.infeasible
-        and compute_iis
-    ):
-        try:
-            write_iis(model, iis_file_name="model_iis.ilp", solver=solver)
-            logger.info("IIS written to model_iis.ilp")
-        except Exception as e:
-            logger.warning(f"IIS generation failed: {e}")
 
     # 4) Denormalize objective
     scaled_obj = pyo.value(model.OBJ)

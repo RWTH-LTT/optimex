@@ -1,3 +1,7 @@
+---
+icon: lucide/sliders-horizontal
+---
+
 # Optimization Setup
 
 Once your Brightway databases are configured, you need to set up the optimization problem: define the time-specific demand $\mathbf{f}_t$, configure characterization methods (static or [dynamic](theory.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and create and solve the optimization model.

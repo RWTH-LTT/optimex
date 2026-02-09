@@ -1,3 +1,7 @@
+---
+icon: lucide/bar-chart-3
+---
+
 # Postprocessing Results
 
 After solving an optimization model, `optimex` provides tools to extract, analyze, and visualize the results through the `PostProcessor` class. Results include capacity installations $\mathbf{s}_v$, operational levels $\mathbf{o}_{t,v}$, production volumes, and time-resolved environmental impacts across all defined categories.

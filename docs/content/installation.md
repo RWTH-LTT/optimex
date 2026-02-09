@@ -1,3 +1,7 @@
+---
+icon: lucide/download
+---
+
 # Installation
 
 `optimex` is available on [PyPI](https://pypi.org/project/optimex/) and [conda](https://anaconda.org/channels/diepers/packages/optimex/overview). Choose your preferred package manager below. In case you have an Apple Silicon Chip, you can directly jump to the [platform-specific notes](#apple-silicon-m1m2m3m4).

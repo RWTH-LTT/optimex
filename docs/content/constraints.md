@@ -1,3 +1,7 @@
+---
+icon: lucide/lock
+---
+
 # Optimization Constraints
 
 By default, `optimex` minimizes the environmental impact of a specified category while meeting the time-specific demand $\mathbf{f}_t$ (see [Theory: Complete Formulation](theory.md#complete-formulation)). Real-world optimization problems often require additional constraints to reflect practical limitations, policy requirements, or scenario-specific conditions — such as existing brownfield capacities, resource bottlenecks, or cumulative environmental budgets.

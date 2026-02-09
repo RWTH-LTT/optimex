@@ -696,7 +696,7 @@ class PostProcessor:
             of process codes.
         """
         if df_impacts is None:
-            if self.df_impacts is not None:
+            if getattr(self, "df_impacts", None) is not None:
                 df_impacts = self.df_impacts
             else:
                 df_impacts = self.get_impacts()

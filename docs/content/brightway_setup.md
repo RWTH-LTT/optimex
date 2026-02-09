@@ -1,3 +1,7 @@
+---
+icon: lucide/database
+---
+
 # Setting Up Brightway
 
 `optimex` builds on the [Brightway](https://docs.brightway.dev/) LCA framework. Before running an optimization, you need to set up a Brightway project with the required databases: a biosphere database for elementary flows, one or more background databases representing supply chains at different points in time (see [Theory: Background Evolution](theory.md#background-evolution-prospective-databases)), and a foreground database with the candidate processes to optimize.

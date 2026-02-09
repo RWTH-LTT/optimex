@@ -1,5 +1,5 @@
 ---
-icon: lucide/scroll
+icon: lucide/history
 ---
 
 --8<-- "CHANGES.md"
