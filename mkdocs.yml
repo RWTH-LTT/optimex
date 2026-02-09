@@ -166,7 +166,7 @@ nav:
     - License: content/license.md
     - Contributing: content/contributing.md
     - Code of Conduct: content/codeofconduct.md
-  - How-Tos:
+  - User Guide:
     - Quick Start: content/quickstart.md
     - Installation: content/installation.md
     - Brightway Setup: content/brightway_setup.md
@@ -174,11 +174,11 @@ nav:
     - Optimization Setup: content/optimization_setup.md
     - Constraints: content/constraints.md
     - Postprocessing: content/postprocessing_guide.md
-  - Theory: content/theory.md
   - Examples:
     - content/examples/index.md
     - Basic Example: content/examples/basic_optimex_example.ipynb
     - Mini Hydrogen Case: content/examples/mini_hydrogen_case.ipynb
+  - Theory: content/theory.md
   - API Reference:
     - api/index.md
     - LCA Processor: api/lca_processor.md
