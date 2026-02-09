@@ -11,49 +11,61 @@
 [![Conda - License](https://img.shields.io/conda/l/diepers/optimex)](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/TimoDiepers/optimex/main?urlpath=%2Fdoc%2Ftree%2Fnotebooks%2Fbasic_optimex_example.ipynb)
 
-This is a Python package for transition pathway optimization based on time-explicit Life Cycle Assessment (LCA). `optimex` helps identify optimal process portfolios and deployment timing in systems with multiple processes producing the same product, aiming to minimize dynamically accumulating environmental impacts over time. 
+**Time-explicit life cycle optimization for transition pathways.**
 
-`optimex` builds on top of the optimization framework [pyomo](https://github.com/Pyomo/pyomo) and the LCA framework [Brightway](https://docs.brightway.dev/en/latest). If you are looking for a time-explicit LCA rather than an optimization tool, make sure to check out [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
+Current life cycle optimization tools collapse all emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades, and the production systems behind them are evolving. `optimex` jointly models both dimensions — *when* exchanges occur and *how* they change over time — to design pathways that respect time-specific and cumulative environmental constraints.
 
-## Features
+### Key Capabilities
 
-Like other transition pathway optimization tools, `optimex` identifies the optimal timing and scale of process deployments to minimize environmental impacts over a transition period. What sets `optimex` apart is its integration of three additional, temporal considerations for environmental impacts:
+- **Temporal Distribution** — Maps life cycle exchanges across their actual timeframes via convolution, capturing time lags between construction, operation, and end-of-life
+- **Technology Evolution** — Tracks vintage-dependent foreground improvements and links to prospective background databases reflecting supply chain decarbonization
+- **Flexible Operation** — Separates capacity installation from operational dispatch, enabling vintage-specific merit order where cleaner cohorts are utilized first
+- **Dynamic Characterization** — Retains emission timing for dynamic LCIA (e.g., Radiative Forcing, dynamic GWP), capturing how impacts accumulate over time
 
-1. **Timing within Process Life Cycles:** Environmental impacts are spread across a process’s life cycle: construction happens first, use comes later, and end-of-life impacts follow. `optimex` captures this by distributing process inputs and outputs over time.
+### What This Enables
 
-2. **Technology Evolution:** Future technologies may become more sustainable, reducing the environmental impacts later in the expansion period. `optimex` reflects this by allowing process inventories to evolve over time.
+Time-explicit LCO reveals transition strategies invisible to static approaches:
 
-3.	**Accumulation of Emissions and Impacts:** Most impacts arise from the accumulation of emissions, but are typically modeled as discrete and independent pulses. `optimex` retains the timing of emissions during inventory calculations and applies dynamic characterization to account for impact accumulation.
+- **Strategic overcapacity** — Early clean technology investment that offsets stranded fossil assets when net emission savings outweigh embodied impacts
+- **Vintage-specific dispatch** — Emissions-aware merit order that preferentially utilizes cleaner technology cohorts
+- **Resource bottleneck navigation** — Technology diversification driven by time-specific constraints on water, critical minerals, or other resources
+- **Cumulative budget compliance** — Pathway verification against carbon budgets and absolute limits through exact emission timing
 
-During the transition pathway optimization, `optimex` simultaneously accounts for these temporal considerations, identifying the environmentally optimal process deployment over the transition period.
-  
-## First Steps
+### Use Cases
 
-- [Installation Guide](https://optimex.readthedocs.io/en/latest/content/installation/)
-- [Getting Started Tutorial](https://optimex.readthedocs.io/en/latest/content/examples/basic_optimex_example/)
-- [Example Collection](https://optimex.readthedocs.io/en/latest/content/examples/)
+`optimex` is broadly applicable across sectors where temporal dynamics are decisive for sustainability:
 
-## Support
+- **Evolving supply chains** — Systems depending on electricity, steel, or hydrogen undergoing rapid decarbonization
+- **Early-stage technologies** — Processes with significant vintage-dependent performance improvements (e.g., electrolyzers, DAC)
+- **Circular economy planning** — Temporal mismatches between primary demand and secondary supply from long material residence times
+- **Time-resolved carbon accounting** — Biogenic feedstocks, temporary carbon storage, or CO2 removal with varying temporal profiles
+- **Multi-regional supply chains** — Sourcing across regions with divergent decarbonization trajectories
 
-If you have any questions or need help, do not hesitate to contact us:
-- Jan Tautorus ([jan.tautorus@rwth-aachen.de](mailto:jan.tautorus@rwth-aachen.de))
+### Installation
+
+```bash
+pip install optimex
+```
+
+### Documentation
+
+Full documentation, tutorials, and examples are available at **[optimex.readthedocs.io](https://optimex.readthedocs.io/)**.
+
+- [Getting Started](https://optimex.readthedocs.io/en/latest/content/quickstart/)
+- [Examples](https://optimex.readthedocs.io/en/latest/content/examples/)
+- [API Reference](https://optimex.readthedocs.io/en/latest/api/overview/)
+
+`optimex` builds on [Pyomo](https://github.com/Pyomo/pyomo) and [Brightway](https://docs.brightway.dev/en/latest). For time-explicit LCA without optimization, see [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
+
+### Support
+
 - Timo Diepers ([timo.diepers@ltt.rwth-aachen.de](mailto:timo.diepers@ltt.rwth-aachen.de))
+- Jan Tautorus ([jan.tautorus@rwth-aachen.de](mailto:jan.tautorus@rwth-aachen.de))
 
-## Contributing
+### Contributing
 
-We welcome contributions! If you have suggestions or want to fix a bug, please:
-- [Open an Issue](https://github.com/TimoDiepers/optimex/issues)
-- [Send a Pull Request](https://github.com/TimoDiepers/optimex/pulls)
+[Open an Issue](https://github.com/TimoDiepers/optimex/issues) or [Send a Pull Request](https://github.com/TimoDiepers/optimex/pulls) — contributions are welcome.
 
-## License
+### License
 
-Distributed under the terms of the [BSD 3 Clause license][License], `optimex` is free and open source software.
-
-<!-- github-only -->
-
-[command-line reference]: https://optimex.readthedocs.io/en/latest/usage.html
-[License]: https://github.com/TimoDiepers/optimex/blob/main/LICENSE
-[Contributor Guide]: https://github.com/TimoDiepers/optimex/blob/main/CONTRIBUTING.md
-[Issue Tracker]: https://github.com/TimoDiepers/optimex/issues
-
-
+[BSD 3-Clause License](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)

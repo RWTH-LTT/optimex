@@ -1,10 +1,8 @@
-# Time-explicit Life Cycle Optimization with `optimex`
+# Time-Explicit Life Cycle Optimization
 
-This is a Python package for time-explicit Life Cycle Optimization for transition pathways. `optimex` helps identify optimal process portfolios and deployment timings in systems with multiple processes producing the same product, aiming to minimize dynamically accumulating environmental impacts over time.
+Transition pathway optimization typically collapses all life cycle stages and emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades (*temporal distribution*), and the production systems behind them are evolving (*temporal evolution*). Ignoring this interplay means pathways may appear sustainable while violating time-specific limits during intensive infrastructure buildup, or miscounting cumulative impacts when decommissioning happens in a fundamentally different future.
 
-`optimex` builds on top of the optimization framework [pyomo](https://github.com/Pyomo/pyomo) and the LCA framework [Brightway](https://docs.brightway.dev/en/latest). If you are looking for a time-explicit LCA rather than an optimization tool, make sure to check out [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
-
-`optimex` is free and open source software, published under the [BSD 3-Clause License](content/license.md).
+`optimex` jointly models both dimensions — *when* exchanges occur and *how* they change over time — to design pathways that respect time-specific and cumulative environmental constraints.
 
 <p class="home-links">
 <a href="content/quickstart" class="primary">Get Started<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rocket"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg></a>
@@ -13,39 +11,74 @@ This is a Python package for time-explicit Life Cycle Optimization for transitio
 
 ---
 
-## Features
-
-Like other transition pathway optimization tools, `optimex` identifies the optimal timing and scale of process deployments to minimize environmental impacts over a transition period. What sets `optimex` apart is its integration of three additional, temporal considerations for environmental impacts:
+## Key Capabilities
 
 <div class="grid cards" markdown>
 
--   :lucide-hourglass:{ style="color: #4dabf7" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Life Cycle Timing</span>
+-   :lucide-hourglass:{ style="color: #4dabf7" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Temporal Distribution</span>
 
     ---
 
-    The processes within a product's life cycle occur in sequence rather than all at once: production comes first, the use phase and end-of-life follow. As a result, emissions are also spread over time.
-
-    `optimex` captures this by distributing process inputs and outputs over time.
+    Maps life cycle exchanges across their actual timeframes via convolution, capturing time lags between construction, operation, and end-of-life.
 
 -   :lucide-settings:{ style="color: #69db7c" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Technology Evolution</span>
 
     ---
 
-    In the future, processes will (hopefully) reduce their emissions. So, the time at which a process happens affects its impacts, with later occurence often resulting in lower emissions.
+    Tracks vintage-dependent foreground improvements and links to prospective background databases reflecting supply chain decarbonization.
 
-    `optimex` reflects this by allowing process inventories to change over time.
-
--   :lucide-trending-up:{ style="color: #ffa94d" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Emission Accumulation</span>
+-   :lucide-arrow-up-down:{ style="color: #ffa94d" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Flexible Operation</span>
 
     ---
 
-    Most impacts come from emission accumulation, but are typically modeled as separate pulses. Emission timing affects how they accumulate, influencing environmental impacts.
+    Separates capacity installation from operational dispatch, enabling vintage-specific merit order where cleaner cohorts are utilized first.
 
-    `optimex` considers the emission timing, enabling characterization via dynamic LCIA.
+-   :lucide-trending-up:{ style="color: #da77f2" } <span style="color: var(--md-primary-bg-color); font-weight: 700;">Dynamic Characterization</span>
+
+    ---
+
+    Retains emission timing for dynamic LCIA (e.g., Radiative Forcing, dynamic GWP), capturing how impacts accumulate over time.
 
 </div>
 
-During the transition pathway optimization, `optimex` simultaneously accounts for these temporal considerations, identifying the environmentally optimal process deployment over the transition period.
+---
+
+## What This Enables
+
+Time-explicit LCO reveals transition strategies that are invisible to static approaches:
+
+- **Strategic overcapacity** — Early investment in clean technologies can offset stranded fossil assets when the net emission savings outweigh the embodied impacts of idle infrastructure
+- **Vintage-specific dispatch** — When multiple cohorts of the same technology coexist, the optimizer preferentially utilizes cleaner vintages, creating an emissions-aware merit order
+- **Resource bottleneck navigation** — Time-specific constraints on water use, critical minerals, or other resources force technology diversification, revealing realistic pathways through transient scarcity
+- **Cumulative budget compliance** — By tracking exact emission timing alongside dynamic characterization, pathways can be verified against carbon budgets and other absolute limits
+
+---
+
+## Use Cases
+
+`optimex` is broadly applicable across sectors where temporal dynamics are decisive for sustainability:
+
+- **Evolving supply chains** — Systems depending on electricity, steel, or hydrogen that undergo rapid decarbonization
+- **Early-stage technologies** — Processes with significant vintage-dependent performance improvements (e.g., electrolyzers, DAC)
+- **Circular economy planning** — Long material residence times create temporal mismatches between primary demand and secondary supply
+- **Time-resolved carbon accounting** — Biogenic feedstocks, temporary carbon storage, or CO~2~ removal with varying temporal profiles
+- **Multi-regional supply chains** — Sourcing decisions across regions with divergent decarbonization trajectories
+
+---
+
+## Built On
+
+`optimex` integrates with established open-source tools:
+
+- [Pyomo](https://github.com/Pyomo/pyomo) for mathematical optimization
+- [Brightway](https://docs.brightway.dev/en/latest) for life cycle assessment
+- [bw_temporalis](https://github.com/brightway-lca/bw_temporalis) for temporal distributions
+- [dynamic_characterization](https://github.com/brightway-lca/dynamic_characterization) for dynamic impact assessment
+- [premise](https://github.com/polca/premise) for prospective background databases
+
+For time-explicit LCA without optimization, see [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
+
+`optimex` is free and open source software, published under the [BSD 3-Clause License](content/license.md).
 
 ## Support
 
