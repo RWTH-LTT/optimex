@@ -15,14 +15,14 @@
 
 Current life cycle optimization tools collapse all emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades, and the production systems behind them are evolving. `optimex` jointly models both dimensions — *when* exchanges occur and *how* they change over time — to design pathways that respect time-specific and cumulative environmental constraints.
 
-### Key Capabilities
+## Key Capabilities
 
 - **Temporal Distribution** — Maps life cycle exchanges across their actual timeframes via convolution, capturing time lags between construction, operation, and end-of-life
 - **Technology Evolution** — Tracks vintage-dependent foreground improvements and links to prospective background databases reflecting supply chain decarbonization
 - **Flexible Operation** — Separates capacity installation from operational dispatch, enabling vintage-specific merit order where cleaner cohorts are utilized first
 - **Dynamic Characterization** — Retains emission timing for dynamic LCIA (e.g., Radiative Forcing, dynamic GWP), capturing how impacts accumulate over time
 
-### What This Enables
+## What This Enables
 
 Time-explicit LCO reveals transition strategies invisible to static approaches:
 
@@ -31,7 +31,7 @@ Time-explicit LCO reveals transition strategies invisible to static approaches:
 - **Resource bottleneck navigation** — Technology diversification driven by time-specific constraints on water, critical minerals, or other resources
 - **Cumulative budget compliance** — Pathway verification against carbon budgets and absolute limits through exact emission timing
 
-### Use Cases
+## Use Cases
 
 `optimex` is broadly applicable across sectors where temporal dynamics are decisive for sustainability:
 
@@ -41,13 +41,13 @@ Time-explicit LCO reveals transition strategies invisible to static approaches:
 - **Time-resolved carbon accounting** — Biogenic feedstocks, temporary carbon storage, or CO2 removal with varying temporal profiles
 - **Multi-regional supply chains** — Sourcing across regions with divergent decarbonization trajectories
 
-### Installation
+##I nstallation
 
 ```bash
 pip install optimex
 ```
 
-### Documentation
+## Documentation
 
 Full documentation, tutorials, and examples are available at **[optimex.readthedocs.io](https://optimex.readthedocs.io/)**.
 
@@ -57,15 +57,15 @@ Full documentation, tutorials, and examples are available at **[optimex.readthed
 
 `optimex` builds on [Pyomo](https://github.com/Pyomo/pyomo) and [Brightway](https://docs.brightway.dev/en/latest). For time-explicit LCA without optimization, see [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
 
-### Support
+## Support
 
 - Timo Diepers ([timo.diepers@ltt.rwth-aachen.de](mailto:timo.diepers@ltt.rwth-aachen.de))
 - Jan Tautorus ([jan.tautorus@rwth-aachen.de](mailto:jan.tautorus@rwth-aachen.de))
 
-### Contributing
+## Contributing
 
 [Open an Issue](https://github.com/TimoDiepers/optimex/issues) or [Send a Pull Request](https://github.com/TimoDiepers/optimex/pulls) — contributions are welcome.
 
-### License
+## License
 
 [BSD 3-Clause License](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
