@@ -41,7 +41,7 @@ Time-explicit LCO reveals transition strategies invisible to static approaches:
 - **Time-resolved carbon accounting** — Biogenic feedstocks, temporary carbon storage, or CO2 removal with varying temporal profiles
 - **Multi-regional supply chains** — Sourcing across regions with divergent decarbonization trajectories
 
-##I nstallation
+## Installation
 
 ```bash
 pip install optimex
