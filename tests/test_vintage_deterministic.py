@@ -44,7 +44,7 @@ class TestVintageDeterministicResults:
         - Demand of 100 units per year for 3 years (2025, 2026, 2027)
         - Production rate: 10 units per installation per operating tau
         - operation_time_limits: (0, 0) - instant production
-        - technology_evolution triggers 4D path
+        - vintage_improvements triggers 4D path
 
         Expected:
         - var_operation should equal demand (since production_rate = 10,
@@ -69,8 +69,8 @@ class TestVintageDeterministicResults:
             "foreground_technosphere": {
                 ("Plant", "electricity", 0): 5,  # 5 kWh per unit output
             },
-            # technology_evolution makes Plant use less electricity over time
-            "technology_evolution": {
+            # vintage_improvements makes Plant use less electricity over time
+            "vintage_improvements": {
                 ("Plant", "electricity", 2025): 1.0,  # 5 kWh in 2025
                 ("Plant", "electricity", 2027): 0.8,  # 4 kWh in 2027 (20% better)
             },
@@ -158,7 +158,7 @@ class TestVintageDeterministicResults:
             "foreground_technosphere": {
                 ("Plant", "electricity", 0): 10,  # 10 kWh/unit base
             },
-            "technology_evolution": {
+            "vintage_improvements": {
                 ("Plant", "electricity", 2025): 1.0,
                 ("Plant", "electricity", 2027): 0.8,
             },
@@ -261,7 +261,7 @@ class TestVintageDeterministicResults:
             "foreground_technosphere": {
                 ("Plant", "electricity", 0): 10,
             },
-            "technology_evolution": {
+            "vintage_improvements": {
                 ("Plant", "electricity", 2025): 1.0,
                 ("Plant", "electricity", 2027): 0.8,
             },
@@ -353,7 +353,7 @@ class TestVintageDeterministicResults:
             "foreground_technosphere": {
                 ("Plant", "electricity", 0): 10,
             },
-            # NO technology_evolution - stays in 3D path
+            # NO vintage_improvements - stays in 3D path
             "internal_demand_technosphere": {},
             "foreground_biosphere": {},
             "foreground_production": {
@@ -393,9 +393,9 @@ class TestVintageDeterministicResults:
             f"Objective = {objective}, expected {expected_impact}"
         )
 
-    def test_technology_evolution_reduces_impact(self):
+    def test_vintage_improvements_reduces_impact(self):
         """
-        Test that technology_evolution correctly reduces impacts.
+        Test that vintage_improvements correctly reduces impacts.
 
         Compare two scenarios:
         1. No evolution (all years use base rate)
@@ -458,7 +458,7 @@ class TestVintageDeterministicResults:
 
         # Scenario 2: With evolution (50% improvement by 2027)
         with_evolution_config = dict(base_config)
-        with_evolution_config["technology_evolution"] = {
+        with_evolution_config["vintage_improvements"] = {
             ("Plant", "electricity", 2025): 1.0,
             ("Plant", "electricity", 2027): 0.5,  # 50% less electricity
         }
@@ -523,8 +523,8 @@ class TestVintageDeterministicResults:
                 ("Plant", "electricity", 1): 10,
                 ("Plant", "electricity", 2): 10,
             },
-            # technology_evolution to trigger 4D path
-            "technology_evolution": {
+            # vintage_improvements to trigger 4D path
+            "vintage_improvements": {
                 ("Plant", "electricity", 2025): 1.0,
                 ("Plant", "electricity", 2027): 0.8,
             },
@@ -586,18 +586,18 @@ class TestVintageDeterministicResults:
                 f"Production {production} should match demand {demand} at t={t}"
             )
 
-    def test_technology_evolution_only_affects_specified_flows(self):
+    def test_vintage_improvements_only_affects_specified_flows(self):
         """
-        Verify that technology_evolution only creates overrides for the specified
+        Verify that vintage_improvements only creates overrides for the specified
         (process, flow) pairs, not for ALL flows.
 
         This test catches a bug where expand_foreground_tensor_with_evolution()
-        was creating 4D overrides for ALL flows when technology_evolution was set,
+        was creating 4D overrides for ALL flows when vintage_improvements was set,
         even for flows that didn't have any evolution factors specified.
 
         Setup:
         - Two processes: Plant1 and Plant2, both produce "output"
-        - technology_evolution ONLY specified for Plant1's electricity consumption
+        - vintage_improvements ONLY specified for Plant1's electricity consumption
         - Plant2 should use 3D path (not vintage-aware) for production
         - Both should correctly fulfill demand
         """
@@ -629,8 +629,8 @@ class TestVintageDeterministicResults:
                 ("Plant2", "electricity", 1): 20,
                 ("Plant2", "electricity", 2): 20,
             },
-            # technology_evolution ONLY for Plant1's electricity, not Plant2
-            "technology_evolution": {
+            # vintage_improvements ONLY for Plant1's electricity, not Plant2
+            "vintage_improvements": {
                 ("Plant1", "electricity", 2025): 1.0,
                 ("Plant1", "electricity", 2027): 0.5,
             },

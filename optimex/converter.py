@@ -61,12 +61,12 @@ class OptimizationModelInputs(BaseModel):
 
     # REFERENCE_VINTAGES is computed automatically from vintage data.
     # Users should NOT set this directly - it is inferred from the vintage years
-    # present in foreground_*_vintages and technology_evolution dictionaries.
+    # present in foreground_*_vintages and vintage_improvements dictionaries.
     REFERENCE_VINTAGES: Optional[List[int]] = Field(
         None,
         description=(
             "[Computed] Reference vintage years, automatically inferred from "
-            "foreground_*_vintages and technology_evolution dictionaries. "
+            "foreground_*_vintages and vintage_improvements dictionaries. "
             "Do not set directly."
         ),
         exclude=True,  # Exclude from serialization since it's computed
@@ -112,10 +112,10 @@ class OptimizationModelInputs(BaseModel):
     # 1. Explicit values (*_vintages): Specify exact values at reference vintages.
     #    Values are linearly interpolated for years between reference vintages.
     #
-    # 2. Scaling factors (technology_evolution): Multiply base tensor values by
+    # 2. Scaling factors (vintage_improvements): Multiply base tensor values by
     #    vintage-specific factors. More compact for uniform efficiency improvements.
     #
-    # PRECEDENCE: If both *_vintages and technology_evolution are specified for
+    # PRECEDENCE: If both *_vintages and vintage_improvements are specified for
     # the same (process, flow), the explicit *_vintages values take precedence.
     # ========================================================================
 
@@ -125,7 +125,7 @@ class OptimizationModelInputs(BaseModel):
             "Vintage-specific technosphere values. Maps (process, intermediate_flow, "
             "process_time, vintage_year) to amount. Values are linearly interpolated "
             "for installation years between specified vintages. "
-            "Takes precedence over technology_evolution for the same (process, flow)."
+            "Takes precedence over vintage_improvements for the same (process, flow)."
         ),
     )
     foreground_biosphere_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
@@ -134,7 +134,7 @@ class OptimizationModelInputs(BaseModel):
             "Vintage-specific biosphere values. Maps (process, elementary_flow, "
             "process_time, vintage_year) to amount. Values are linearly interpolated "
             "for installation years between specified vintages. "
-            "Takes precedence over technology_evolution for the same (process, flow)."
+            "Takes precedence over vintage_improvements for the same (process, flow)."
         ),
     )
     foreground_production_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
@@ -143,10 +143,10 @@ class OptimizationModelInputs(BaseModel):
             "Vintage-specific production values. Maps (process, product, process_time, "
             "vintage_year) to amount. Values are linearly interpolated "
             "for installation years between specified vintages. "
-            "Takes precedence over technology_evolution for the same (process, product)."
+            "Takes precedence over vintage_improvements for the same (process, product)."
         ),
     )
-    technology_evolution: Optional[Dict[Tuple[str, str, int], float]] = Field(
+    vintage_improvements: Optional[Dict[Tuple[str, str, int], float]] = Field(
         None,
         description=(
             "Scaling factors for vintage-dependent efficiency. Maps (process, flow, "
@@ -540,8 +540,8 @@ class OptimizationModelInputs(BaseModel):
         if data.get("foreground_production_vintages") is not None:
             for key in data["foreground_production_vintages"].keys():
                 inferred_vintages.add(key[3])
-        if data.get("technology_evolution") is not None:
-            for key in data["technology_evolution"].keys():
+        if data.get("vintage_improvements") is not None:
+            for key in data["vintage_improvements"].keys():
                 inferred_vintages.add(key[2])
 
         # Set REFERENCE_VINTAGES to the inferred values (sorted list)
@@ -591,13 +591,13 @@ class OptimizationModelInputs(BaseModel):
                     [key[2]], process_times, "foreground_production_vintages process times"
                 )
 
-        # Validate technology_evolution (processes, flows)
-        if data.get("technology_evolution") is not None:
-            for key in data["technology_evolution"].keys():
-                validate_keys([key[0]], processes, "technology_evolution processes")
+        # Validate vintage_improvements (processes, flows)
+        if data.get("vintage_improvements") is not None:
+            for key in data["vintage_improvements"].keys():
+                validate_keys([key[0]], processes, "vintage_improvements processes")
                 # Flow can be intermediate, elementary, or product
                 validate_keys(
-                    [key[1]], all_flows, "technology_evolution flows"
+                    [key[1]], all_flows, "vintage_improvements flows"
                 )
 
         return data
@@ -871,10 +871,10 @@ class OptimizationModelInputs(BaseModel):
                 self.REFERENCE_VINTAGES,
                 system_times,
             )
-        elif self.technology_evolution and self.foreground_technosphere:
+        elif self.vintage_improvements and self.foreground_technosphere:
             self.foreground_technosphere_vintage_overrides = expand_foreground_tensor_with_evolution(
                 self.foreground_technosphere,
-                self.technology_evolution,
+                self.vintage_improvements,
                 self.REFERENCE_VINTAGES,
                 system_times,
                 "INTERMEDIATE_FLOW",
@@ -888,10 +888,10 @@ class OptimizationModelInputs(BaseModel):
                 self.REFERENCE_VINTAGES,
                 system_times,
             )
-        elif self.technology_evolution and self.foreground_biosphere:
+        elif self.vintage_improvements and self.foreground_biosphere:
             self.foreground_biosphere_vintage_overrides = expand_foreground_tensor_with_evolution(
                 self.foreground_biosphere,
-                self.technology_evolution,
+                self.vintage_improvements,
                 self.REFERENCE_VINTAGES,
                 system_times,
                 "ELEMENTARY_FLOW",
@@ -904,10 +904,10 @@ class OptimizationModelInputs(BaseModel):
                 self.REFERENCE_VINTAGES,
                 system_times,
             )
-        elif self.technology_evolution and self.foreground_production:
+        elif self.vintage_improvements and self.foreground_production:
             self.foreground_production_vintage_overrides = expand_foreground_tensor_with_evolution(
                 self.foreground_production,
-                self.technology_evolution,
+                self.vintage_improvements,
                 self.REFERENCE_VINTAGES,
                 system_times,
                 "PRODUCT",
@@ -1115,7 +1115,7 @@ class ModelInputManager:
             "foreground_technosphere_vintages": lca_processor.foreground_technosphere_vintages,
             "foreground_biosphere_vintages": lca_processor.foreground_biosphere_vintages,
             "foreground_production_vintages": lca_processor.foreground_production_vintages,
-            "technology_evolution": lca_processor.vintage_improvements,
+            "vintage_improvements": lca_processor.vintage_improvements,
             # Optional constraints not populated by default
             "category_impact_limits": None,
             "cumulative_category_impact_limits": None,
@@ -1297,6 +1297,10 @@ class ModelInputManager:
                 "flow_limits_max",
                 "flow_limits_min",
                 "category_impact_limits",
+                "foreground_technosphere_vintages",
+                "foreground_biosphere_vintages",
+                "foreground_production_vintages",
+                "vintage_improvements",
             ]
 
             for field in tuple_key_fields:
@@ -1367,6 +1371,10 @@ class ModelInputManager:
                 "flow_limits_max",
                 "flow_limits_min",
                 "category_impact_limits",
+                "foreground_technosphere_vintages",
+                "foreground_biosphere_vintages",
+                "foreground_production_vintages",
+                "vintage_improvements",
             ]
 
             for field in tuple_key_fields:
@@ -1530,7 +1538,7 @@ def expand_foreground_tensor_with_vintages(
 
 def expand_foreground_tensor_with_evolution(
     base_tensor: Dict[Tuple[str, str, int], float],
-    technology_evolution: Dict[Tuple[str, str, int], float],
+    vintage_improvements: Dict[Tuple[str, str, int], float],
     reference_vintages: List[int],
     system_times: List[int],
     flow_type: str,
@@ -1540,14 +1548,14 @@ def expand_foreground_tensor_with_evolution(
 
     Takes a base 3D tensor and applies vintage-specific scaling factors to produce
     a 4D tensor with installation year dimension. ONLY expands (process, flow) pairs
-    that have entries in technology_evolution - other pairs are left unchanged to
+    that have entries in vintage_improvements - other pairs are left unchanged to
     use the efficient 3D path in the optimizer.
 
     Parameters
     ----------
     base_tensor : Dict[Tuple[str, str, int], float]
         Base tensor mapping (process, flow, process_time) to value.
-    technology_evolution : Dict[Tuple[str, str, int], float]
+    vintage_improvements : Dict[Tuple[str, str, int], float]
         Scaling factors mapping (process, flow, vintage_year) to multiplier.
     reference_vintages : List[int]
         List of reference vintage years.
@@ -1585,7 +1593,7 @@ def expand_foreground_tensor_with_evolution(
 
     # Determine which (process, flow) pairs have evolution factors
     # Only these pairs should be expanded to 4D
-    evolved_pairs = set((k[0], k[1]) for k in technology_evolution.keys())
+    evolved_pairs = set((k[0], k[1]) for k in vintage_improvements.keys())
 
     expanded: Dict[Tuple[str, str, int, int], float] = {}
     for (proc, flow, tau), base_value in base_tensor.items():
@@ -1600,7 +1608,7 @@ def expand_foreground_tensor_with_evolution(
                 weight = vintage_mapping.get((vintage, install_year), 0.0)
                 if weight > 0:
                     evo_key = (proc, flow, vintage)
-                    evo_factor = technology_evolution.get(evo_key, 1.0)
+                    evo_factor = vintage_improvements.get(evo_key, 1.0)
                     factor += weight * evo_factor
 
             # If no evolution factors found, use 1.0

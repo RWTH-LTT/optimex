@@ -86,7 +86,7 @@ class TestVintageDataModelExtensions:
         base_model_inputs["foreground_technosphere_vintages"] = {
             ("EV", "electricity", 1, 2020): 60,
         }
-        base_model_inputs["technology_evolution"] = {
+        base_model_inputs["vintage_improvements"] = {
             ("EV", "CO2", 2025): 0.8,
             ("EV", "CO2", 2030): 0.6,
         }
@@ -142,9 +142,9 @@ class TestVintageDataModelExtensions:
         assert model.foreground_production_vintages[("EV", "vkm", 1, 2025)] == 55
         assert model.REFERENCE_VINTAGES == [2020, 2025]
 
-    def test_model_accepts_technology_evolution(self, base_model_inputs):
-        """Test that technology_evolution scaling factors are accepted."""
-        base_model_inputs["technology_evolution"] = {
+    def test_model_accepts_vintage_improvements(self, base_model_inputs):
+        """Test that vintage_improvements scaling factors are accepted."""
+        base_model_inputs["vintage_improvements"] = {
             # Electricity consumption evolves (decreases over time)
             ("EV", "electricity", 2020): 1.0,  # baseline
             ("EV", "electricity", 2025): 0.7,  # 30% improvement
@@ -153,8 +153,8 @@ class TestVintageDataModelExtensions:
             ("EV", "CO2", 2025): 0.8,  # 20% improvement
         }
         model = converter.OptimizationModelInputs(**base_model_inputs)
-        assert model.technology_evolution[("EV", "electricity", 2020)] == 1.0
-        assert model.technology_evolution[("EV", "electricity", 2025)] == 0.7
+        assert model.vintage_improvements[("EV", "electricity", 2020)] == 1.0
+        assert model.vintage_improvements[("EV", "electricity", 2025)] == 0.7
         assert model.REFERENCE_VINTAGES == [2020, 2025]
 
     def test_validation_process_in_vintage_tensors_must_exist(self, base_model_inputs):
@@ -339,7 +339,7 @@ class TestEffectiveForegroundTensors:
         expected_2023 = 60 * 0.4 + 40 * 0.6
         assert effective[("EV", "electricity", 1, 2023)] == pytest.approx(expected_2023)
 
-    def test_expand_with_technology_evolution_factors(self, vintage_model_inputs):
+    def test_expand_with_vintage_improvements_factors(self, vintage_model_inputs):
         """Test expansion using technology evolution scaling factors."""
         # Use base tensor + evolution factors instead of vintages
         vintage_model_inputs["foreground_technosphere_vintages"] = None
@@ -347,7 +347,7 @@ class TestEffectiveForegroundTensors:
             ("EV", "electricity", 1): 60,  # Base value
             ("EV", "electricity", 2): 60,
         }
-        vintage_model_inputs["technology_evolution"] = {
+        vintage_model_inputs["vintage_improvements"] = {
             ("EV", "electricity", 2020): 1.0,  # baseline
             ("EV", "electricity", 2025): 0.667,  # ~40 kWh (40/60)
         }
@@ -355,7 +355,7 @@ class TestEffectiveForegroundTensors:
         model = converter.OptimizationModelInputs(**vintage_model_inputs)
         effective = converter.expand_foreground_tensor_with_evolution(
             model.foreground_technosphere,
-            model.technology_evolution,
+            model.vintage_improvements,
             model.REFERENCE_VINTAGES,
             model.SYSTEM_TIME,
             "INTERMEDIATE_FLOW",
@@ -558,11 +558,11 @@ class TestOptimizerWithVintages:
 
 
 class TestTechnologyEvolutionIntegration:
-    """Integration tests for technology_evolution scaling factors."""
+    """Integration tests for vintage_improvements scaling factors."""
 
-    def test_technology_evolution_affects_optimization(self):
+    def test_vintage_improvements_affects_optimization(self):
         """
-        Test that technology_evolution scaling factors affect the optimal solution.
+        Test that vintage_improvements scaling factors affect the optimal solution.
 
         Same scenario as above but using evolution factors instead of explicit vintages.
         """
@@ -587,7 +587,7 @@ class TestTechnologyEvolutionIntegration:
                 ("Plant", "electricity", 1): 100,
             },
             # Evolution: 2020 = 1.0x, 2025 = 0.5x (50% improvement)
-            "technology_evolution": {
+            "vintage_improvements": {
                 ("Plant", "electricity", 2020): 1.0,
                 ("Plant", "electricity", 2025): 0.5,
             },
@@ -784,16 +784,16 @@ class TestVintageResultsValidation:
         """
         Test that 50% efficiency improvement results in 50% lower impact.
 
-        Using technology_evolution with factor 0.5 for 2022 vintage means:
+        Using vintage_improvements with factor 0.5 for 2022 vintage means:
         - Electricity consumption: 100 * 0.5 = 50 units
         - CO2 emissions: 50 kg
         - Impact: 50 kg CO2
         """
         from optimex import optimizer
 
-        # Add 50% improvement via technology_evolution
+        # Add 50% improvement via vintage_improvements
         inputs_with_evolution = simple_system_base.copy()
-        inputs_with_evolution["technology_evolution"] = {
+        inputs_with_evolution["vintage_improvements"] = {
             ("Plant", "electricity", 2020): 1.0,  # baseline at 2020
             ("Plant", "electricity", 2022): 0.5,  # 50% reduction by 2022
         }
@@ -894,7 +894,7 @@ class TestVintageResultsValidation:
 
         # Run with 30% improvement (factor = 0.7)
         improved_inputs = simple_system_base.copy()
-        improved_inputs["technology_evolution"] = {
+        improved_inputs["vintage_improvements"] = {
             ("Plant", "electricity", 2020): 1.0,
             ("Plant", "electricity", 2022): 0.7,  # 30% improvement
         }
@@ -1319,6 +1319,6 @@ class TestDatabaseVintageParameterExtraction:
         assert len(model_inputs.foreground_technosphere_vintages) > 0
         assert ("EV", "electricity", 1, 2020) in model_inputs.foreground_technosphere_vintages
         
-        assert model_inputs.technology_evolution is not None
-        assert len(model_inputs.technology_evolution) > 0
-        assert ("EV", "CO2", 2020) in model_inputs.technology_evolution
+        assert model_inputs.vintage_improvements is not None
+        assert len(model_inputs.vintage_improvements) > 0
+        assert ("EV", "CO2", 2020) in model_inputs.vintage_improvements

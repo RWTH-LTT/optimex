@@ -167,7 +167,7 @@ class TestMeritOrderDispatch:
         - Both have capacity available in 2022
         - Optimizer should prefer 2022 vintage for its lower emissions
 
-        Note: With vintage-dependent emissions, we use technology_evolution to
+        Note: With vintage-dependent emissions, we use vintage_improvements to
         create different emission rates for different vintages.
         """
         model_inputs_dict = {
@@ -190,7 +190,7 @@ class TestMeritOrderDispatch:
             "foreground_technosphere": {
                 ("Plant", "fuel", tau): 10 for tau in range(4)
             },
-            "technology_evolution": {
+            "vintage_improvements": {
                 ("Plant", "fuel", 2020): 1.0,   # 2020 vintage: baseline
                 ("Plant", "fuel", 2022): 0.5,   # 2022 vintage: 50% more efficient
             },
@@ -265,7 +265,7 @@ class TestMeritOrderDispatch:
                 ("Plant", "fuel", tau): 10 for tau in range(6)
             },
             # Technology evolution makes newer vintages more efficient
-            "technology_evolution": {
+            "vintage_improvements": {
                 ("Plant", "fuel", 2020): 1.0,
                 ("Plant", "fuel", 2022): 0.7,
             },
@@ -536,8 +536,9 @@ class TestPostprocessingWithVintages:
         for col in op_df.columns:
             assert len(col) == 2
 
-    def test_get_operation_by_vintage_method(self):
-        """Test the convenience method get_operation_by_vintage()."""
+    def test_get_operation_by_vintage_column_names(self):
+        """Test get_operation(aggregate_vintages=False) returns correct column structure."""
+        import pandas as pd
         model_inputs_dict = {
             "PROCESS": ["P1"],
             "PRODUCT": ["product"],
@@ -572,11 +573,11 @@ class TestPostprocessingWithVintages:
         solved_model, _, _ = optimizer.solve_model(model, solver_name="glpk", tee=False)
 
         pp = PostProcessor(solved_model)
-        op_by_vintage = pp.get_operation_by_vintage()
+        op_by_vintage = pp.get_operation(aggregate_vintages=False)
 
-        # Should return the same as get_operation(aggregate_vintages=False)
-        op_explicit = pp.get_operation(aggregate_vintages=False)
-        assert op_by_vintage.shape == op_explicit.shape
+        # Should have MultiIndex columns (Process, Vintage)
+        assert isinstance(op_by_vintage.columns, pd.MultiIndex)
+        assert op_by_vintage.columns.names == ["Process", "Vintage"]
 
 
 class TestValidateOperationBounds:

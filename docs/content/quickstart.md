@@ -66,7 +66,7 @@ solved, objective, results = optimizer.solve_model(model, solver_name="glpk")
 pp = postprocessing.PostProcessor(solved)
 pp.plot_impacts()
 pp.plot_installation()
-pp.plot_production_and_demand()
+pp.plot_capacity_balance()
 ```
 
 ---
@@ -193,7 +193,7 @@ model_inputs.existing_capacity = {("old_plant", 2010): 500.0}
 | `get_demand()` | DataFrame | Demand fulfillment over time |
 | `plot_impacts()` | Figure | Stacked area plot of impacts |
 | `plot_installation()` | Figure | Bar chart of installations |
-| `plot_production_and_demand()` | Figure | Production vs demand comparison |
+| `plot_capacity_balance()` | Figure | Production vs capacity comparison |
 
 ---
 

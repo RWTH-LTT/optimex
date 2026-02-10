@@ -208,15 +208,15 @@ fig = pp.plot_operation()
 
 ---
 
-### Production and Demand Plot
+### Capacity Balance Plot
 
-Compares production with demand to verify fulfillment:
+Compares actual production with maximum available capacity:
 
 ```python
-fig = pp.plot_production_and_demand()
+fig = pp.plot_capacity_balance()
 ```
 
-![Production and demand plot](../_static/placeholder_production.png)
+![Capacity balance plot](../_static/placeholder_production.png)
 
 ---
 
@@ -320,7 +320,7 @@ for proc in df_installation.columns:
 # Generate all plots
 fig_impacts = pp.plot_impacts()
 fig_install = pp.plot_installation()
-fig_prod = pp.plot_production_and_demand()
+fig_prod = pp.plot_capacity_balance()
 
 # Save results
 with pd.ExcelWriter("optimization_results.xlsx") as writer:

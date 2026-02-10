@@ -567,16 +567,16 @@ class TestBrownfieldPostprocessing:
 class TestBrownfieldWithVintageParameters:
     """Tests for brownfield optimization combined with vintage-dependent parameters."""
 
-    def test_brownfield_with_technology_evolution(self):
+    def test_brownfield_with_vintage_improvements(self):
         """
-        Test that brownfield + technology_evolution works correctly.
+        Test that brownfield + vintage_improvements works correctly.
 
-        This tests the 4D code path triggered by technology_evolution when
+        This tests the 4D code path triggered by vintage_improvements when
         existing capacity is installed before SYSTEM_TIME.
 
         Scenario:
         - Existing capacity from 2015 (before SYSTEM_TIME 2025-2030)
-        - technology_evolution triggers 4D code path
+        - vintage_improvements triggers 4D code path
         - Model should be feasible and use existing capacity
         """
         model_inputs_dict = {
@@ -593,8 +593,8 @@ class TestBrownfieldWithVintageParameters:
             "foreground_technosphere": {
                 ("Plant", "electricity", tau): 10 for tau in range(21)
             },
-            # technology_evolution triggers 4D code path
-            "technology_evolution": {
+            # vintage_improvements triggers 4D code path
+            "vintage_improvements": {
                 ("Plant", "electricity", 2025): 1.0,
                 ("Plant", "electricity", 2030): 0.8,  # 20% efficiency improvement
             },
@@ -719,7 +719,7 @@ class TestBrownfieldWithVintageParameters:
 
         Scenario:
         - OldPlant: No vintage parameters, existing capacity
-        - NewPlant: Has technology_evolution, no existing capacity
+        - NewPlant: Has vintage_improvements, no existing capacity
 
         Both should work together correctly.
         """
@@ -742,8 +742,8 @@ class TestBrownfieldWithVintageParameters:
             } | {
                 ("NewPlant", "electricity", tau): 15 for tau in range(11)
             },
-            # technology_evolution only for NewPlant
-            "technology_evolution": {
+            # vintage_improvements only for NewPlant
+            "vintage_improvements": {
                 ("NewPlant", "electricity", 2025): 1.0,
                 ("NewPlant", "electricity", 2027): 0.8,
             },
@@ -825,7 +825,7 @@ class TestBrownfieldWithVintageParameters:
                 ("Plant", "electricity", 1): 10,
                 ("Plant", "electricity", 2): 10,
             },
-            "technology_evolution": {
+            "vintage_improvements": {
                 ("Plant", "electricity", 2025): 1.0,
                 ("Plant", "electricity", 2026): 0.9,
             },
@@ -914,8 +914,8 @@ class TestBrownfieldWithVintageParameters:
             "foreground_technosphere": {
                 ("Plant", "electricity", tau): 10 for tau in range(31)
             },
-            # technology_evolution triggers 4D path
-            "technology_evolution": {
+            # vintage_improvements triggers 4D path
+            "vintage_improvements": {
                 ("Plant", "electricity", 2025): 1.0,
                 ("Plant", "electricity", 2035): 0.9,
             },

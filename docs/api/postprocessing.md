@@ -26,7 +26,9 @@ This module provides tools to extract, process, and visualize results from solve
 
 - `plot_impacts()`: Stacked bar chart of impacts over time
 - `plot_installation()`: Installation schedule visualization
-- `plot_production_and_demand()`: Production vs demand comparison
+- `plot_operation()`: Operation levels over time
+- `plot_capacity_balance()`: Production vs capacity comparison
+- `plot_utilization_heatmap()`: Capacity utilization heatmap by process
 
 ## Module Reference
 

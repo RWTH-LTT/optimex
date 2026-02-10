@@ -60,16 +60,16 @@ class PostProcessor:
 
         # Default plot config
         default_config = {
-            "figsize": (10, 6),
-            "fontsize": 12,
-            "grid_alpha": 0.6,
-            "grid_linestyle": "--",
+            "figsize": (8, 4),
+            "fontsize": 10,
+            "grid_alpha": 0.3,
+            "grid_linestyle": "-",
             "rotation": 45,
-            "bar_width": 0.8,
+            "bar_width": 0.7,
             "colormap": plt.colormaps["tab20"].colors,
             "line_color": "black",
             "line_marker": "o",
-            "line_width": 2,
+            "line_width": 1.5,
             "max_xticks": 10,
         }
 
@@ -214,13 +214,16 @@ class PostProcessor:
         """
         fig_size = figsize or self._plot_config["figsize"]
         fig, axes = plt.subplots(
-            nrows=nrows, ncols=ncols, figsize=fig_size, sharex=True
+            nrows=nrows, ncols=ncols, figsize=fig_size
         )
         axes = axes.flatten() if isinstance(axes, (np.ndarray, list)) else [axes]
 
         for ax in axes:
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.set_axisbelow(True)
             ax.grid(
-                axis="y",
+                axis="both",
                 linestyle=self._plot_config["grid_linestyle"],
                 alpha=self._plot_config["grid_alpha"],
             )
@@ -230,11 +233,43 @@ class PostProcessor:
                 labelsize=self._plot_config["fontsize"],
             )
             ax.tick_params(axis="y", labelsize=self._plot_config["fontsize"])
-            ax.set_xlabel("Time", fontsize=self._plot_config["fontsize"])
-            ax.set_ylabel("Value", fontsize=self._plot_config["fontsize"])
         return fig, axes
 
-    def _apply_bar_styles(self, df, ax, colors, title=None, legend_title=None):
+    def _add_legend(self, ax, position="right", **kwargs):
+        """Place legend in a consistent position.
+
+        Parameters
+        ----------
+        ax : matplotlib axis
+        position : str, default="right"
+            "right" places the legend to the right of the plot.
+            "bottom" places the legend below the plot.
+        """
+        handles = kwargs.pop("handles", None)
+        labels = kwargs.pop("labels", None)
+        if handles is None or labels is None:
+            handles, labels = ax.get_legend_handles_labels()
+        if not handles:
+            return
+        if position == "right":
+            defaults = dict(
+                loc="upper left",
+                bbox_to_anchor=(1.02, 1),
+                fontsize=self._plot_config["fontsize"] - 1,
+                frameon=False,
+            )
+        else:
+            defaults = dict(
+                loc="upper center",
+                bbox_to_anchor=(0.5, -0.18),
+                ncol=min(len(handles), 4),
+                fontsize=self._plot_config["fontsize"] - 1,
+                frameon=False,
+            )
+        defaults.update(kwargs)
+        ax.legend(handles=handles, labels=labels, **defaults)
+
+    def _apply_bar_styles(self, df, ax, colors, title=None, legend_position="right"):
         """
         Apply standard bar plot styling with consistent colors.
 
@@ -248,8 +283,8 @@ class PostProcessor:
             List of colors for each column
         title : str, optional
             Plot title
-        legend_title : str, optional
-            Legend title
+        legend_position : str, default="right"
+            Legend placement: "right" or "bottom".
         """
         df.plot(
             kind="bar",
@@ -258,25 +293,24 @@ class PostProcessor:
             width=self._plot_config["bar_width"],
             color=colors,
             edgecolor="black",
-            legend=True,
+            legend=False,
         )
         ax.set_title(title or "", fontsize=self._plot_config["fontsize"] + 2)
         self._set_smart_xticks(ax, df.index)
+        ax.set_axisbelow(True)
+        ax.grid(
+            axis="both",
+            linestyle=self._plot_config["grid_linestyle"],
+            alpha=self._plot_config["grid_alpha"],
+        )
 
-        handles, labels = ax.get_legend_handles_labels()
+        # Re-add labels from df columns for the legend helper
+        handles, _ = ax.get_legend_handles_labels()
         if handles:
             labels = [self._format_label(col) for col in df.columns]
-            ax.legend(
-                handles,
-                labels,
-                title=legend_title or "",
-                fontsize=self._plot_config["fontsize"] - 2,
-                loc="upper center",
-                ncol=max(1, min(len(labels), 4)),
-                frameon=False,
-                bbox_to_anchor=(0.5, -0.25),
-                title_fontsize=self._plot_config["fontsize"],
-            )
+            for h, l in zip(handles, labels):
+                h.set_label(l)
+            self._add_legend(ax, position=legend_position)
 
     def get_impacts(self) -> pd.DataFrame:
         """
@@ -479,12 +513,20 @@ class PostProcessor:
             marker=self._plot_config["line_marker"],
             linewidth=self._plot_config["line_width"],
             color=self._plot_config["line_color"],
+            label=metric.replace("_", " ").title(),
         )
 
         ax.set_xlabel("Year", fontsize=self._plot_config["fontsize"])
         ax.set_ylabel(f"{metric.replace('_', ' ').title()}", fontsize=self._plot_config["fontsize"])
         ax.set_title(f"Dynamic {metric.replace('_', ' ').title()}", fontsize=self._plot_config["fontsize"] + 2)
+        ax.set_axisbelow(True)
+        ax.grid(
+            axis="both",
+            linestyle=self._plot_config["grid_linestyle"],
+            alpha=self._plot_config["grid_alpha"],
+        )
 
+        self._add_legend(ax, position="right")
         fig.tight_layout()
         plt.show()
 
@@ -562,27 +604,6 @@ class PostProcessor:
             df = df.reset_index()
             df_pivot = df.pivot(index="Time", columns=["Process", "Vintage"], values="Value")
             return df_pivot
-
-    def get_operation_by_vintage(self) -> pd.DataFrame:
-        """
-        Get operation data broken down by vintage for detailed merit-order analysis.
-
-        This is a convenience method equivalent to get_operation(aggregate_vintages=False).
-
-        Returns
-        -------
-        pd.DataFrame
-            DataFrame with Time as index and (Process, Vintage) MultiIndex columns.
-            Values are the operational levels for each process-vintage combination.
-
-        Example
-        -------
-        >>> pp = PostProcessor(solved_model)
-        >>> op_by_vintage = pp.get_operation_by_vintage()
-        >>> # See how much each vintage contributes to operation
-        >>> op_by_vintage.loc[2030, ('solar_pv', 2025)]  # Operation of 2025-vintage solar at 2030
-        """
-        return self.get_operation(aggregate_vintages=False)
 
     def get_production(self) -> pd.DataFrame:
         """
@@ -705,10 +726,9 @@ class PostProcessor:
         ncols = 2
         nrows = math.ceil(len(categories) / ncols)
 
-        # Widen figure for multiple columns to avoid cramped subplots
         base_w, base_h = self._plot_config["figsize"]
-        fig_w = base_w * ncols
-        fig_h = base_h * max(1, nrows * 0.9)
+        fig_w = base_w * ncols * 1.1
+        fig_h = base_h * nrows
 
         fig, axes = self._create_clean_axes(nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h))
 
@@ -721,107 +741,14 @@ class PostProcessor:
             colors = self._get_colors_for_dataframe(sub_df)
             # Annotate if requested
             sub_df = self._annotate_dataframe(sub_df, annotated)
-            self._apply_bar_styles(sub_df, ax, colors, title=category, legend_title="Process")
+            self._apply_bar_styles(sub_df, ax, colors, title=category, legend_position="bottom")
 
         # Hide unused axes
         for j in range(i + 1, len(axes)):
             fig.delaxes(axes[j])
 
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.25)
-        plt.show()
-
-    def plot_production_and_demand(self, prod_df=None, demand_df=None, annotated=True):
-        """
-        Plot a stacked bar chart for production and line(s) for demand.
-
-        Parameters
-        ----------
-        prod_df : DataFrame, optional
-            DataFrame with Time as index, (Process, Product) as columns
-        demand_df : DataFrame, optional
-            DataFrame with Time as index, Products as columns
-        annotated : bool, default=True
-            If True, show human-readable names instead of codes
-        """
-
-        if prod_df is None:
-            prod_df = self.get_production()
-        if demand_df is None:
-            demand_df = self.get_demand()
-
-        # Convert indices to strings for consistent tick labeling
-        prod_df = prod_df.copy()
-        demand_df = demand_df.copy()
-        prod_df.index = prod_df.index.astype(str)
-        demand_df.index = demand_df.index.astype(str)
-
-        # Filter out columns with all zero values
-        prod_df = prod_df.loc[:, (prod_df != 0).any(axis=0)]
-        demand_df = demand_df.loc[:, (demand_df != 0).any(axis=0)]
-
-        # Get colors BEFORE annotation (using codes)
-        prod_colors = self._get_colors_for_dataframe(prod_df)
-
-        # Annotate if requested
-        prod_df = self._annotate_dataframe(prod_df, annotated)
-        demand_df = self._annotate_dataframe(demand_df, annotated)
-
-        fig, axes = self._create_clean_axes()
-        ax = axes[0]
-
-        # Define x positions for line plotting
-        x_positions = np.arange(len(prod_df.index))
-
-        # Plot production (stacked bars)
-        if not prod_df.empty:
-            prod_df.plot(
-                kind="bar",
-                stacked=True,
-                ax=ax,
-                edgecolor="black",
-                width=self._plot_config["bar_width"],
-                color=prod_colors,
-                legend=True,  # We'll handle legend separately
-            )
-
-        # Plot demand (lines)
-        for col in demand_df.columns:
-            ax.plot(
-                x_positions,
-                demand_df[col].values,
-                marker=self._plot_config["line_marker"],
-                linewidth=self._plot_config["line_width"],
-                label=f"Demand: {col}",
-                color=self._plot_config["line_color"],
-            )
-
-        self._set_smart_xticks(ax, prod_df.index)
-
-        # Create combined legend
-        handles, labels = ax.get_legend_handles_labels()
-        bar_count = prod_df.shape[1] if not prod_df.empty else 0
-        if bar_count:
-            bar_labels = [self._format_label(col) for col in prod_df.columns]
-            labels = bar_labels + labels[bar_count:]
-        ax.legend(
-            handles=handles,
-            loc="upper center",
-            fontsize=self._plot_config["fontsize"] - 2,
-            title="Processes / Demand",
-            title_fontsize=self._plot_config["fontsize"],
-            frameon=False,
-            bbox_to_anchor=(0.5, -0.25),
-            ncol=max(1, min(len(labels), 4)) if labels else 1,
-        )
-
-        ax.set_title(
-            "Production and Demand", fontsize=self._plot_config["fontsize"] + 2
-        )
-        ax.set_ylabel("Quantity", fontsize=self._plot_config["fontsize"])
-
-        fig.tight_layout()
-        fig.subplots_adjust(bottom=0.25)
+        fig.subplots_adjust(bottom=0.2)
         plt.show()
 
     def plot_installation(self, df_installation=None, annotated=True):
@@ -850,11 +777,10 @@ class PostProcessor:
         fig, axes = self._create_clean_axes()
         ax = axes[0]
         self._apply_bar_styles(
-            df_installation, ax, colors, title="Installed Capacity", legend_title="Processes"
+            df_installation, ax, colors, title="Installed Capacity"
         )
-        ax.set_ylabel("Installation", fontsize=self._plot_config["fontsize"])
+        ax.set_ylabel("Installed Capacity", fontsize=self._plot_config["fontsize"])
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.25)
         plt.show()
 
     def plot_operation(self, df_operation=None, annotated=True):
@@ -883,11 +809,10 @@ class PostProcessor:
         fig, axes = self._create_clean_axes()
         ax = axes[0]
         self._apply_bar_styles(
-            df_operation, ax, colors, title="Operational Level", legend_title="Processes"
+            df_operation, ax, colors, title="Operational Level"
         )
-        ax.set_ylabel("Operation", fontsize=self._plot_config["fontsize"])
+        ax.set_ylabel("Operation Level", fontsize=self._plot_config["fontsize"])
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.25)
         plt.show()
 
     def get_existing_capacity(self) -> pd.DataFrame:
@@ -1102,6 +1027,7 @@ class PostProcessor:
         show_legend=True,
         show_fill=True,
         show_title=True,
+        legend_position="bottom",
     ):
         """
         Plot production vs capacity lines on a given axis.
@@ -1168,7 +1094,13 @@ class PostProcessor:
 
         # Set labels and title
         self._set_smart_xticks(ax, actual_production.index)
-        ax.set_ylabel(f"Quantity", fontsize=self._plot_config["fontsize"])
+        ax.set_ylabel("Quantity", fontsize=self._plot_config["fontsize"])
+        ax.set_axisbelow(True)
+        ax.grid(
+            axis="both",
+            linestyle=self._plot_config["grid_linestyle"],
+            alpha=self._plot_config["grid_alpha"],
+        )
 
         if show_title:
             ax.set_title(
@@ -1177,21 +1109,8 @@ class PostProcessor:
                 pad=10
             )
 
-        # Add grid
-        ax.grid(
-            True,
-            alpha=self._plot_config["grid_alpha"],
-            linestyle=self._plot_config["grid_linestyle"]
-        )
-
         if show_legend:
-            ax.legend(
-                loc='upper center',
-                bbox_to_anchor=(0.5, -0.15),
-                ncol=3,
-                fontsize=self._plot_config["fontsize"] - 2,
-                frameon=False
-            )
+            self._add_legend(ax, position=legend_position)
 
     def _compute_capacity_breakdown(self, product):
         """
@@ -1410,6 +1329,7 @@ class PostProcessor:
         annotated=True,
         show_legend=True,
         show_title=True,
+        legend_position="bottom",
     ):
         """
         Plot detailed capacity balance with grouped bars on a given axis.
@@ -1540,26 +1460,39 @@ class PostProcessor:
                 color='#A23B72', linestyle='--', zorder=3)
 
         self._set_smart_xticks(ax, actual_production.index)
-        ax.set_ylabel(f"Quantity", fontsize=self._plot_config["fontsize"])
+        ax.set_ylabel("Quantity", fontsize=self._plot_config["fontsize"])
+        ax.set_axisbelow(True)
+        ax.grid(
+            axis="both",
+            linestyle=self._plot_config["grid_linestyle"],
+            alpha=self._plot_config["grid_alpha"],
+        )
 
         if show_title:
             ax.set_title(f"{product_name}", fontsize=self._plot_config["fontsize"] + 2, pad=10)
 
-        ax.grid(True, alpha=self._plot_config["grid_alpha"], linestyle=self._plot_config["grid_linestyle"])
-
         if show_legend and process_legend:
             all_handles = process_legend + type_legend
-            ncol = min(6, len(all_handles))
-            ax.legend(handles=all_handles, loc='upper center', bbox_to_anchor=(0.5, -0.15),
-                     ncol=ncol, fontsize=self._plot_config["fontsize"] - 2, frameon=False)
+            all_labels = [h.get_label() for h in all_handles]
+            self._add_legend(
+                ax,
+                position=legend_position,
+                ncol=min(6, len(all_handles)),
+                handles=all_handles,
+                labels=all_labels,
+            )
 
         return process_legend, type_legend
 
     def plot_capacity_balance(self, product=None, prod_df=None, capacity_df=None, demand_df=None, annotated=True, detailed=False):
         """
-        Plot actual production vs maximum available capacity for a specific product.
+        Plot actual production vs maximum available capacity.
 
-        Shows two lines:
+        When a specific product is given, plots a single chart. When product is
+        None, auto-detects all products with non-zero demand or production and
+        plots a grid of subplots.
+
+        Shows two lines per product:
         - Production (demand is assumed equal and overlaid)
         - Maximum available capacity (dashed line)
 
@@ -1570,7 +1503,8 @@ class PostProcessor:
         Parameters
         ----------
         product : str, optional
-            Product to plot. If None, uses the first product with non-zero demand.
+            Product to plot. If None, plots all products with non-zero
+            demand or production in a grid layout.
         prod_df : pd.DataFrame, optional
             Production DataFrame from get_production()
         capacity_df : pd.DataFrame, optional
@@ -1590,143 +1524,116 @@ class PostProcessor:
         if demand_df is None:
             demand_df = self.get_demand()
 
-        # Determine which product to plot
-        if product is None:
-            products_with_demand = demand_df.columns[(demand_df != 0).any(axis=0)]
-            if len(products_with_demand) == 0:
-                raise ValueError("No products with non-zero demand found")
-            product = products_with_demand[0]
+        if product is not None:
+            # Single-product plot — legend to the right
+            fig, axes = self._create_clean_axes(nrows=1, ncols=1)
+            ax = axes[0]
 
-        fig, axes = self._create_clean_axes(nrows=1, ncols=1)
-        ax = axes[0]
+            if detailed:
+                self._plot_capacity_balance_detailed_on_ax(
+                    ax, product, prod_df, capacity_df,
+                    annotated=annotated, show_legend=True, show_title=True,
+                    legend_position="right",
+                )
+            else:
+                self._plot_capacity_balance_on_ax(
+                    ax, product, prod_df, capacity_df,
+                    annotated=annotated, show_legend=True, show_fill=True, show_title=True,
+                    legend_position="right",
+                )
 
-        if detailed:
-            self._plot_capacity_balance_detailed_on_ax(
-                ax, product, prod_df, capacity_df,
-                annotated=annotated, show_legend=True, show_title=True
-            )
-        else:
-            self._plot_capacity_balance_on_ax(
-                ax, product, prod_df, capacity_df,
-                annotated=annotated, show_legend=True, show_fill=True, show_title=True
-            )
+            fig.tight_layout()
+            plt.show()
+            return
 
-        fig.tight_layout()
-        fig.subplots_adjust(bottom=0.25)
-        plt.show()
-
-    # Alias for backward compatibility
-    plot_production_vs_capacity = plot_capacity_balance
-
-    def plot_capacity_balance_all(self, prod_df=None, capacity_df=None, demand_df=None, annotated=True, detailed=False):
-        """
-        Plot production vs capacity for all products in the foreground system.
-
-        Creates a grid of subplots, one for each product with non-zero production
-        or capacity. Each subplot shows the production line and capacity line
-        over time.
-
-        When detailed=True, also shows grouped bars per time step for each product:
-        - Left bar: Capacity changes (additions/removals stacked by process)
-        - Right bar: Operation level (stacked by process)
-
-        Parameters
-        ----------
-        prod_df : pd.DataFrame, optional
-            Production DataFrame from get_production()
-        capacity_df : pd.DataFrame, optional
-            Capacity DataFrame from get_production_capacity()
-        demand_df : pd.DataFrame, optional
-            Demand DataFrame from get_demand()
-        annotated : bool, default=True
-            If True, show human-readable names instead of codes
-        detailed : bool, default=False
-            If True, show grouped bars for capacity changes and operation by process
-        """
-        # Get data if not provided
-        if prod_df is None:
-            prod_df = self.get_production()
-        if capacity_df is None:
-            capacity_df = self.get_production_capacity()
-        if demand_df is None:
-            demand_df = self.get_demand()
-
-        # Collect all products that have either production or capacity
+        # Multi-product: collect all products with production or capacity
         all_products = set()
 
-        # Products from production (MultiIndex columns)
         if isinstance(prod_df.columns, pd.MultiIndex):
             prod_products = set(col[1] for col in prod_df.columns)
-            # Filter to products with non-zero production
-            for product in prod_products:
-                production_cols = [col for col in prod_df.columns if col[1] == product]
+            for p in prod_products:
+                production_cols = [col for col in prod_df.columns if col[1] == p]
                 if (prod_df[production_cols].sum(axis=1) != 0).any():
-                    all_products.add(product)
+                    all_products.add(p)
         else:
-            for product in prod_df.columns:
-                if (prod_df[product] != 0).any():
-                    all_products.add(product)
+            for p in prod_df.columns:
+                if (prod_df[p] != 0).any():
+                    all_products.add(p)
 
-        # Products from capacity
-        for product in capacity_df.columns:
-            if (capacity_df[product] != 0).any():
-                all_products.add(product)
+        for p in capacity_df.columns:
+            if (capacity_df[p] != 0).any():
+                all_products.add(p)
 
         if not all_products:
             raise ValueError("No products with production or capacity found")
 
-        # Sort products for consistent ordering
         products = sorted(all_products)
-
-        # Determine grid dimensions
         n_products = len(products)
         ncols = min(2, n_products)
         nrows = math.ceil(n_products / ncols)
 
-        # Calculate figure size
         base_w, base_h = self._plot_config["figsize"]
         fig_w = base_w * ncols
         fig_h = base_h * max(1, nrows * 0.8)
 
         fig, axes = plt.subplots(
-            nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h), sharex=True
+            nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h)
         )
 
-        # Handle single subplot case
         if n_products == 1:
             axes = np.array([axes])
         axes = axes.flatten() if isinstance(axes, np.ndarray) else [axes]
 
-        # Plot each product with individual legends (colors are synced via self._color_map)
-        for i, product in enumerate(products):
+        for ax in axes:
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.set_axisbelow(True)
+            ax.grid(
+                axis="both",
+                linestyle=self._plot_config["grid_linestyle"],
+                alpha=self._plot_config["grid_alpha"],
+            )
+            ax.tick_params(axis="x", labelsize=self._plot_config["fontsize"])
+            ax.tick_params(axis="y", labelsize=self._plot_config["fontsize"])
+
+        all_handles = []
+        all_labels = []
+        for i, p in enumerate(products):
             ax = axes[i]
             if detailed:
-                self._plot_capacity_balance_detailed_on_ax(
-                    ax, product, prod_df, capacity_df,
-                    annotated=annotated,
-                    show_legend=True,
-                    show_title=True
+                proc_legend, type_legend = self._plot_capacity_balance_detailed_on_ax(
+                    ax, p, prod_df, capacity_df,
+                    annotated=annotated, show_legend=False, show_title=True
                 )
+                if not all_handles and proc_legend:
+                    all_handles = proc_legend + type_legend
+                    all_labels = [h.get_label() for h in all_handles]
             else:
                 self._plot_capacity_balance_on_ax(
-                    ax, product, prod_df, capacity_df,
-                    annotated=annotated,
-                    show_legend=True,
-                    show_fill=True,
-                    show_title=True
+                    ax, p, prod_df, capacity_df,
+                    annotated=annotated, show_legend=False, show_fill=True, show_title=True
                 )
+                if not all_handles:
+                    h, l = ax.get_legend_handles_labels()
+                    all_handles, all_labels = h, l
 
-        # Hide unused axes
         for j in range(len(products), len(axes)):
             fig.delaxes(axes[j])
 
-        fig.suptitle(
-            "Production vs Capacity by Product",
-            fontsize=self._plot_config["fontsize"] + 4,
-            y=1.02
-        )
+        # Shared legend at bottom of figure
+        if all_handles:
+            fig.legend(
+                handles=all_handles,
+                labels=all_labels,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 0.02),
+                ncol=min(len(all_handles), 6),
+                fontsize=self._plot_config["fontsize"] - 1,
+                frameon=False,
+            )
 
         fig.tight_layout()
+        fig.subplots_adjust(bottom=0.15)
         plt.show()
 
     def plot_utilization_heatmap(self, product=None, annotated=True, show_values=True):
@@ -1939,22 +1846,13 @@ class PostProcessor:
         # Add colorbar
         cbar = fig.colorbar(im, ax=ax, shrink=0.8)
         cbar.set_label('Utilization %', fontsize=self._plot_config["fontsize"])
+        cbar.ax.tick_params(labelsize=self._plot_config["fontsize"] - 1)
 
         # Labels and title
         ax.set_xlabel('Year', fontsize=self._plot_config["fontsize"])
         ax.set_ylabel('Process', fontsize=self._plot_config["fontsize"])
         ax.set_title(f'Capacity Utilization: {product_name}', fontsize=self._plot_config["fontsize"] + 2)
 
-        # Add summary statistics
-        mean_util = np.nanmean(util_df.values)
-        total_cap = cap_df.sum().sum()
-        total_op = op_df.sum().sum()
-        overall_util = (total_op / total_cap * 100) if total_cap > 0 else 0
-
-        ax.text(1.02, 0.98, f'Overall: {overall_util:.0f}%\nMean: {mean_util:.0f}%',
-               transform=ax.transAxes, fontsize=self._plot_config["fontsize"] - 2,
-               verticalalignment='top',
-               bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
-
         fig.tight_layout()
+        fig.subplots_adjust(bottom=0.15)
         plt.show()
