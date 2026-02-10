@@ -486,6 +486,12 @@ html {
     color:  rgba(255, 255, 255, 0.2);
 }
 
+@media screen and (max-width:44.984375em) {
+    .md-content__inner>.highlight {
+        margin: 1em 0 !important;
+    }
+}
+
 /* ============================================================================
    9. JUPYTER NOTEBOOKS
    ============================================================================ */
@@ -507,6 +513,10 @@ html {
 .jp-OutputArea * {
     border-radius: 0.5rem !important;
     overflow-x: scroll !important;
+}
+
+.jp-InputArea-editor {
+    margin: 0.5em 0 !important;
 }
 
 .jp-CodeMirrorEditor pre {
