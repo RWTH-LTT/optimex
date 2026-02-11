@@ -13,9 +13,36 @@ import math
 
 import bw2data as bd
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
+
+
+class _EngineeringFormatter(mticker.ScalarFormatter):
+    """Y-axis formatter that always shows values as X.X with a 10^n offset.
+
+    For example, 1 400 000 → 1.4 with '×10⁶' on top of the axis.
+    When all values are small enough (< 10), no offset is used.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.set_useMathText(True)
+
+    def _set_order_of_magnitude(self):
+        # Determine the order based on the axis limits
+        vmin, vmax = self.axis.get_view_interval()
+        max_abs = max(abs(vmin), abs(vmax))
+        if max_abs == 0:
+            self.orderOfMagnitude = 0
+            return
+        # Find power so that max_abs / 10^power is in [1, 10)
+        power = math.floor(math.log10(max_abs))
+        self.orderOfMagnitude = power
+
+    def _set_format(self):
+        self.format = "%1.1f"
 
 
 class PostProcessor:
@@ -259,6 +286,7 @@ class PostProcessor:
                 labelsize=self._plot_config["fontsize"],
             )
             ax.tick_params(axis="y", labelsize=self._plot_config["fontsize"])
+            ax.yaxis.set_major_formatter(_EngineeringFormatter())
         return fig, axes
 
     @staticmethod
@@ -1693,6 +1721,7 @@ class PostProcessor:
             )
             ax.tick_params(axis="x", labelsize=self._plot_config["fontsize"])
             ax.tick_params(axis="y", labelsize=self._plot_config["fontsize"])
+            ax.yaxis.set_major_formatter(_EngineeringFormatter())
 
         all_handles = []
         all_labels = []
