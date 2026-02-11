@@ -72,6 +72,9 @@ docs = [
     "mkdocstrings[python]",
     "mkdocs-jupyter",
 ]
+gurobi = [
+    "gurobipy"
+]
 
 [tool.setuptools]
 license-files = ["LICENSE"]

@@ -60,7 +60,7 @@ class PostProcessor:
 
         # Default plot config
         default_config = {
-            "figsize": (8, 4),
+            "figsize": (6, 3),
             "fontsize": 10,
             "label_fontsize": 11,
             "title_fontsize": 12,
@@ -88,6 +88,7 @@ class PostProcessor:
             "line_marker": "o",
             "line_width": 1.5,
             "max_xticks": 10,
+            "subplot_ncols": 1,
         }
 
         # If user provided config, update defaults with it
@@ -260,15 +261,43 @@ class PostProcessor:
             ax.tick_params(axis="y", labelsize=self._plot_config["fontsize"])
         return fig, axes
 
-    def _add_legend(self, ax, position="right", **kwargs):
+    @staticmethod
+    def _reorder_legend_row_first(handles, labels, ncol):
+        """
+        Reorder handles/labels so the legend reads row-by-row (left to right)
+        instead of matplotlib's default column-first ordering.
+
+        Matplotlib fills legends column-first when ncol > 1.  To get row-first
+        reading order we rearrange items so that column-first filling produces
+        the desired visual order.
+        """
+        n = len(handles)
+        if n <= ncol:
+            return handles, labels
+        nrow = math.ceil(n / ncol)
+        # Pad to fill the grid
+        h_pad = list(handles) + [None] * (nrow * ncol - n)
+        l_pad = list(labels) + [None] * (nrow * ncol - n)
+        # Build grid row-by-row, then read column-by-column
+        reordered_h = []
+        reordered_l = []
+        for col in range(ncol):
+            for row in range(nrow):
+                idx = row * ncol + col
+                if h_pad[idx] is not None:
+                    reordered_h.append(h_pad[idx])
+                    reordered_l.append(l_pad[idx])
+        return reordered_h, reordered_l
+
+    def _add_legend(self, ax, position="bottom", **kwargs):
         """Place legend in a consistent position.
 
         Parameters
         ----------
         ax : matplotlib axis
-        position : str, default="right"
-            "right" places the legend to the right of the plot.
+        position : str, default="bottom"
             "bottom" places the legend below the plot.
+            "right" places the legend to the right of the plot.
         """
         handles = kwargs.pop("handles", None)
         labels = kwargs.pop("labels", None)
@@ -278,23 +307,25 @@ class PostProcessor:
             return
         if position == "right":
             defaults = dict(
-                loc="upper left",
-                bbox_to_anchor=(1.02, 1),
+                loc="center left",
+                bbox_to_anchor=(1.02, 0.5),
                 fontsize=self._plot_config["legend_fontsize"],
                 frameon=False,
             )
         else:
             defaults = dict(
                 loc="upper center",
-                bbox_to_anchor=(0.5, -0.18),
-                ncol=min(len(handles), 4),
+                bbox_to_anchor=(0.5, -0.02),
+                ncol=2,
                 fontsize=self._plot_config["legend_fontsize"],
                 frameon=False,
             )
         defaults.update(kwargs)
+        ncol = defaults.get("ncol", 1)
+        handles, labels = self._reorder_legend_row_first(handles, labels, ncol)
         ax.legend(handles=handles, labels=labels, **defaults)
 
-    def _apply_bar_styles(self, df, ax, colors, title=None, legend_position="right"):
+    def _apply_bar_styles(self, df, ax, colors, title=None, legend_position="bottom"):
         """
         Apply standard bar plot styling with consistent colors.
 
@@ -541,7 +572,6 @@ class PostProcessor:
             label=metric.replace("_", " ").title(),
         )
 
-        ax.set_xlabel("Year", fontsize=self._plot_config["label_fontsize"])
         ax.set_ylabel(f"{metric.replace('_', ' ').title()}", fontsize=self._plot_config["label_fontsize"])
         ax.set_title(f"Dynamic {metric.replace('_', ' ').title()}", fontsize=self._plot_config["title_fontsize"])
         ax.set_axisbelow(True)
@@ -551,7 +581,8 @@ class PostProcessor:
             alpha=self._plot_config["grid_alpha"],
         )
 
-        self._add_legend(ax, position="right")
+        self._add_legend(ax, position="bottom", bbox_to_anchor=(0.5, -0.35))
+
         fig.tight_layout()
         plt.show()
 
@@ -748,11 +779,12 @@ class PostProcessor:
                 df_impacts = self.get_impacts()
 
         categories = df_impacts.columns.get_level_values(0).unique()
-        ncols = 2
-        nrows = math.ceil(len(categories) / ncols)
+        n_categories = len(categories)
+        ncols = min(self._plot_config["subplot_ncols"], n_categories)
+        nrows = math.ceil(n_categories / ncols)
 
         base_w, base_h = self._plot_config["figsize"]
-        fig_w = base_w * ncols * 1.1
+        fig_w = base_w * ncols
         fig_h = base_h * nrows
 
         fig, axes = self._create_clean_axes(nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h))
@@ -769,6 +801,7 @@ class PostProcessor:
             # Annotate if requested
             sub_df = self._annotate_dataframe(sub_df, annotated)
             self._apply_bar_styles(sub_df, ax, colors, title=category)
+            ax.set_xlabel("")
             ax.set_ylabel("Impact", fontsize=self._plot_config["label_fontsize"])
 
             # Collect handles/labels for shared legend
@@ -782,20 +815,20 @@ class PostProcessor:
         for j in range(i + 1, len(axes)):
             fig.delaxes(axes[j])
 
-        # Shared legend at bottom of figure
+        # Shared legend to the right of figure
         if all_handles:
+            all_handles, all_labels = self._reorder_legend_row_first(all_handles, all_labels, 2)
             fig.legend(
                 handles=all_handles,
                 labels=all_labels,
                 loc="upper center",
-                bbox_to_anchor=(0.5, 0.02),
-                ncol=min(len(all_handles), 6),
+                bbox_to_anchor=(0.5, -0.02),
+                ncol=2,
                 fontsize=self._plot_config["legend_fontsize"],
                 frameon=False,
             )
 
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.2)
         plt.show()
 
     def plot_installation(self, df_installation=None, annotated=True):
@@ -828,21 +861,22 @@ class PostProcessor:
         )
         ax.set_ylabel("Installed Capacity", fontsize=self._plot_config["label_fontsize"])
 
+
         # Legend at bottom
         h, l = ax.get_legend_handles_labels()
         if h:
+            h, l = self._reorder_legend_row_first(h, l, 2)
             fig.legend(
                 handles=h,
                 labels=l,
                 loc="upper center",
-                bbox_to_anchor=(0.5, 0.02),
-                ncol=min(len(h), 6),
+                bbox_to_anchor=(0.5, -0.02),
+                ncol=2,
                 fontsize=self._plot_config["legend_fontsize"],
                 frameon=False,
             )
 
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.15)
         plt.show()
 
     def plot_operation(self, df_operation=None, annotated=True):
@@ -875,21 +909,22 @@ class PostProcessor:
         )
         ax.set_ylabel("Operation Level", fontsize=self._plot_config["label_fontsize"])
 
+
         # Legend at bottom
         h, l = ax.get_legend_handles_labels()
         if h:
+            h, l = self._reorder_legend_row_first(h, l, 2)
             fig.legend(
                 handles=h,
                 labels=l,
                 loc="upper center",
-                bbox_to_anchor=(0.5, 0.02),
-                ncol=min(len(h), 6),
+                bbox_to_anchor=(0.5, -0.02),
+                ncol=2,
                 fontsize=self._plot_config["legend_fontsize"],
                 frameon=False,
             )
 
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.15)
         plt.show()
 
     def get_existing_capacity(self) -> pd.DataFrame:
@@ -1187,7 +1222,7 @@ class PostProcessor:
             )
 
         if show_legend:
-            self._add_legend(ax, position=legend_position)
+            self._add_legend(ax, position=legend_position, bbox_to_anchor=(0.5, 0.0))
 
     def _compute_capacity_breakdown(self, product):
         """
@@ -1433,6 +1468,7 @@ class PostProcessor:
         tuple
             (process_legend, type_legend) for creating shared legends.
         """
+        from matplotlib.lines import Line2D
         from matplotlib.patches import Patch
 
         actual_production, max_capacity = self._extract_product_data(product, prod_df, capacity_df)
@@ -1467,7 +1503,7 @@ class PostProcessor:
             cap_positions = x_positions - offset
             op_positions = x_positions + offset
 
-            # Plot capacity additions (positive, dark green border)
+            # Plot capacity additions (positive, green border)
             bottom_additions = np.zeros(len(x_positions))
             for i, col in enumerate(capacity_additions_df.columns):
                 add_values = capacity_additions_df[col].values
@@ -1476,29 +1512,13 @@ class PostProcessor:
                        color=clr, hatch="///", edgecolor="#30A834FF", linewidth=1.5, zorder=1)
                 bottom_additions += add_values
 
-            # Plot existing capacity additions (light green border)
-            for i, col in enumerate(existing_additions_df.columns):
-                add_values = existing_additions_df[col].values
-                clr = self._color_map.get(process_codes[i], 'black')
-                ax.bar(cap_positions, add_values, width=bar_width, bottom=bottom_additions,
-                       color=clr, hatch="///", edgecolor="#81C784", linewidth=1.5, zorder=1)
-                bottom_additions += add_values
-
-            # Plot capacity removals (negative, dark red border)
+            # Plot capacity removals (negative, red border)
             bottom_removals = np.zeros(len(x_positions))
             for i, col in enumerate(capacity_removals_df.columns):
                 rem_values = capacity_removals_df[col].values
                 clr = self._color_map.get(process_codes[i], 'black')
                 ax.bar(cap_positions, -rem_values, width=bar_width, bottom=bottom_removals,
                        color=clr, hatch="///", edgecolor="#CD221FFF", linewidth=1.5, zorder=1)
-                bottom_removals -= rem_values
-
-            # Plot existing capacity removals (light red border)
-            for i, col in enumerate(existing_removals_df.columns):
-                rem_values = existing_removals_df[col].values
-                clr = self._color_map.get(process_codes[i], 'black')
-                ax.bar(cap_positions, -rem_values, width=bar_width, bottom=bottom_removals,
-                       color=clr, hatch="///", edgecolor="#E57373", linewidth=1.5, zorder=1)
                 bottom_removals -= rem_values
 
             # Plot operation (solid bars)
@@ -1513,20 +1533,12 @@ class PostProcessor:
 
             ax.axhline(0, color='gray', linewidth=0.5, zorder=0)
 
-            # Bar group labels
-            ax.text(cap_positions[0], -0.08, 'Δ Cap', transform=ax.get_xaxis_transform(),
-                   ha='center', va='top', fontsize=self._plot_config["fontsize"] - 3, color='gray')
-            ax.text(op_positions[0], -0.08, 'Op', transform=ax.get_xaxis_transform(),
-                   ha='center', va='top', fontsize=self._plot_config["fontsize"] - 3, color='gray')
-
             # Build legend handles
             process_legend = [Patch(facecolor=self._color_map.get(process_codes[i], 'black'), edgecolor='black', linewidth=0.5, label=col)
                             for i, col in enumerate(capacity_additions_df.columns)]
             type_legend = [
-                Patch(facecolor="white", edgecolor='#30A834', linewidth=2, label='+ New Cap'),
-                Patch(facecolor="white", edgecolor='#81C784', linewidth=2, label='+ Existing Cap'),
-                Patch(facecolor="white", edgecolor='#CD221F', linewidth=2, label='− New Cap'),
-                Patch(facecolor="white", edgecolor='#E57373', linewidth=2, label='− Existing Cap'),
+                Patch(facecolor="white", edgecolor='#30A834', linewidth=2, label='+ Cap'),
+                Patch(facecolor="white", edgecolor='#CD221F', linewidth=2, label='− Cap'),
             ]
 
         # Plot production and capacity lines
@@ -1536,6 +1548,14 @@ class PostProcessor:
         ax.plot(x_positions, max_capacity.values, marker='s',
                 linewidth=self._plot_config["line_width"], label='Max Capacity',
                 color='#000000', linestyle='--', zorder=3)
+
+        # Line legend entries
+        line_legend = [
+            Line2D([0], [0], color='#00549F', marker='o', linestyle='-',
+                   linewidth=self._plot_config["line_width"], label='Production / Demand'),
+            Line2D([0], [0], color='#000000', marker='s', linestyle='--',
+                   linewidth=self._plot_config["line_width"], label='Max Capacity'),
+        ]
 
         self._set_smart_xticks(ax, actual_production.index)
         ax.set_ylabel("Quantity", fontsize=self._plot_config["label_fontsize"])
@@ -1550,17 +1570,18 @@ class PostProcessor:
             ax.set_title(f"{product_name}", fontsize=self._plot_config["title_fontsize"], pad=10)
 
         if show_legend and process_legend:
-            all_handles = process_legend + type_legend
+            all_handles = process_legend + type_legend + line_legend
             all_labels = [h.get_label() for h in all_handles]
             self._add_legend(
                 ax,
                 position=legend_position,
-                ncol=min(6, len(all_handles)),
+                ncol=2,
                 handles=all_handles,
                 labels=all_labels,
+                bbox_to_anchor=(0.5, 0.0),
             )
 
-        return process_legend, type_legend
+        return process_legend, type_legend, line_legend
 
     def plot_capacity_balance(self, product=None, prod_df=None, capacity_df=None, demand_df=None, annotated=True, detailed=False):
         """
@@ -1611,15 +1632,16 @@ class PostProcessor:
                 self._plot_capacity_balance_detailed_on_ax(
                     ax, product, prod_df, capacity_df,
                     annotated=annotated, show_legend=True, show_title=True,
-                    legend_position="right",
+                    legend_position="bottom",
                 )
             else:
                 self._plot_capacity_balance_on_ax(
                     ax, product, prod_df, capacity_df,
                     annotated=annotated, show_legend=True, show_fill=True, show_title=True,
-                    legend_position="right",
+                    legend_position="bottom",
                 )
 
+    
             fig.tight_layout()
             plt.show()
             return
@@ -1647,12 +1669,12 @@ class PostProcessor:
 
         products = sorted(all_products)
         n_products = len(products)
-        ncols = min(2, n_products)
+        ncols = min(self._plot_config["subplot_ncols"], n_products)
         nrows = math.ceil(n_products / ncols)
 
         base_w, base_h = self._plot_config["figsize"]
         fig_w = base_w * ncols
-        fig_h = base_h * max(1, nrows * 0.8)
+        fig_h = base_h * nrows
 
         fig, axes = plt.subplots(
             nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h)
@@ -1674,42 +1696,58 @@ class PostProcessor:
 
         all_handles = []
         all_labels = []
+        type_handles = []
+        line_handles = []
         for i, p in enumerate(products):
             ax = axes[i]
             if detailed:
-                proc_legend, type_legend = self._plot_capacity_balance_detailed_on_ax(
+                proc_legend, type_legend, line_legend = self._plot_capacity_balance_detailed_on_ax(
                     ax, p, prod_df, capacity_df,
                     annotated=annotated, show_legend=False, show_title=True
                 )
-                if not all_handles and proc_legend:
-                    all_handles = proc_legend + type_legend
-                    all_labels = [h.get_label() for h in all_handles]
+                # Collect process handles from all subplots (deduplicate by label)
+                for handle in proc_legend:
+                    if handle.get_label() not in all_labels:
+                        all_handles.append(handle)
+                        all_labels.append(handle.get_label())
+                # Keep type/line handles from first subplot only
+                if not type_handles and type_legend:
+                    type_handles = type_legend
+                    line_handles = line_legend
             else:
                 self._plot_capacity_balance_on_ax(
                     ax, p, prod_df, capacity_df,
                     annotated=annotated, show_legend=False, show_fill=True, show_title=True
                 )
-                if not all_handles:
-                    h, l = ax.get_legend_handles_labels()
-                    all_handles, all_labels = h, l
+                # Collect handles from all subplots (deduplicate by label)
+                h, l = ax.get_legend_handles_labels()
+                for handle, label in zip(h, l):
+                    if label not in all_labels:
+                        all_handles.append(handle)
+                        all_labels.append(label)
+
+        # For detailed mode, append type and line handles after all process handles
+        if detailed and type_handles:
+            all_handles = all_handles + type_handles + line_handles
+            all_labels = [h.get_label() for h in all_handles]
 
         for j in range(len(products), len(axes)):
             fig.delaxes(axes[j])
 
         # Shared legend at bottom of figure
         if all_handles:
+            all_handles, all_labels = self._reorder_legend_row_first(all_handles, all_labels, 2)
             fig.legend(
                 handles=all_handles,
                 labels=all_labels,
                 loc="upper center",
-                bbox_to_anchor=(0.5, 0.02),
-                ncol=min(len(all_handles), 6),
+                bbox_to_anchor=(0.5, 0.0),
+                ncol=2,
                 fontsize=self._plot_config["legend_fontsize"],
                 frameon=False,
             )
 
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.15)
         plt.show()
 
     def plot_utilization_heatmap(self, product=None, annotated=True, show_values=True):
@@ -1930,5 +1968,4 @@ class PostProcessor:
         ax.set_title(f'Capacity Utilization: {product_name}', fontsize=self._plot_config["title_fontsize"])
 
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.15)
         plt.show()
