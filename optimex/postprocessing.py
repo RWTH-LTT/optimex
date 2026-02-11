@@ -62,12 +62,29 @@ class PostProcessor:
         default_config = {
             "figsize": (8, 4),
             "fontsize": 10,
+            "label_fontsize": 11,
+            "title_fontsize": 12,
+            "legend_fontsize": 9,
             "grid_alpha": 0.3,
             "grid_linestyle": "-",
             "rotation": 45,
-            "bar_width": 0.7,
-            "colormap": plt.colormaps["tab20"].colors,
-            "line_color": "black",
+            "bar_width": 0.65,
+            "colormap": [
+                "#00549F",  # RWTH Blau
+                "#F6A800",  # RWTH Gelb
+                "#57AB27",  # RWTH Gruen
+                "#CC071E",  # RWTH Rot
+                "#612158",  # RWTH Violett
+                "#A11035",  # RWTH Bordeaux
+                "#7A6FAC",  # RWTH Lila
+                "#006165",  # RWTH Petrol
+                "#BDCD00",  # RWTH Maigruen
+                "#0098A1",  # RWTH Tuerkis
+            ],
+            "color_map": None,
+            "bar_edgecolor": "white",
+            "bar_linewidth": 1,
+            "line_color": "#000000",
             "line_marker": "o",
             "line_width": 1.5,
             "max_xticks": 10,
@@ -91,7 +108,12 @@ class PostProcessor:
         """
         Create a consistent color mapping for all processes and products.
         Returns a dict mapping item names to colors.
+        Uses user-provided color_map as base, then assigns from RWTH cycle
+        for any unmapped items.
         """
+        user_map = self._plot_config.get("color_map") or {}
+        color_map = dict(user_map)
+
         # Collect all unique processes and products
         all_items = set()
         all_items.update(self.m.PROCESS)
@@ -100,9 +122,14 @@ class PostProcessor:
         # Sort for consistency
         all_items = sorted(all_items)
 
-        # Map to colors
+        # Assign from RWTH cycle for any items not in user map
         colors = self._plot_config["colormap"]
-        color_map = {item: colors[i % len(colors)] for i, item in enumerate(all_items)}
+        cycle_idx = 0
+        for item in all_items:
+            if item not in color_map:
+                color_map[item] = colors[cycle_idx % len(colors)]
+                cycle_idx += 1
+
         return color_map
 
     def _build_name_cache(self) -> dict:
@@ -219,8 +246,6 @@ class PostProcessor:
         axes = axes.flatten() if isinstance(axes, (np.ndarray, list)) else [axes]
 
         for ax in axes:
-            ax.spines["top"].set_visible(False)
-            ax.spines["right"].set_visible(False)
             ax.set_axisbelow(True)
             ax.grid(
                 axis="both",
@@ -255,7 +280,7 @@ class PostProcessor:
             defaults = dict(
                 loc="upper left",
                 bbox_to_anchor=(1.02, 1),
-                fontsize=self._plot_config["fontsize"] - 1,
+                fontsize=self._plot_config["legend_fontsize"],
                 frameon=False,
             )
         else:
@@ -263,7 +288,7 @@ class PostProcessor:
                 loc="upper center",
                 bbox_to_anchor=(0.5, -0.18),
                 ncol=min(len(handles), 4),
-                fontsize=self._plot_config["fontsize"] - 1,
+                fontsize=self._plot_config["legend_fontsize"],
                 frameon=False,
             )
         defaults.update(kwargs)
@@ -292,10 +317,11 @@ class PostProcessor:
             ax=ax,
             width=self._plot_config["bar_width"],
             color=colors,
-            edgecolor="black",
+            edgecolor=self._plot_config["bar_edgecolor"],
+            linewidth=self._plot_config["bar_linewidth"],
             legend=False,
         )
-        ax.set_title(title or "", fontsize=self._plot_config["fontsize"] + 2)
+        ax.set_title(title or "", fontsize=self._plot_config["title_fontsize"])
         self._set_smart_xticks(ax, df.index)
         ax.set_axisbelow(True)
         ax.grid(
@@ -310,7 +336,6 @@ class PostProcessor:
             labels = [self._format_label(col) for col in df.columns]
             for h, l in zip(handles, labels):
                 h.set_label(l)
-            self._add_legend(ax, position=legend_position)
 
     def get_impacts(self) -> pd.DataFrame:
         """
@@ -516,9 +541,9 @@ class PostProcessor:
             label=metric.replace("_", " ").title(),
         )
 
-        ax.set_xlabel("Year", fontsize=self._plot_config["fontsize"])
-        ax.set_ylabel(f"{metric.replace('_', ' ').title()}", fontsize=self._plot_config["fontsize"])
-        ax.set_title(f"Dynamic {metric.replace('_', ' ').title()}", fontsize=self._plot_config["fontsize"] + 2)
+        ax.set_xlabel("Year", fontsize=self._plot_config["label_fontsize"])
+        ax.set_ylabel(f"{metric.replace('_', ' ').title()}", fontsize=self._plot_config["label_fontsize"])
+        ax.set_title(f"Dynamic {metric.replace('_', ' ').title()}", fontsize=self._plot_config["title_fontsize"])
         ax.set_axisbelow(True)
         ax.grid(
             axis="both",
@@ -732,6 +757,8 @@ class PostProcessor:
 
         fig, axes = self._create_clean_axes(nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h))
 
+        all_handles = []
+        all_labels = []
         for i, category in enumerate(categories):
             ax = axes[i]
             sub_df = df_impacts[category]
@@ -741,11 +768,31 @@ class PostProcessor:
             colors = self._get_colors_for_dataframe(sub_df)
             # Annotate if requested
             sub_df = self._annotate_dataframe(sub_df, annotated)
-            self._apply_bar_styles(sub_df, ax, colors, title=category, legend_position="bottom")
+            self._apply_bar_styles(sub_df, ax, colors, title=category)
+            ax.set_ylabel("Impact", fontsize=self._plot_config["label_fontsize"])
+
+            # Collect handles/labels for shared legend
+            h, l = ax.get_legend_handles_labels()
+            for handle, label in zip(h, l):
+                if label not in all_labels:
+                    all_handles.append(handle)
+                    all_labels.append(label)
 
         # Hide unused axes
         for j in range(i + 1, len(axes)):
             fig.delaxes(axes[j])
+
+        # Shared legend at bottom of figure
+        if all_handles:
+            fig.legend(
+                handles=all_handles,
+                labels=all_labels,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 0.02),
+                ncol=min(len(all_handles), 6),
+                fontsize=self._plot_config["legend_fontsize"],
+                frameon=False,
+            )
 
         fig.tight_layout()
         fig.subplots_adjust(bottom=0.2)
@@ -779,8 +826,23 @@ class PostProcessor:
         self._apply_bar_styles(
             df_installation, ax, colors, title="Installed Capacity"
         )
-        ax.set_ylabel("Installed Capacity", fontsize=self._plot_config["fontsize"])
+        ax.set_ylabel("Installed Capacity", fontsize=self._plot_config["label_fontsize"])
+
+        # Legend at bottom
+        h, l = ax.get_legend_handles_labels()
+        if h:
+            fig.legend(
+                handles=h,
+                labels=l,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 0.02),
+                ncol=min(len(h), 6),
+                fontsize=self._plot_config["legend_fontsize"],
+                frameon=False,
+            )
+
         fig.tight_layout()
+        fig.subplots_adjust(bottom=0.15)
         plt.show()
 
     def plot_operation(self, df_operation=None, annotated=True):
@@ -811,8 +873,23 @@ class PostProcessor:
         self._apply_bar_styles(
             df_operation, ax, colors, title="Operational Level"
         )
-        ax.set_ylabel("Operation Level", fontsize=self._plot_config["fontsize"])
+        ax.set_ylabel("Operation Level", fontsize=self._plot_config["label_fontsize"])
+
+        # Legend at bottom
+        h, l = ax.get_legend_handles_labels()
+        if h:
+            fig.legend(
+                handles=h,
+                labels=l,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 0.02),
+                ncol=min(len(h), 6),
+                fontsize=self._plot_config["legend_fontsize"],
+                frameon=False,
+            )
+
         fig.tight_layout()
+        fig.subplots_adjust(bottom=0.15)
         plt.show()
 
     def get_existing_capacity(self) -> pd.DataFrame:
@@ -1063,7 +1140,7 @@ class PostProcessor:
             marker='o',
             linewidth=self._plot_config["line_width"],
             label='Production / Demand',
-            color='#2E86AB',
+            color='#00549F',
             linestyle='-',
             zorder=3
         )
@@ -1075,7 +1152,7 @@ class PostProcessor:
             marker='s',
             linewidth=self._plot_config["line_width"],
             label='Max Capacity',
-            color='#A23B72',
+            color='#000000',
             linestyle='--',
             zorder=3
         )
@@ -1086,15 +1163,15 @@ class PostProcessor:
                 x_positions,
                 actual_production.values,
                 max_capacity.values,
-                alpha=0.2,
-                color='#A23B72',
+                alpha=0.15,
+                color='#00549F',
                 label='Unused Capacity',
                 zorder=2
             )
 
         # Set labels and title
         self._set_smart_xticks(ax, actual_production.index)
-        ax.set_ylabel("Quantity", fontsize=self._plot_config["fontsize"])
+        ax.set_ylabel("Quantity", fontsize=self._plot_config["label_fontsize"])
         ax.set_axisbelow(True)
         ax.grid(
             axis="both",
@@ -1105,7 +1182,7 @@ class PostProcessor:
         if show_title:
             ax.set_title(
                 f"{product_name}",
-                fontsize=self._plot_config["fontsize"] + 2,
+                fontsize=self._plot_config["title_fontsize"],
                 pad=10
             )
 
@@ -1430,7 +1507,8 @@ class PostProcessor:
                 operation_values = operation_df[col].values
                 clr = self._color_map.get(process_codes[i], 'black')
                 ax.bar(op_positions, operation_values, width=bar_width, bottom=bottom_operation,
-                       alpha=0.9, color=clr, edgecolor='black', linewidth=1, zorder=2)
+                       alpha=0.9, color=clr, edgecolor=self._plot_config["bar_edgecolor"],
+                       linewidth=self._plot_config["bar_linewidth"], zorder=2)
                 bottom_operation += operation_values
 
             ax.axhline(0, color='gray', linewidth=0.5, zorder=0)
@@ -1454,13 +1532,13 @@ class PostProcessor:
         # Plot production and capacity lines
         ax.plot(x_positions, actual_production.values, marker='o',
                 linewidth=self._plot_config["line_width"], label='Production / Demand',
-                color='#2E86AB', linestyle='-', zorder=3)
+                color='#00549F', linestyle='-', zorder=3)
         ax.plot(x_positions, max_capacity.values, marker='s',
                 linewidth=self._plot_config["line_width"], label='Max Capacity',
-                color='#A23B72', linestyle='--', zorder=3)
+                color='#000000', linestyle='--', zorder=3)
 
         self._set_smart_xticks(ax, actual_production.index)
-        ax.set_ylabel("Quantity", fontsize=self._plot_config["fontsize"])
+        ax.set_ylabel("Quantity", fontsize=self._plot_config["label_fontsize"])
         ax.set_axisbelow(True)
         ax.grid(
             axis="both",
@@ -1469,7 +1547,7 @@ class PostProcessor:
         )
 
         if show_title:
-            ax.set_title(f"{product_name}", fontsize=self._plot_config["fontsize"] + 2, pad=10)
+            ax.set_title(f"{product_name}", fontsize=self._plot_config["title_fontsize"], pad=10)
 
         if show_legend and process_legend:
             all_handles = process_legend + type_legend
@@ -1585,8 +1663,6 @@ class PostProcessor:
         axes = axes.flatten() if isinstance(axes, np.ndarray) else [axes]
 
         for ax in axes:
-            ax.spines["top"].set_visible(False)
-            ax.spines["right"].set_visible(False)
             ax.set_axisbelow(True)
             ax.grid(
                 axis="both",
@@ -1628,7 +1704,7 @@ class PostProcessor:
                 loc="upper center",
                 bbox_to_anchor=(0.5, 0.02),
                 ncol=min(len(all_handles), 6),
-                fontsize=self._plot_config["fontsize"] - 1,
+                fontsize=self._plot_config["legend_fontsize"],
                 frameon=False,
             )
 
@@ -1849,9 +1925,9 @@ class PostProcessor:
         cbar.ax.tick_params(labelsize=self._plot_config["fontsize"] - 1)
 
         # Labels and title
-        ax.set_xlabel('Year', fontsize=self._plot_config["fontsize"])
-        ax.set_ylabel('Process', fontsize=self._plot_config["fontsize"])
-        ax.set_title(f'Capacity Utilization: {product_name}', fontsize=self._plot_config["fontsize"] + 2)
+        ax.set_xlabel('Year', fontsize=self._plot_config["label_fontsize"])
+        ax.set_ylabel('Process', fontsize=self._plot_config["label_fontsize"])
+        ax.set_title(f'Capacity Utilization: {product_name}', fontsize=self._plot_config["title_fontsize"])
 
         fig.tight_layout()
         fig.subplots_adjust(bottom=0.15)
