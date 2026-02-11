@@ -178,7 +178,7 @@ nav:
   - Examples:
     - content/examples/index.md
     - Basic Example: content/examples/basic_example.ipynb
-    - Mini Hydrogen Case: content/examples/methanol_and_iron.ipynb
+    - Methanol & Pig Iron Case Study: content/examples/methanol_and_iron.ipynb
   - Theory: content/theory.md
   - API Reference:
     - api/index.md
