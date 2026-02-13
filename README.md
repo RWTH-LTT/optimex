@@ -13,7 +13,7 @@
 
 **Time-explicit life cycle optimization for transition pathways.**
 
-Current life cycle optimization tools collapse all emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades, and the production systems behind them are evolving. `optimex` jointly models both dimensions — *when* exchanges occur and *how* they change over time — to design pathways that respect time-specific and cumulative environmental constraints.
+Current life cycle optimization tools collapse all emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades, and the production systems behind them are evolving. `optimex` jointly models both dimensions — *when* exchanges occur and *how* their magnitudes change over time — to design pathways that respect time-specific and cumulative environmental constraints.
 
 ## Key Capabilities
 
