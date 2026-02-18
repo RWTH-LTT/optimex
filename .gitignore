@@ -4,6 +4,8 @@
 .claude/
 claude.md
 docs_local/
+visualizations/
+media/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
