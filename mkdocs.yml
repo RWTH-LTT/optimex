@@ -1,7 +1,7 @@
 site_name: optimex
 site_description: Time-Explicit Life Cycle Optimization
 site_author: Timo Diepers, Jan Tautorus
-site_url: https://optimex.readthedocs.io
+site_url: https://optimex.readthedocs.io/en/latest/
 
 repo_name: RWTH-LTT/optimex
 repo_url: https://github.com/RWTH-LTT/optimex
