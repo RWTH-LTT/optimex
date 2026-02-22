@@ -13,7 +13,7 @@
 
 **Time-explicit life cycle optimization.**
 
-LCA can quantify environmental impacts — but it cannot design a system. When different processes, supply chain options, and interdependent choices are available, optimization is needed. Life Cycle Optimization (LCO) embeds LCA within mathematical optimization to *design* environmentally sustainable systems across entire supply chains. Existing LCO tools ignore time, yet real life cycles span decades and supply chains are evolving. `optimex` makes time explicit — jointly modeling *when* flows occur and *how* they change — to design transition pathways that rigorously respect time-specific and cumulative constraints.
+LCA can quantify environmental impacts — but it cannot design a system. When different processes, supply chain options, and interdependent choices are available, optimization is needed. Life Cycle Optimization (LCO) embeds LCA within mathematical optimization to *design* environmentally sustainable systems across entire supply chains. Traditional LCO tools collapse all emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades, and the production systems behind them are evolving. `optimex` jointly models both dimensions — *when* exchanges occur and *how* their magnitudes change over time — to design pathways that respect time-specific and cumulative environmental constraints.
 
 ## Key Capabilities
 
