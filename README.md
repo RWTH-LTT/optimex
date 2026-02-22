@@ -11,9 +11,11 @@
 [![Conda - License](https://img.shields.io/conda/l/diepers/optimex)](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/TimoDiepers/optimex/main?urlpath=%2Fdoc%2Ftree%2Fnotebooks%2Fbasic_optimex_example.ipynb)
 
-**Time-explicit life cycle optimization for transition pathways.**
+**Life cycle optimization with explicit time dependence.**
 
-Current life cycle optimization tools collapse all emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades, and the production systems behind them are evolving. `optimex` jointly models both dimensions — *when* exchanges occur and *how* their magnitudes change over time — to design pathways that respect time-specific and cumulative environmental constraints.
+Life Cycle Assessment (LCA) quantifies the environmental impacts of a product system — but it takes that system as given. When multiple processes can deliver the same function, supply chains offer alternative sourcing options, and these choices interact, LCA alone cannot identify the best design. Life Cycle Optimization (LCO) closes this gap by embedding LCA within a mathematical optimization framework so that product systems can be *designed*, not just *assessed*.
+
+While several tools and methods exist for LCO, they typically collapse all emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades, and the production systems behind them are evolving. Accounting for these temporal dependencies is critical to ensure that the choices identified as optimal are genuinely sustainable. `optimex` jointly models both dimensions — *when* exchanges occur and *how* their magnitudes change over time — to design product systems and transition pathways that respect time-specific and cumulative environmental constraints.
 
 ## Key Capabilities
 
