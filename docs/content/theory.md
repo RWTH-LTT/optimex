@@ -2,9 +2,9 @@
 
 ## Why Time Matters in Life Cycle Optimization
 
-Life Cycle Assessment (LCA) quantifies the environmental impacts of a given product system, but it cannot choose among alternatives. When different processes produce the same product, supply chains offer multiple sourcing options, and these choices are interdependent, a design problem arises that LCA alone cannot solve. Life Cycle Optimization (LCO) addresses this by embedding LCA within mathematical optimization to *design* product systems and transition pathways that minimize environmental impacts while meeting demand.
+Sustainable transition pathways must respect both stock-related limits — such as cumulative carbon budgets and finite mineral resources — and flow-related limits, dictating maximum rates at which resources can be extracted or emissions assimilated. Designing such pathways requires choosing among alternative processes, supply chain options, and interdependent decisions while holistically accounting for environmental impacts across entire supply chains. Life Cycle Optimization (LCO) enables this by embedding Life Cycle Assessment (LCA) within mathematical optimization — *designing* product systems and transition pathways rather than just *assessing* a given system.
 
-However, traditional LCO approaches assume all life cycle stages and emissions occur simultaneously — effectively collapsing the temporal dimension. This creates two blind spots:
+However, current LCO approaches assume all life cycle stages and emissions occur simultaneously — effectively collapsing the temporal dimension. This creates two blind spots:
 
 1. **Time-specific limits cannot be verified.** If the model cannot distinguish between an emission occurring today or a decade from now, it cannot check whether a pathway respects annual carbon budgets or yearly resource extraction limits.
 
