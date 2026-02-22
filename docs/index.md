@@ -1,6 +1,6 @@
 # Life Cycle Optimization
 
-LCA can quantify the environmental impacts of a product system — but it cannot design one. When different processes produce the same product, supply chains offer competing options, and these choices are interdependent, optimization is needed. Life Cycle Optimization (LCO) embeds LCA within mathematical optimization to *design* environmentally sustainable systems across entire supply chains.
+Life Cycle Assessment (LCA) can quantify the environmental impacts of a product system across its entire life cycle — from raw material extraction through production, use, and end-of-life. But while LCA evaluates a *given* system, it cannot design one. When different processes produce the same product, supply chains offer competing options, and these choices are interdependent, optimization is needed. Life Cycle Optimization (LCO) embeds LCA within mathematical optimization to *design* environmentally sustainable systems across entire supply chains.
 
 Traditional LCO tools collapse all emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades, and the production systems behind them are evolving. `optimex` jointly models both dimensions — *when* exchanges occur and *how* their magnitudes change over time — to design pathways that respect time-specific and cumulative environmental constraints.
 
