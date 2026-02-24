@@ -154,6 +154,34 @@ characterization_methods=[
 
 ---
 
+### Background Inventory Settings
+
+Control how background supply chains are processed:
+
+```python
+config = lca_processor.LCAConfig(
+    demand=demand,
+    temporal={...},
+    characterization_methods=[...],
+    background_inventory={
+        "cutoff": 1e4,                    # Top elementary flows to retain
+        "calculation_method": "sequential", # or "parallel"
+        "temporal": False,                 # Enable temporal background resolution
+    },
+)
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `cutoff` | `1e4` | Number of top elementary flows to retain per intermediate flow |
+| `calculation_method` | `"sequential"` | Method for computing background inventories |
+| `temporal` | `False` | Enable cross-database graph traversal with temporal distributions |
+
+!!! tip "Temporal Background Resolution"
+    When `temporal=True`, background supply chains are traversed with temporal distributions on their exchanges. Upstream demands that are time-shifted (e.g., raw material extraction occurring before product delivery) are resolved against the database appropriate for that shifted time. This produces a pre-computed inventory that accounts for temporal evolution within the background system. See [Theory: Temporal Background Resolution](theory.md#temporal-background-resolution) for details.
+
+---
+
 ## Processing LCA Data
 
 The `LCADataProcessor` extracts all necessary data from your Brightway databases:
@@ -168,6 +196,7 @@ This step:
 - Calculates background inventories for each database
 - Constructs characterization factors (static or dynamic)
 - Builds interpolation weights between background databases
+- Optionally resolves temporal distributions in the background (when `temporal=True`)
 
 !!! note "Computation Time"
     This step can take time for large databases. The results can be saved and reused.

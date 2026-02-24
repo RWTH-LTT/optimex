@@ -10,7 +10,9 @@ Key classes:
     - LCAConfig: Configuration for LCA computations
     - LCADataProcessor: Main class for time-explicit LCA processing
 """
+import heapq
 import pickle
+from collections import defaultdict
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
@@ -132,6 +134,10 @@ class BackgroundInventoryConfig(BaseModel):
     Attributes:
         cutoff: Cutoff threshold for the number of top elementary flows to retain based on impact magnitude.
         calculation_method: Method for calculating the inventory tensor. Options: 'sequential', 'parallel'.
+        temporal: If True, perform cross-database graph traversal of background supply chains
+            using temporal distributions on exchanges. At each traversal step, the absolute time
+            determines which database's coefficients to use, producing a pre-computed
+            resolved_background_inventory tensor that replaces background_inventory + mapping.
         path_to_save: Optional path to save the inventory tensor.
         path_to_load: Optional path to load the inventory tensor.
     """
@@ -145,6 +151,11 @@ class BackgroundInventoryConfig(BaseModel):
         "sequential",
         description="Method for calculating the inventory tensor. "
         "Options: 'sequential', 'parallel'.",
+    )
+    temporal: bool = Field(
+        False,
+        description="If True, perform cross-database graph traversal of background "
+        "supply chains using temporal distributions on exchanges.",
     )
     path_to_save: Optional[str] = Field(
         None, description="Optional path to save the inventory tensor."
@@ -247,11 +258,24 @@ class LCADataProcessor:
         self._vintage_improvements = {}
         self._reference_vintages = set()
 
+        # Resolved background inventory from temporal graph traversal
+        self._resolved_background_inventory = None
+
+        # Cached data for temporal background traversal
+        self._bg_lca_objects = None
+        self._bg_reverse_activity = None
+        self._bg_reverse_biosphere = None
+        self._bg_td_lookup = None
+
         self._parse_demand()
         self._construct_foreground_tensors()
         self._prepare_background_inventory()
-        self._construct_characterization_tensor()
         self._construct_mapping_matrix()
+        self._construct_characterization_tensor()
+
+        # Resolve background inventory temporally if configured
+        if self.config.background_inventory.temporal:
+            self._resolve_background_inventory()
 
     @property
     def processes(self) -> dict:
@@ -367,6 +391,15 @@ class LCADataProcessor:
     def reference_vintages(self) -> Optional[list]:
         """Read-only access to reference vintage years."""
         return sorted(list(self._reference_vintages)) if self._reference_vintages else None
+
+    @property
+    def resolved_background_inventory(self) -> Optional[Dict[Tuple[str, str, int], float]]:
+        """Read-only access to the resolved background inventory tensor.
+
+        Only populated when background_inventory.temporal is True.
+        Maps (intermediate_flow_code, elementary_flow_code, system_time) to amount.
+        """
+        return self._resolved_background_inventory
 
     def _parse_demand(self) -> None:
         """
@@ -895,6 +928,308 @@ class LCADataProcessor:
         logger.info(
             "Constructed mapping matrix for background databases "
             "based on linear interpolation."
+        )
+
+    def _get_mapping_weights_for_time(self, abs_time: int) -> Dict[str, float]:
+        """
+        Get database interpolation weights for an arbitrary absolute time.
+
+        Uses the same logic as _construct_mapping_matrix but for any year,
+        not just system times.
+
+        Parameters
+        ----------
+        abs_time : int
+            The absolute year to get weights for.
+
+        Returns
+        -------
+        Dict[str, float]
+            Mapping from database name to interpolation weight.
+        """
+        db_year_map = {db: self.background_dbs[db].year for db in self.background_dbs}
+        db_names_sorted = sorted(db_year_map, key=lambda db: db_year_map[db])
+        db_years_sorted = [db_year_map[db] for db in db_names_sorted]
+
+        weights = {}
+        if abs_time <= db_years_sorted[0]:
+            weights[db_names_sorted[0]] = 1.0
+        elif abs_time >= db_years_sorted[-1]:
+            weights[db_names_sorted[-1]] = 1.0
+        else:
+            for idx in range(len(db_years_sorted) - 1):
+                y0, y1 = db_years_sorted[idx], db_years_sorted[idx + 1]
+                if y0 <= abs_time <= y1:
+                    w1 = (abs_time - y0) / (y1 - y0)
+                    w0 = 1.0 - w1
+                    weights[db_names_sorted[idx]] = w0
+                    weights[db_names_sorted[idx + 1]] = w1
+                    break
+        return weights
+
+    def _init_temporal_traversal_cache(self) -> None:
+        """
+        Initialize cached data structures needed for temporal background traversal.
+
+        Creates per-database LCA objects, reverse index lookups, and temporal
+        distribution lookups. Only called once on first use.
+
+        Side Effects
+        ------------
+        Populates:
+            - self._bg_lca_objects: {db_name: bw2calc.LCA}
+            - self._bg_reverse_activity: {db_name: {matrix_row_index: activity_code}}
+            - self._bg_reverse_biosphere: {matrix_row_index: elementary_flow_code}
+            - self._bg_td_lookup: {(input_code, output_code, db_name): TemporalDistribution}
+        """
+        if self._bg_lca_objects is not None:
+            return  # Already initialized
+
+        self._bg_lca_objects = {}
+        self._bg_reverse_activity = {}
+        self._bg_reverse_biosphere = {}
+        self._bg_td_lookup = {}
+
+        for db_name in self.background_dbs:
+            db = bd.Database(db_name)
+            activities = list(db)
+            if not activities:
+                continue
+
+            # Create LCA object with a dummy demand
+            fu = {activities[0]: 1}
+            lca = bc.LCA(fu)
+            lca.lci()
+            self._bg_lca_objects[db_name] = lca
+
+            # Build reverse mapping: matrix index -> activity code
+            reverse_act = {}
+            activity_dict = lca.dicts.activity
+            for act in activities:
+                if act.id in activity_dict:
+                    matrix_idx = activity_dict[act.id]
+                    reverse_act[matrix_idx] = act["code"]
+            self._bg_reverse_activity[db_name] = reverse_act
+
+            # Build biosphere reverse mapping (same across databases)
+            if not self._bg_reverse_biosphere:
+                biosphere_dict = lca.dicts.biosphere
+                for bio_act in self.biosphere_db:
+                    if bio_act.id in biosphere_dict:
+                        matrix_idx = biosphere_dict[bio_act.id]
+                        self._bg_reverse_biosphere[matrix_idx] = bio_act["code"]
+
+            # Build TD lookup for exchanges in this database
+            for act in activities:
+                for exc in act.exchanges():
+                    td = exc.get("temporal_distribution")
+                    if td is not None:
+                        input_code = exc.input["code"]
+                        output_code = act["code"]
+                        self._bg_td_lookup[(input_code, output_code, db_name)] = td
+
+        logger.info(
+            "Initialized temporal traversal cache for %d background databases.",
+            len(self._bg_lca_objects),
+        )
+
+    def _temporal_inventory_of_intermediate_flow(
+        self,
+        intermediate_flow_code: str,
+        system_time: int,
+        cutoff: float = 1e-9,
+        max_calc: int = 2000,
+    ) -> Dict[str, float]:
+        """
+        Compute the elementary flow inventory for one unit of an intermediate flow
+        demanded at a specific system time, using cross-database graph traversal
+        with temporal distributions.
+
+        At each node in the background supply chain, the absolute time determines
+        which database's coefficients to use (via the mapping matrix). Temporal
+        distributions on exchanges shift the time at which upstream demands occur.
+
+        Parameters
+        ----------
+        intermediate_flow_code : str
+            Code of the intermediate flow to traverse.
+        system_time : int
+            The absolute year at which the intermediate flow is demanded.
+        cutoff : float, optional
+            Minimum absolute demand amount to continue traversal (default: 1e-9).
+        max_calc : int, optional
+            Maximum number of heap iterations (default: 2000).
+
+        Returns
+        -------
+        Dict[str, float]
+            Maps elementary_flow_code to total accumulated amount.
+        """
+        self._init_temporal_traversal_cache()
+
+        elementary_flows: Dict[str, float] = defaultdict(float)
+        heap: list = []
+        calc_count = 0
+
+        # Initialize: push the demanded intermediate flow
+        # Priority: negative absolute demand (so largest demands are processed first)
+        heapq.heappush(heap, (-1.0, intermediate_flow_code, system_time, 1.0))
+
+        while heap and calc_count < max_calc:
+            neg_priority, activity_code, abs_time, demand_amount = heapq.heappop(heap)
+            calc_count += 1
+
+            if abs(demand_amount) < cutoff:
+                continue
+
+            # Get mapping weights for this absolute time
+            weights = self._get_mapping_weights_for_time(abs_time)
+
+            for db_name, weight in weights.items():
+                if weight == 0 or db_name not in self._bg_lca_objects:
+                    continue
+
+                lca = self._bg_lca_objects[db_name]
+                db = bd.Database(db_name)
+
+                # Look up activity in this database
+                try:
+                    act = db.get(code=activity_code)
+                except Exception:
+                    continue
+
+                if act.id not in lca.dicts.activity:
+                    continue
+
+                col_idx = lca.dicts.activity[act.id]
+
+                # Extract biosphere column: B[:, j]
+                bio_matrix = lca.biosphere_matrix
+                bio_col = bio_matrix[:, col_idx]
+                if hasattr(bio_col, 'toarray'):
+                    bio_col = bio_col.toarray().ravel()
+                else:
+                    bio_col = np.asarray(bio_col).ravel()
+
+                for row_idx in np.nonzero(bio_col)[0]:
+                    bio_amount = bio_col[row_idx]
+                    ef_code = self._bg_reverse_biosphere.get(row_idx)
+                    if ef_code is None:
+                        continue
+                    elementary_flows[ef_code] += bio_amount * weight * demand_amount
+
+                # Extract technosphere column: A[:, j]
+                tech_matrix = lca.technosphere_matrix
+                tech_col = tech_matrix[:, col_idx]
+                if hasattr(tech_col, 'toarray'):
+                    tech_col = tech_col.toarray().ravel()
+                else:
+                    tech_col = np.asarray(tech_col).ravel()
+
+                # Diagonal element (production of this activity)
+                diag = tech_col[col_idx]
+                if diag == 0:
+                    continue
+
+                reverse_act = self._bg_reverse_activity[db_name]
+
+                for row_idx in np.nonzero(tech_col)[0]:
+                    if row_idx == col_idx:
+                        continue  # Skip diagonal (self-production)
+
+                    input_amount = -tech_col[row_idx] / diag  # Normalize by production
+                    input_code = reverse_act.get(row_idx)
+                    if input_code is None:
+                        continue
+
+                    child_demand = input_amount * weight * demand_amount
+
+                    # Check for temporal distribution on this exchange
+                    td = self._bg_td_lookup.get((input_code, activity_code, db_name))
+                    if td is not None:
+                        # Spread demand across time according to TD
+                        years = td.date.astype("timedelta64[Y]").astype(int)
+                        amounts = td.amount
+                        for delta, share in zip(years, amounts):
+                            child_time = abs_time + int(delta)
+                            child_amount = child_demand * share
+                            if abs(child_amount) >= cutoff:
+                                heapq.heappush(
+                                    heap,
+                                    (-abs(child_amount), input_code, child_time, child_amount),
+                                )
+                    else:
+                        # No TD: upstream demand at same time
+                        if abs(child_demand) >= cutoff:
+                            heapq.heappush(
+                                heap,
+                                (-abs(child_demand), input_code, abs_time, child_demand),
+                            )
+
+        if calc_count >= max_calc:
+            logger.warning(
+                "Temporal traversal for intermediate flow '%s' at t=%d hit max_calc=%d. "
+                "Results may be incomplete.",
+                intermediate_flow_code,
+                system_time,
+                max_calc,
+            )
+
+        return dict(elementary_flows)
+
+    def _resolve_background_inventory(self) -> None:
+        """
+        Resolve the background inventory using temporal graph traversal.
+
+        For each (intermediate_flow, system_time) pair, performs cross-database
+        graph traversal and stores the resulting elementary flow amounts in
+        self._resolved_background_inventory.
+
+        Side Effects
+        ------------
+        Populates:
+            - self._resolved_background_inventory: Dict[(i_code, e_code, t), float]
+            - self._elementary_flows: Updated with any newly discovered flows
+        """
+        logger.info("Resolving background inventory with temporal graph traversal...")
+        self._resolved_background_inventory = {}
+
+        cutoff = self.config.background_inventory.cutoff
+        # For temporal traversal, cutoff is a demand amount threshold, not a count
+        # Use a small absolute cutoff
+        traversal_cutoff = 1e-9
+
+        total_pairs = len(self._intermediate_flows) * len(self._system_time)
+        pair_count = 0
+
+        for i_code in tqdm(
+            self._intermediate_flows,
+            desc="Resolving background inventory (temporal)",
+        ):
+            for t in self._system_time:
+                pair_count += 1
+                ef_amounts = self._temporal_inventory_of_intermediate_flow(
+                    intermediate_flow_code=i_code,
+                    system_time=t,
+                    cutoff=traversal_cutoff,
+                )
+
+                for ef_code, amount in ef_amounts.items():
+                    self._resolved_background_inventory[(i_code, ef_code, t)] = amount
+
+                    # Register newly discovered elementary flows
+                    if ef_code not in self._elementary_flows:
+                        try:
+                            self._elementary_flows[ef_code] = self.biosphere_db.get(
+                                code=ef_code
+                            )["name"]
+                        except Exception:
+                            self._elementary_flows[ef_code] = ef_code
+
+        logger.info(
+            "Resolved background inventory: %d entries for %d (flow, time) pairs.",
+            len(self._resolved_background_inventory),
+            pair_count,
         )
 
     def _construct_characterization_tensor(self) -> None:

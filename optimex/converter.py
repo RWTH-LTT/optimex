@@ -189,6 +189,14 @@ class OptimizationModelInputs(BaseModel):
             "Maps (background_id, system_time) to scaling or availability factor."
         ),
     )
+    resolved_background_inventory: Optional[Dict[Tuple[str, str, int], float]] = Field(
+        None,
+        description=(
+            "Pre-computed background inventory from temporal graph traversal. "
+            "Maps (intermediate_flow, elementary_flow, system_time) to amount. "
+            "When present, replaces background_inventory × mapping in the optimizer."
+        ),
+    )
     characterization: Dict[Tuple[str, str, int], float] = Field(
         ...,
         description=(
@@ -440,6 +448,24 @@ class OptimizationModelInputs(BaseModel):
                 [key[1]], elementary_flows, "characterization elementary flows"
             )
             validate_keys([key[2]], system_times, "characterization system times")
+
+        if data.get("resolved_background_inventory") is not None:
+            for key in data["resolved_background_inventory"].keys():
+                validate_keys(
+                    [key[0]],
+                    intermediate_flows,
+                    "resolved_background_inventory intermediate flows",
+                )
+                validate_keys(
+                    [key[1]],
+                    elementary_flows,
+                    "resolved_background_inventory elementary flows",
+                )
+                validate_keys(
+                    [key[2]],
+                    system_times,
+                    "resolved_background_inventory system times",
+                )
 
         if data.get("category_impact_limits") is not None:
             for key in data["category_impact_limits"].keys():
@@ -1109,6 +1135,7 @@ class ModelInputManager:
             "foreground_production": lca_processor.foreground_production,
             "background_inventory": lca_processor.background_inventory,
             "mapping": lca_processor.mapping,
+            "resolved_background_inventory": lca_processor.resolved_background_inventory,
             "characterization": lca_processor.characterization,
             "operation_time_limits": lca_processor.operation_time_limits,
             # Vintage parameters from database (if any)
@@ -1287,6 +1314,7 @@ class ModelInputManager:
                 "foreground_production",
                 "background_inventory",
                 "mapping",
+                "resolved_background_inventory",
                 "characterization",
                 "process_deployment_limits_max",
                 "process_deployment_limits_min",
@@ -1361,6 +1389,7 @@ class ModelInputManager:
                 "foreground_production",
                 "background_inventory",
                 "mapping",
+                "resolved_background_inventory",
                 "characterization",
                 "process_deployment_limits_max",
                 "process_deployment_limits_min",

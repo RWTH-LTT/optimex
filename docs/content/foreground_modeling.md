@@ -124,8 +124,8 @@ TemporalDistribution(
 )
 ```
 
-!!! warning "Amounts must sum correctly"
-    For production exchanges, the amounts in the temporal distribution should sum to the total production per unit. For a process producing 1 unit total over its lifetime with `amount=1`, use fractions that sum to 1.
+!!! tip "Background Temporalization"
+    Temporal distributions can be added to exchanges both in the foreground and the background system. For more info on how this is treated, see [Theory: Temporal Background Resolution](theory.md#temporal-background-resolution).
 
 ---
 

@@ -249,6 +249,19 @@ def create_model(
         default=0,
         initialize=scaled_inputs.mapping,
     )
+
+    # Resolved background inventory (from temporal graph traversal)
+    model._has_resolved_background = scaled_inputs.resolved_background_inventory is not None
+    if model._has_resolved_background:
+        model.resolved_background_inventory = pyo.Param(
+            model.INTERMEDIATE_FLOW,
+            model.ELEMENTARY_FLOW,
+            model.SYSTEM_TIME,
+            within=pyo.Reals,
+            doc="pre-computed temporal background inventory tensor",
+            default=0,
+            initialize=scaled_inputs.resolved_background_inventory,
+        )
     model.characterization = pyo.Param(
         model.CATEGORY,
         model.ELEMENTARY_FLOW,
@@ -647,6 +660,17 @@ def create_model(
         )
     )
 
+    # Helper: background LCI lookup (resolved or mapping-based)
+    def background_lci(model, i, e, t):
+        """Get background elementary flow amount for intermediate flow i, elem flow e, at time t."""
+        if model._has_resolved_background:
+            return model.resolved_background_inventory[i, e, t]
+        else:
+            return sum(
+                model.background_inventory[bkg, i, e] * model.mapping[bkg, t]
+                for bkg in model.BACKGROUND_ID
+            )
+
     def scaled_inventory_tensor(model, p, e, t):
         """
         Returns a Pyomo expression for the total inventory impact for a given
@@ -658,10 +682,7 @@ def create_model(
                 model.scaled_technosphere_dependent_on_installation[p, i, t]
                 + model.scaled_technosphere_dependent_on_operation[p, i, t]
             )
-            * sum(
-                model.background_inventory[bkg, i, e] * model.mapping[bkg, t]
-                for bkg in model.BACKGROUND_ID
-            )
+            * background_lci(model, i, e, t)
             for i in model.INTERMEDIATE_FLOW
         ) + (
             model.scaled_biosphere_dependent_on_installation[p, e, t]
@@ -926,10 +947,7 @@ def create_model(
                 model.scaled_technosphere_dependent_on_installation[p, i, t]
                 + model.scaled_technosphere_dependent_on_operation[p, i, t]
             )
-            * sum(
-                model.background_inventory[bkg, i, e] * model.mapping[bkg, t]
-                for bkg in model.BACKGROUND_ID
-            )
+            * background_lci(model, i, e, t)
             for i in model.INTERMEDIATE_FLOW
             for p in model.PROCESS
         )

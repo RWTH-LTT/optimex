@@ -66,16 +66,22 @@ To make this work, each exchange in a process is classified as either installati
 
 ---
 
+## Temporal Background Resolution
+
+By default, when a foreground process demands an intermediate flow from the background at system time *t*, the entire upstream supply chain is evaluated at that same time — all background activities are assumed to occur simultaneously. However, background processes also have temporal structure: mining raw materials, refining, and transport may occur at different times relative to the final product delivery.
+
+`optimex` supports **optional temporal background resolution** that accounts for this. When enabled (`temporal=True` in the background inventory configuration), a cross-database graph traversal resolves the background supply chain with temporal distributions:
+
+1. For each demanded intermediate flow at each system time, the traversal walks through the background supply chain.
+2. At each node, temporal distributions on exchanges shift upstream demands to their actual absolute times.
+3. The mapping matrix selects (or interpolates between) the appropriate database version for each time-shifted demand.
+4. Elementary flows are accumulated into a pre-computed tensor that replaces the standard `background_inventory × mapping` computation.
+
+This means upstream activities that occur earlier than the direct demand are evaluated against an earlier (potentially dirtier) background system, while activities occurring later use the (potentially cleaner) future background. Since there are no decision variables in the background, everything can be pre-computed before optimization.
+
+---
+
 ## Scope and Limitations
-
-### Single-Tier Convolution
-
-Unlike dynamic LCA approaches that propagate temporal distributions through entire multi-tier supply chains, `optimex` applies convolution only at the foreground tier. Upstream supply chains in the background are treated as temporally aggregated at the time of the direct exchange. This simplification is necessary because multi-tier convolution creates a circular dependency: upstream timings depend on installation timing, which is the decision variable being optimized.
-
-**Workarounds** where finer upstream resolution is needed:
-
-- Move critical upstream processes into the foreground, allowing explicit temporal distributions on their exchanges.
-- Pre-compute time-resolved emission profiles using dynamic LCA and map them as temporal distributions on elementary flows.
 
 ### Dynamic Characterization
 
