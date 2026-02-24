@@ -32,26 +32,19 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        py-version: ["3.10", "3.11", "3.12"]
+        py-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
 
-      # general Python setup
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Set up Python ${{ matrix.py-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.py-version }}
+        run: uv python install ${{ matrix.py-version }}
 
-      - name: Update pip & install testing pkgs
-        run: |
-          python -VV
-          python -m pip install --upgrade pip setuptools wheel
-
-      # install testing
       - name: Install package and test deps
-        run: |
-          pip install .[testing] # install the package and the testing deps
+        run: uv sync --extra testing
 
       # 🔧 Install GLPK solver
       - name: Install GLPK
@@ -66,8 +59,7 @@ jobs:
         shell: bash
 
       - name: Test with pytest
-        run: |
-          pytest
+        run: uv run pytest
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
