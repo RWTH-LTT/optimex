@@ -61,5 +61,8 @@ jobs:
       - name: Test with pytest
         run: uv run pytest
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.py-version == '3.13'
+        uses: codecov/codecov-action@v5
+        with:
+          file: ./coverage.xml
