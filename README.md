@@ -6,6 +6,8 @@
 </h1>
 
 [![Read the Docs](https://img.shields.io/readthedocs/optimex?label=documentation)](https://optimex.readthedocs.io/)
+[![tests](https://img.shields.io/github/actions/workflow/status/RWTH-LTT/optimex/python-test.yml?label=tests)](https://github.com/RWTH-LTT/optimex/actions/workflows/python-test.yml)
+[![codecov](https://codecov.io/gh/RWTH-LTT/optimex/graph/badge.svg)](https://codecov.io/gh/RWTH-LTT/optimex)
 [![PyPI - Version](https://img.shields.io/pypi/v/optimex?color=%2300549f)](https://pypi.org/project/optimex/)
 [![Conda Version](https://img.shields.io/conda/v/diepers/optimex?label=conda)](https://anaconda.org/diepers/optimex)
 [![Conda - License](https://img.shields.io/conda/l/diepers/optimex)](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
