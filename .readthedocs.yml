@@ -5,8 +5,8 @@
 # Required
 version: 2
 
-mkdocs:
-  configuration: mkdocs.yml
+zensical:
+  configuration: zensical.toml
 
 python:
   install:
