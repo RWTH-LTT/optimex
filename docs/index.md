@@ -1,3 +1,7 @@
+---
+title: optimex
+---
+
 # Time-Explicit Life Cycle Optimization
 
 Transition pathway optimization typically collapses all life cycle stages and emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades (*temporal distribution*), and the production systems behind them are evolving (*temporal evolution*). Ignoring this interplay means pathways may appear sustainable while violating time-specific limits during intensive infrastructure buildup, or miscounting cumulative impacts when decommissioning happens in a fundamentally different future.
