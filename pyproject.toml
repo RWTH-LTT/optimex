@@ -66,10 +66,9 @@ dev = [
     "setuptools",
 ]
 docs = [
-    "mkdocs-material",
-    "mkdocs-autorefs",
+    "zensical",
     "mkdocstrings[python]",
-    "mkdocs-jupyter",
+    "mkdocs-autorefs",
 ]
 gurobi = [
     "gurobipy"

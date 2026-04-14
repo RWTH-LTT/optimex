@@ -11,14 +11,13 @@ copyright: Copyright &copy; 2025 Institute of Technical Thermodynamics, RWTH Aac
 
 theme:
   name: material
-  custom_dir: docs/overrides
   icon:
     search: lucide/search
   font:
     text: Inter
     code: Consolas
   language: en
-  logo: _static/favicons/favicon.svg
+  logo: _static/optimex_light_nomargins.svg
   favicon: _static/favicons/favicon.svg
   palette:
     # Palette toggle for light mode
@@ -71,9 +70,6 @@ extra:
       link: https://mybinder.org/v2/gh/RWTH-LTT/optimex/main?urlpath=%2Fdoc%2Ftree%2Fnotebooks%2Fbasic_optimex_example.ipynb
       name: Launch interactive Demo on Binder
 
-extra_css:
-  - _static/custom_mkdocs.css
-
 markdown_extensions:
   - abbr
   - admonition
@@ -81,7 +77,7 @@ markdown_extensions:
   - def_list
   - footnotes
   - md_in_html
-  # - material.extensions.preview:
+  # - zensical.extensions.preview:
   #     configurations:
   #       - targets:
   #           include:
@@ -96,8 +92,8 @@ markdown_extensions:
   - pymdownx.caret
   - pymdownx.details
   - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      emoji_index: !!python/name:zensical.extensions.emoji.twemoji
+      emoji_generator: !!python/name:zensical.extensions.emoji.to_svg
       options:
         custom_icons:
           - docs/overrides/.icons
@@ -155,10 +151,6 @@ plugins:
             filters:
               - "!^_"  # exclude private members
               - "!^__"  # exclude magic methods (except __init__)
-  - mkdocs-jupyter:
-      include_source: true
-      execute: false
-      allow_errors: false
 
 nav:
   - Home:
@@ -177,8 +169,8 @@ nav:
     - Postprocessing: content/postprocessing_guide.md
   - Examples:
     - content/examples/index.md
-    - Basic Example: content/examples/basic_example.ipynb
-    - Methanol & Pig Iron Case Study: content/examples/methanol_and_iron.ipynb
+    - Basic Example: content/examples/basic_example.md
+    - Methanol & Pig Iron Case Study: content/examples/methanol_and_iron.md
   - Theory: content/theory.md
   - API Reference:
     - api/index.md
