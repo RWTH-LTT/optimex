@@ -1,5 +1,6 @@
 ---
 title: optimex
+icon: lucide/house
 ---
 
 # Time-Explicit Life Cycle Optimization

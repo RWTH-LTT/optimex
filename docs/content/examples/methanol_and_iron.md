@@ -1,3 +1,7 @@
+---
+icon: lucide/flask-conical
+---
+
 # Methanol & Pig Iron Case Study
 
 This notebook demonstrates `optimex` on a realistic case study using **ecoinvent** and **premise** (REMIND-EU SSP2-NDC scenario) databases. It optimizes the transition pathway for two coupled product systems:

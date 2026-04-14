@@ -12,7 +12,7 @@ copyright = "Copyright &copy; 2025 Institute of Technical Thermodynamics, RWTH A
 
 nav = [
   { Home = [
-    "index.md",
+    { Overview = "index.md" },
     { Changelog = "content/changelog.md" },
     { License = "content/license.md" },
     { Contributing = "content/contributing.md" },
@@ -28,7 +28,7 @@ nav = [
     { Postprocessing = "content/postprocessing_guide.md" },
   ]},
   { Examples = [
-    "content/examples/index.md",
+    { Overview = "content/examples/index.md" },
     { "Basic Example" = "content/examples/basic_example.md" },
     { "Methanol & Pig Iron Case Study" = "content/examples/methanol_and_iron.md" },
   ]},

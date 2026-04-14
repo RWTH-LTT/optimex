@@ -1,3 +1,7 @@
+---
+icon: lucide/play
+---
+
 # Basic `optimex` Example
 
 This notebook demonstrates the core `optimex` workflow using dummy processes — no external databases required.
