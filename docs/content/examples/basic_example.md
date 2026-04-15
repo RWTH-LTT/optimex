@@ -63,7 +63,7 @@ bd.Database("biosphere3").write(biosphere_data)
 
     100%|██████████| 3/3 [00:00<00:00, 12545.28it/s]
 
-    [2m11:15:06+0100[0m [[32m[1minfo     [0m] [1mVacuuming database            [0m
+    11:15:06+0100 [info     ] Vacuuming database            
 
 
     
@@ -302,26 +302,26 @@ bg_2050.metadata["representative_time"] = datetime(2050, 1, 1).isoformat()
 bg_2050.register()
 ```
 
-    [2m11:15:06+0100[0m [[33m[1mwarning  [0m] [1mNot able to determine geocollections for all datasets. This database is not ready for regionalization.[0m
+    11:15:06+0100 [warning  ] Not able to determine geocollections for all datasets. This database is not ready for regionalization.
 
 
     100%|██████████| 3/3 [00:00<00:00, 30393.51it/s]
 
-    [2m11:15:06+0100[0m [[32m[1minfo     [0m] [1mVacuuming database            [0m
-    [2m11:15:06+0100[0m [[33m[1mwarning  [0m] [1mNot able to determine geocollections for all datasets. This database is not ready for regionalization.[0m
+    11:15:06+0100 [info     ] Vacuuming database            
+    11:15:06+0100 [warning  ] Not able to determine geocollections for all datasets. This database is not ready for regionalization.
 
 
     
     100%|██████████| 3/3 [00:00<00:00, 58798.65it/s]
 
-    [2m11:15:06+0100[0m [[32m[1minfo     [0m] [1mVacuuming database            [0m
-    [2m11:15:06+0100[0m [[33m[1mwarning  [0m] [1mNot able to determine geocollections for all datasets. This database is not ready for regionalization.[0m
+    11:15:06+0100 [info     ] Vacuuming database            
+    11:15:06+0100 [warning  ] Not able to determine geocollections for all datasets. This database is not ready for regionalization.
 
 
     
     100%|██████████| 3/3 [00:00<00:00, 69518.85it/s]
 
-    [2m11:15:06+0100[0m [[32m[1minfo     [0m] [1mVacuuming database            [0m
+    11:15:06+0100 [info     ] Vacuuming database            
 
 
     
@@ -543,12 +543,12 @@ fg.write(foreground_data)
 fg.register()
 ```
 
-    [2m11:15:06+0100[0m [[33m[1mwarning  [0m] [1mNot able to determine geocollections for all datasets. This database is not ready for regionalization.[0m
+    11:15:06+0100 [warning  ] Not able to determine geocollections for all datasets. This database is not ready for regionalization.
 
 
     100%|██████████| 6/6 [00:00<00:00, 21041.66it/s]
 
-    [2m11:15:06+0100[0m [[32m[1minfo     [0m] [1mVacuuming database            [0m
+    11:15:06+0100 [info     ] Vacuuming database            
 
 
     
@@ -601,27 +601,27 @@ lca_config = lca_processor.LCAConfig(
 lca_data_processor = lca_processor.LCADataProcessor(lca_config)
 ```
 
-    [32m2026-02-11 11:15:06.146[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_parse_demand[0m:[36m417[0m - [1mIdentified demand in system time range of %s for products %s[0m
-    [32m2026-02-11 11:15:06.150[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_construct_foreground_tensors[0m:[36m639[0m - [1mConstructed foreground tensors.[0m
-    [32m2026-02-11 11:15:06.151[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36mlog_tensor_dimensions[0m:[36m634[0m - [1mTechnosphere (external) shape: (4 processes, 3 flows, 2 years) with 6 total entries.[0m
-    [32m2026-02-11 11:15:06.151[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36mlog_tensor_dimensions[0m:[36m634[0m - [1mInternal demand shape: (2 processes, 1 flows, 15 years) with 22 total entries.[0m
-    [32m2026-02-11 11:15:06.151[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36mlog_tensor_dimensions[0m:[36m634[0m - [1mBiosphere shape: (4 processes, 1 flows, 15 years) with 39 total entries.[0m
-    [32m2026-02-11 11:15:06.151[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36mlog_tensor_dimensions[0m:[36m634[0m - [1mProduction shape: (4 processes, 2 flows, 15 years) with 39 total entries.[0m
-    [32m2026-02-11 11:15:06.152[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_calculate_inventory_of_db[0m:[36m678[0m - [1mCalculating inventory for database: db_2020[0m
-    [32m2026-02-11 11:15:06.158[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_calculate_inventory_of_db[0m:[36m694[0m - [1mFactorized LCI for database: db_2020[0m
+    2026-02-11 11:15:06.146 | INFO     | optimex.lca_processor:_parse_demand:417 - Identified demand in system time range of %s for products %s
+    2026-02-11 11:15:06.150 | INFO     | optimex.lca_processor:_construct_foreground_tensors:639 - Constructed foreground tensors.
+    2026-02-11 11:15:06.151 | INFO     | optimex.lca_processor:log_tensor_dimensions:634 - Technosphere (external) shape: (4 processes, 3 flows, 2 years) with 6 total entries.
+    2026-02-11 11:15:06.151 | INFO     | optimex.lca_processor:log_tensor_dimensions:634 - Internal demand shape: (2 processes, 1 flows, 15 years) with 22 total entries.
+    2026-02-11 11:15:06.151 | INFO     | optimex.lca_processor:log_tensor_dimensions:634 - Biosphere shape: (4 processes, 1 flows, 15 years) with 39 total entries.
+    2026-02-11 11:15:06.151 | INFO     | optimex.lca_processor:log_tensor_dimensions:634 - Production shape: (4 processes, 2 flows, 15 years) with 39 total entries.
+    2026-02-11 11:15:06.152 | INFO     | optimex.lca_processor:_calculate_inventory_of_db:678 - Calculating inventory for database: db_2020
+    2026-02-11 11:15:06.158 | INFO     | optimex.lca_processor:_calculate_inventory_of_db:694 - Factorized LCI for database: db_2020
     100%|██████████| 3/3 [00:00<00:00, 223.28it/s]
-    [32m2026-02-11 11:15:06.173[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_calculate_inventory_of_db[0m:[36m734[0m - [1mFinished calculating inventory for database: db_2020[0m
-    [32m2026-02-11 11:15:06.173[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_calculate_inventory_of_db[0m:[36m678[0m - [1mCalculating inventory for database: db_2035[0m
-    [32m2026-02-11 11:15:06.178[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_calculate_inventory_of_db[0m:[36m694[0m - [1mFactorized LCI for database: db_2035[0m
+    2026-02-11 11:15:06.173 | INFO     | optimex.lca_processor:_calculate_inventory_of_db:734 - Finished calculating inventory for database: db_2020
+    2026-02-11 11:15:06.173 | INFO     | optimex.lca_processor:_calculate_inventory_of_db:678 - Calculating inventory for database: db_2035
+    2026-02-11 11:15:06.178 | INFO     | optimex.lca_processor:_calculate_inventory_of_db:694 - Factorized LCI for database: db_2035
     100%|██████████| 3/3 [00:00<00:00, 277.65it/s]
-    [32m2026-02-11 11:15:06.189[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_calculate_inventory_of_db[0m:[36m734[0m - [1mFinished calculating inventory for database: db_2035[0m
-    [32m2026-02-11 11:15:06.190[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_calculate_inventory_of_db[0m:[36m678[0m - [1mCalculating inventory for database: db_2050[0m
-    [32m2026-02-11 11:15:06.194[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_calculate_inventory_of_db[0m:[36m694[0m - [1mFactorized LCI for database: db_2050[0m
+    2026-02-11 11:15:06.189 | INFO     | optimex.lca_processor:_calculate_inventory_of_db:734 - Finished calculating inventory for database: db_2035
+    2026-02-11 11:15:06.190 | INFO     | optimex.lca_processor:_calculate_inventory_of_db:678 - Calculating inventory for database: db_2050
+    2026-02-11 11:15:06.194 | INFO     | optimex.lca_processor:_calculate_inventory_of_db:694 - Factorized LCI for database: db_2050
     100%|██████████| 3/3 [00:00<00:00, 261.19it/s]
-    [32m2026-02-11 11:15:06.207[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_calculate_inventory_of_db[0m:[36m734[0m - [1mFinished calculating inventory for database: db_2050[0m
-    [32m2026-02-11 11:15:06.207[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_prepare_background_inventory[0m:[36m841[0m - [1mComputed background inventory using method: sequential[0m
-    [32m2026-02-11 11:15:06.209[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_construct_characterization_tensor[0m:[36m952[0m - [1mStatic characterization for method climate_change completed.[0m
-    [32m2026-02-11 11:15:06.210[0m | [1mINFO    [0m | [36moptimex.lca_processor[0m:[36m_construct_mapping_matrix[0m:[36m895[0m - [1mConstructed mapping matrix for background databases based on linear interpolation.[0m
+    2026-02-11 11:15:06.207 | INFO     | optimex.lca_processor:_calculate_inventory_of_db:734 - Finished calculating inventory for database: db_2050
+    2026-02-11 11:15:06.207 | INFO     | optimex.lca_processor:_prepare_background_inventory:841 - Computed background inventory using method: sequential
+    2026-02-11 11:15:06.209 | INFO     | optimex.lca_processor:_construct_characterization_tensor:952 - Static characterization for method climate_change completed.
+    2026-02-11 11:15:06.210 | INFO     | optimex.lca_processor:_construct_mapping_matrix:895 - Constructed mapping matrix for background databases based on linear interpolation.
 
 
 ### Convert to Optimization Inputs
@@ -657,9 +657,9 @@ model = optimizer.create_model(
 )
 ```
 
-    [32m2026-02-11 11:15:06.421[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m116[0m - [1mCreating sets[0m
-    [32m2026-02-11 11:15:06.422[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m158[0m - [1mCreating parameters[0m
-    [32m2026-02-11 11:15:06.423[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m448[0m - [1mCreating variables[0m
+    2026-02-11 11:15:06.421 | INFO     | optimex.optimizer:create_model:116 - Creating sets
+    2026-02-11 11:15:06.422 | INFO     | optimex.optimizer:create_model:158 - Creating parameters
+    2026-02-11 11:15:06.423 | INFO     | optimex.optimizer:create_model:448 - Creating variables
 
 
 
@@ -667,9 +667,9 @@ model = optimizer.create_model(
 m, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
 ```
 
-    [32m2026-02-11 11:15:06.919[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1113[0m - [1mSolver [glpk] termination: optimal[0m
-    [32m2026-02-11 11:15:06.936[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1127[0m - [1mObjective (scaled): 27.3871[0m
-    [32m2026-02-11 11:15:06.936[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1128[0m - [1mObjective (real):   25880.8[0m
+    2026-02-11 11:15:06.919 | INFO     | optimex.optimizer:solve_model:1113 - Solver [glpk] termination: optimal
+    2026-02-11 11:15:06.936 | INFO     | optimex.optimizer:solve_model:1127 - Objective (scaled): 27.3871
+    2026-02-11 11:15:06.936 | INFO     | optimex.optimizer:solve_model:1128 - Objective (real):   25880.8
 
 
 ## 4. Post-processing
@@ -713,7 +713,7 @@ pp.plot_characterized_dynamic_inventory(
 )
 ```
 
-    [32m2026-02-11 11:15:07.822[0m | [1mINFO    [0m | [36mdynamic_characterization.dynamic_characterization[0m:[36mcharacterize[0m:[36m82[0m - [1mNo custom dynamic characterization functions provided. Using default dynamic             characterization functions. The flows that are characterized are based on the selection                of the initially chosen impact category.[0m
+    2026-02-11 11:15:07.822 | INFO     | dynamic_characterization.dynamic_characterization:characterize:82 - No custom dynamic characterization functions provided. Using default dynamic             characterization functions. The flows that are characterized are based on the selection                of the initially chosen impact category.
 
 
 

@@ -1072,9 +1072,9 @@ model_baseline = optimizer.create_model(
 )
 ```
 
-    [32m2026-02-11 11:19:16.373[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m116[0m - [1mCreating sets[0m
-    [32m2026-02-11 11:19:16.374[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m158[0m - [1mCreating parameters[0m
-    [32m2026-02-11 11:19:16.519[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m448[0m - [1mCreating variables[0m
+    2026-02-11 11:19:16.373 | INFO     | optimex.optimizer:create_model:116 - Creating sets
+    2026-02-11 11:19:16.374 | INFO     | optimex.optimizer:create_model:158 - Creating parameters
+    2026-02-11 11:19:16.519 | INFO     | optimex.optimizer:create_model:448 - Creating variables
 
 
 
@@ -1084,9 +1084,9 @@ m_baseline, obj_baseline, results_baseline = optimizer.solve_model(
 )
 ```
 
-    [32m2026-02-11 11:21:21.815[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1113[0m - [1mSolver [gurobi] termination: optimal[0m
-    [32m2026-02-11 11:22:08.049[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1127[0m - [1mObjective (scaled): 2778[0m
-    [32m2026-02-11 11:22:08.052[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1128[0m - [1mObjective (real):   4.62873e-06[0m
+    2026-02-11 11:21:21.815 | INFO     | optimex.optimizer:solve_model:1113 - Solver [gurobi] termination: optimal
+    2026-02-11 11:22:08.049 | INFO     | optimex.optimizer:solve_model:1127 - Objective (scaled): 2778
+    2026-02-11 11:22:08.052 | INFO     | optimex.optimizer:solve_model:1128 - Objective (real):   4.62873e-06
 
 
 
@@ -1187,9 +1187,9 @@ model_evolution = optimizer.create_model(
 )
 ```
 
-    [32m2026-02-11 11:25:24.863[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m116[0m - [1mCreating sets[0m
-    [32m2026-02-11 11:25:24.865[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m158[0m - [1mCreating parameters[0m
-    [32m2026-02-11 11:25:25.014[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m448[0m - [1mCreating variables[0m
+    2026-02-11 11:25:24.863 | INFO     | optimex.optimizer:create_model:116 - Creating sets
+    2026-02-11 11:25:24.865 | INFO     | optimex.optimizer:create_model:158 - Creating parameters
+    2026-02-11 11:25:25.014 | INFO     | optimex.optimizer:create_model:448 - Creating variables
 
 
 
@@ -1199,9 +1199,9 @@ m_evolution, obj_evolution, results_evolution = optimizer.solve_model(
 )
 ```
 
-    [32m2026-02-11 11:27:35.494[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1113[0m - [1mSolver [gurobi] termination: optimal[0m
-    [32m2026-02-11 11:28:20.604[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1127[0m - [1mObjective (scaled): 1090.77[0m
-    [32m2026-02-11 11:28:20.607[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1128[0m - [1mObjective (real):   1.81746e-06[0m
+    2026-02-11 11:27:35.494 | INFO     | optimex.optimizer:solve_model:1113 - Solver [gurobi] termination: optimal
+    2026-02-11 11:28:20.604 | INFO     | optimex.optimizer:solve_model:1127 - Objective (scaled): 1090.77
+    2026-02-11 11:28:20.607 | INFO     | optimex.optimizer:solve_model:1128 - Objective (real):   1.81746e-06
 
 
 
@@ -1249,7 +1249,7 @@ pp_evolution.get_production_capacity().to_excel("data/paper/capacity_evolution.x
 pp_evolution.df_impacts.to_excel("data/paper/impacts_evolution.xlsx")
 ```
 
-    [32m2026-02-10 15:44:25.663[0m | [1mINFO    [0m | [36mdynamic_characterization.dynamic_characterization[0m:[36mcharacterize[0m:[36m108[0m - [1mNo custom dynamic characterization functions provided. Using default dynamic             characterization functions. The flows that are characterized are based on the selection                of the initially chosen impact category.[0m
+    2026-02-10 15:44:25.663 | INFO     | dynamic_characterization.dynamic_characterization:characterize:108 - No custom dynamic characterization functions provided. Using default dynamic             characterization functions. The flows that are characterized are based on the selection                of the initially chosen impact category.
 
 
 ### Scenario 3: Water Use and Iridium Resource constraint
@@ -1297,9 +1297,9 @@ model_constrained = optimizer.create_model(
 )
 ```
 
-    [32m2026-02-11 11:31:25.100[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m116[0m - [1mCreating sets[0m
-    [32m2026-02-11 11:31:25.102[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m158[0m - [1mCreating parameters[0m
-    [32m2026-02-11 11:31:25.250[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36mcreate_model[0m:[36m448[0m - [1mCreating variables[0m
+    2026-02-11 11:31:25.100 | INFO     | optimex.optimizer:create_model:116 - Creating sets
+    2026-02-11 11:31:25.102 | INFO     | optimex.optimizer:create_model:158 - Creating parameters
+    2026-02-11 11:31:25.250 | INFO     | optimex.optimizer:create_model:448 - Creating variables
 
 
 
@@ -1309,9 +1309,9 @@ m_constrained, obj_constrained, results_constrained = optimizer.solve_model(
 )  # choose solver here, e.g. "gurobi", "cplex", "glpk", etc.
 ```
 
-    [32m2026-02-11 11:33:24.088[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1113[0m - [1mSolver [gurobi] termination: optimal[0m
-    [32m2026-02-11 11:34:08.907[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1127[0m - [1mObjective (scaled): 1765.32[0m
-    [32m2026-02-11 11:34:08.908[0m | [1mINFO    [0m | [36moptimex.optimizer[0m:[36msolve_model[0m:[36m1128[0m - [1mObjective (real):   2.9414e-06[0m
+    2026-02-11 11:33:24.088 | INFO     | optimex.optimizer:solve_model:1113 - Solver [gurobi] termination: optimal
+    2026-02-11 11:34:08.907 | INFO     | optimex.optimizer:solve_model:1127 - Objective (scaled): 1765.32
+    2026-02-11 11:34:08.908 | INFO     | optimex.optimizer:solve_model:1128 - Objective (real):   2.9414e-06
 
 
 
@@ -1363,5 +1363,5 @@ pp_constrained.get_production_capacity().to_excel(
 pp_constrained.df_impacts.to_excel("data/paper/impacts_constrained.xlsx")
 ```
 
-    [32m2026-02-10 15:58:56.630[0m | [1mINFO    [0m | [36mdynamic_characterization.dynamic_characterization[0m:[36mcharacterize[0m:[36m108[0m - [1mNo custom dynamic characterization functions provided. Using default dynamic             characterization functions. The flows that are characterized are based on the selection                of the initially chosen impact category.[0m
+    2026-02-10 15:58:56.630 | INFO     | dynamic_characterization.dynamic_characterization:characterize:108 - No custom dynamic characterization functions provided. Using default dynamic             characterization functions. The flows that are characterized are based on the selection                of the initially chosen impact category.
 
