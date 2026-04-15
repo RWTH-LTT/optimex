@@ -69,6 +69,7 @@ docs = [
     "zensical",
     "mkdocstrings[python]",
     "mkdocs-autorefs",
+    "nbconvert>=7.0",
 ]
 gurobi = [
     "gurobipy"
