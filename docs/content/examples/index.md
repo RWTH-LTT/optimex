@@ -11,7 +11,7 @@ Here are some examples on how you can use the `optimex` package.
 
 <div class="grid cards" markdown>
 
--   :lucide-book-open:{ style="color: #4dabf7" } **Basic Example**
+-   :lucide-play:{ style="color: #4dabf7" } **Basic Example**
 
     ---
 
@@ -19,7 +19,7 @@ Here are some examples on how you can use the `optimex` package.
 
     [:lucide-arrow-right: View Example](./basic_example.md)
 
--   :lucide-factory:{ style="color: #69db7c" } **Methanol & Pig Iron Case Study**
+-   :lucide-flask-conical:{ style="color: #69db7c" } **Methanol & Pig Iron Case Study**
 
     ---
 

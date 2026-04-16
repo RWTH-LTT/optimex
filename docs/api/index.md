@@ -5,7 +5,7 @@ tags:
   - reference
 ---
 
-# API Reference
+# Overview
 
 This section contains the API documentation automatically generated from the `optimex` source code docstrings.
 

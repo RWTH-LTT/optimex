@@ -8,7 +8,7 @@ repo_name = "RWTH-LTT/optimex"
 repo_url = "https://github.com/RWTH-LTT/optimex"
 edit_uri = "edit/main/docs/"
 
-copyright = "Copyright &copy; 2025 Institute of Technical Thermodynamics, RWTH Aachen University"
+copyright = "Copyright &copy; 2026 Institute of Technical Thermodynamics, RWTH Aachen University"
 
 nav = [
   { Home = [
@@ -32,7 +32,11 @@ nav = [
     { "Basic Example" = "content/examples/basic_example.md" },
     { "Methanol & Pig Iron Case Study" = "content/examples/methanol_and_iron.md" },
   ]},
-  { Theory = "content/theory.md" },
+  { Theory = [
+    { "Why Time Matters" = "content/theory_why_time_matters.md" },
+    { "How It Works" = "content/theory_how_it_works.md" },
+    { "Scope and Limits" = "content/theory_scope_and_limits.md" },
+  ]},
   { "API Reference" = [
     "api/index.md",
     { "LCA Processor" = "api/lca_processor.md" },
@@ -44,6 +48,10 @@ nav = [
 
 extra_javascript = [
   "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.0/es5/tex-mml-chtml.min.js",
+]
+
+extra_css = [
+  "stylesheets/extra.css",
 ]
 
 [project.theme]
@@ -72,16 +80,16 @@ features = [
 [[project.theme.palette]]
 media = "(prefers-color-scheme: light)"
 scheme = "default"
-primary = "white"
-accent = "blue"
+primary = "indigo"
+accent = "indigo"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
 scheme = "slate"
-primary = "black"
-accent = "blue"
+primary = "indigo"
+accent = "indigo"
 toggle.icon = "lucide/moon-star"
 toggle.name = "Switch to light mode"
 
