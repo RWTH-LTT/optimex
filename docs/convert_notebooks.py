@@ -4,7 +4,7 @@ For each notebook listed in NOTEBOOKS:
 - Runs nbconvert (markdown output) into docs/content/examples/
 - Strips ANSI escape sequences from every output cell
 - Moves output images into a <stem>_files/ subdirectory
-- Prepends YAML front-matter (icon) required by Zensical
+- Prepends YAML front-matter (icon + tags) required by Zensical
 
 Run this script from the project root before building the docs:
 
@@ -22,10 +22,16 @@ REPO_ROOT = Path(__file__).parent.parent
 NOTEBOOKS_DIR = REPO_ROOT / "notebooks"
 OUTPUT_DIR = REPO_ROOT / "docs" / "content" / "examples"
 
-# Map notebook stem → Zensical icon
-NOTEBOOK_ICONS: dict[str, str] = {
-    "basic_example": "lucide/play",
-    "methanol_and_iron": "lucide/flask-conical",
+# Map notebook stem → (Zensical icon, list of tags)
+NOTEBOOK_META: dict[str, tuple[str, list[str]]] = {
+    "basic_example": (
+        "lucide/play",
+        ["example", "tutorial", "getting started", "LCA", "LCO"],
+    ),
+    "methanol_and_iron": (
+        "lucide/flask-conical",
+        ["example", "case study", "methanol", "pig iron", "LCA", "LCO"],
+    ),
 }
 
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mK]")
@@ -35,13 +41,14 @@ def strip_ansi(text: str) -> str:
     return ANSI_ESCAPE.sub("", text)
 
 
-def convert(notebook_path: Path, output_dir: Path, icon: str) -> Path:
+def convert(
+    notebook_path: Path, output_dir: Path, icon: str, tags: list[str]
+) -> Path:
     """Convert *notebook_path* to Markdown in *output_dir*, strip ANSI codes,
     organise images into a <stem>_files/ sub-directory, and inject the Zensical
-    icon front-matter.  Returns the output file path."""
+    icon and tags front-matter.  Returns the output file path."""
     try:
         from nbconvert.exporters import MarkdownExporter
-        from nbconvert.writers import FilesWriter
     except ImportError:
         print(
             "nbconvert is not installed. "
@@ -68,8 +75,9 @@ def convert(notebook_path: Path, output_dir: Path, icon: str) -> Path:
         body,
     )
 
-    # Prepend Zensical front-matter
-    frontmatter = f"---\nicon: {icon}\n---\n\n"
+    # Build YAML front-matter lines
+    tags_yaml = "\n".join(f"  - {t}" for t in tags)
+    frontmatter = f"---\nicon: {icon}\ntags:\n{tags_yaml}\n---\n\n"
     body = frontmatter + body
 
     # Write markdown file
@@ -94,12 +102,12 @@ def main() -> None:
     for leftover in OUTPUT_DIR.glob("output_*.png"):
         leftover.unlink()
 
-    for stem, icon in NOTEBOOK_ICONS.items():
+    for stem, (icon, tags) in NOTEBOOK_META.items():
         notebook_path = NOTEBOOKS_DIR / f"{stem}.ipynb"
         if not notebook_path.exists():
             print(f"WARNING: notebook not found: {notebook_path}", file=sys.stderr)
             continue
-        out = convert(notebook_path, OUTPUT_DIR, icon)
+        out = convert(notebook_path, OUTPUT_DIR, icon, tags)
         print(f"Converted {notebook_path.name} → {out.relative_to(REPO_ROOT)}")
 
 

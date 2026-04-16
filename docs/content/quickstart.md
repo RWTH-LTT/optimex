@@ -1,5 +1,9 @@
 ---
 icon: lucide/zap
+tags:
+  - quickstart
+  - getting started
+  - workflow
 ---
 
 # Quick Start

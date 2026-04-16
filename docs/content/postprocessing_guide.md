@@ -1,5 +1,10 @@
 ---
 icon: lucide/bar-chart-3
+tags:
+  - postprocessing
+  - visualization
+  - results
+  - analysis
 ---
 
 # Postprocessing Results

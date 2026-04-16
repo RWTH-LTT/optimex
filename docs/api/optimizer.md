@@ -1,5 +1,10 @@
 ---
 icon: lucide/refresh-cw
+tags:
+  - API
+  - optimizer
+  - optimization
+  - reference
 ---
 
 # Optimizer

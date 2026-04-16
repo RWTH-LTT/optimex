@@ -1,3 +1,13 @@
+---
+icon: lucide/book-open
+tags:
+  - theory
+  - LCA
+  - LCO
+  - temporal
+  - methodology
+---
+
 # Theory
 
 ## Why Time Matters in Life Cycle Optimization

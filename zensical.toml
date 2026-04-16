@@ -159,3 +159,5 @@ merge_init_into_class = true
 show_source = true
 inherited_members = false
 filters = ["!^_", "!^__"]
+
+[project.plugins.tags]

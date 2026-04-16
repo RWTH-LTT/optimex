@@ -1,5 +1,9 @@
 ---
 icon: lucide/arrow-right-left
+tags:
+  - API
+  - converter
+  - reference
 ---
 
 # Converter
