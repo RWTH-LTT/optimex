@@ -1,5 +1,8 @@
 ---
 icon: lucide/arrow-right-left
+tags:
+  - model input
+  - conversion
 ---
 
 # Converter

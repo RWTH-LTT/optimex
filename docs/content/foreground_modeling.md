@@ -1,5 +1,8 @@
 ---
 icon: lucide/pencil
+tags:
+  - modeling
+  - supply chain
 ---
 
 # Foreground Modeling

@@ -5,13 +5,6 @@
 # Required
 version: 2
 
-mkdocs:
-  configuration: mkdocs.yml
-
-python:
-  install:
-    - requirements: docs/requirements.txt
-
 submodules:
    include: all
 
@@ -19,3 +12,10 @@ build:
    os: "ubuntu-lts-latest" # https://docs.readthedocs.io/en/stable/config-file/v2.html#build-os
    tools:
       python: "3.11" # https://docs.readthedocs.io/en/stable/config-file/v2.html#build-tools-python
+   commands:
+      - pip install -r docs/requirements.txt
+      - pip install -e .
+      - python docs/convert_notebooks.py
+      - zensical build
+      - mkdir -p $READTHEDOCS_OUTPUT/html
+      - cp -r site/* $READTHEDOCS_OUTPUT/html/

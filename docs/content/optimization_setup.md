@@ -1,5 +1,8 @@
 ---
 icon: lucide/sliders-horizontal
+tags:
+  - optimization
+  - setup
 ---
 
 # Optimization Setup

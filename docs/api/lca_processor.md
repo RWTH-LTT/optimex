@@ -1,5 +1,8 @@
 ---
 icon: lucide/database
+tags:
+  - LCA
+  - data processing
 ---
 
 # LCA Processor

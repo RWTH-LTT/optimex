@@ -1,5 +1,8 @@
 ---
 icon: lucide/database
+tags:
+  - brightway setup
+  - database
 ---
 
 # Setting Up Brightway

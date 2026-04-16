@@ -1,5 +1,8 @@
 ---
 icon: lucide/bar-chart-3
+tags:
+  - results
+  - plotting
 ---
 
 # Postprocessing

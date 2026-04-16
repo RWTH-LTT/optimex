@@ -1,4 +1,11 @@
-# API Reference
+---
+icon: lucide/code-2
+tags:
+  - API
+  - reference
+---
+
+# Overview
 
 This section contains the API documentation automatically generated from the `optimex` source code docstrings.
 

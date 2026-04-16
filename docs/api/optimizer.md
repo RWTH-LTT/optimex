@@ -1,5 +1,8 @@
 ---
 icon: lucide/refresh-cw
+tags:
+  - optimization
+  - solver
 ---
 
 # Optimizer

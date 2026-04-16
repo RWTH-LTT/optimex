@@ -66,10 +66,10 @@ dev = [
     "setuptools",
 ]
 docs = [
-    "mkdocs-material",
-    "mkdocs-autorefs",
+    "zensical",
     "mkdocstrings[python]",
-    "mkdocs-jupyter",
+    "mkdocs-autorefs",
+    "nbconvert>=7.0",
 ]
 gurobi = [
     "gurobipy"

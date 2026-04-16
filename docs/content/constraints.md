@@ -1,5 +1,8 @@
 ---
 icon: lucide/lock
+tags:
+  - optimization
+  - constraints
 ---
 
 # Optimization Constraints
