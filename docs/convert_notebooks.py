@@ -75,6 +75,12 @@ def convert(
         body,
     )
 
+    # Rewrite notebook-local data asset paths for rendered docs pages.
+    # In notebooks, assets live at data/<file>; once rendered under
+    # /content/examples/<page>/ they must resolve via ../data/<file>.
+    body = re.sub(r"src=(['\"])data/", r"src=\1../data/", body)
+    body = body.replace("](data/", "](../data/")
+
     # Build YAML front-matter lines
     tags_yaml = "\n".join(f"  - {t}" for t in tags)
     frontmatter = f"---\nicon: {icon}\ntags:\n{tags_yaml}\n---\n\n"
