@@ -12,7 +12,7 @@ Transition pathway optimization typically collapses all life cycle stages and em
 
 `optimex` jointly models both dimensions — *when* exchanges occur and *how* their magnitudes change over time — to design pathways that respect time-specific and cumulative environmental constraints.
 
-[:lucide-rocket: Get Started](content/quickstart.md){ .md-button .md-button--primary } [:lucide-github: View on GitHub](https://github.com/RWTH-LTT/optimex){ .md-button }
+[:lucide-rocket: Get Started](content/quickstart.md){ .md-button .md-button--primary } [:fontawesome-brands-github: View on GitHub](https://github.com/RWTH-LTT/optimex){ .md-button }
 
 ---
 
