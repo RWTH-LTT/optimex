@@ -26,11 +26,11 @@ OUTPUT_DIR = REPO_ROOT / "docs" / "content" / "examples"
 NOTEBOOK_META: dict[str, tuple[str, list[str]]] = {
     "basic_example": (
         "lucide/play",
-        ["example", "tutorial", "getting started", "LCA", "LCO"],
+        ["tutorial", "LCA", "LCO"],
     ),
     "methanol_and_iron": (
         "lucide/flask-conical",
-        ["example", "case study", "methanol", "pig iron", "LCA", "LCO"],
+        ["case study", "LCA", "industry"],
     ),
 }
 

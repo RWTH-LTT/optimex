@@ -1,7 +1,6 @@
 ---
 icon: lucide/history
 tags:
-  - changelog
   - releases
   - updates
 ---

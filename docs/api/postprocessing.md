@@ -2,9 +2,7 @@
 icon: lucide/bar-chart-3
 tags:
   - API
-  - postprocessing
   - visualization
-  - reference
 ---
 
 # Postprocessing

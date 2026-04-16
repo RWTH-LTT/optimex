@@ -1,7 +1,6 @@
 ---
 icon: lucide/git-pull-request
 tags:
-  - contributing
   - development
   - community
 ---

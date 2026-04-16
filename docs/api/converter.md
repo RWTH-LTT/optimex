@@ -2,8 +2,7 @@
 icon: lucide/arrow-right-left
 tags:
   - API
-  - converter
-  - reference
+  - validation
 ---
 
 # Converter

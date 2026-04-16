@@ -1,11 +1,8 @@
 ---
 icon: lucide/database
 tags:
-  - brightway
-  - setup
-  - database
-  - biosphere
-  - background
+  - LCA
+  - databases
 ---
 
 # Setting Up Brightway

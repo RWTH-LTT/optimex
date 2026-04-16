@@ -1,8 +1,8 @@
 ---
 icon: lucide/handshake
 tags:
-  - code of conduct
   - community
+  - guidelines
 ---
 
 --8<-- "CODE_OF_CONDUCT.md"

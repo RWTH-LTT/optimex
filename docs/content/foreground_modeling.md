@@ -1,10 +1,7 @@
 ---
 icon: lucide/pencil
 tags:
-  - foreground
-  - modeling
   - brightway
-  - processes
   - temporal distribution
 ---
 

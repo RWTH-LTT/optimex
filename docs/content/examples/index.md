@@ -1,7 +1,6 @@
 ---
 icon: lucide/layout-grid
 tags:
-  - examples
   - notebooks
   - tutorial
 ---

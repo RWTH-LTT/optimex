@@ -2,9 +2,7 @@
 icon: lucide/database
 tags:
   - API
-  - LCA
-  - processor
-  - reference
+  - LCI
 ---
 
 # LCA Processor

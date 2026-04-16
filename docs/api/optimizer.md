@@ -2,9 +2,7 @@
 icon: lucide/refresh-cw
 tags:
   - API
-  - optimizer
-  - optimization
-  - reference
+  - solver
 ---
 
 # Optimizer

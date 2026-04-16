@@ -1,8 +1,8 @@
 ---
 icon: lucide/file-badge
 tags:
-  - license
   - legal
+  - open-source
 ---
 
 ```
