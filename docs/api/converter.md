@@ -1,8 +1,8 @@
 ---
 icon: lucide/arrow-right-left
 tags:
-  - API
-  - validation
+  - model input
+  - conversion
 ---
 
 # Converter

@@ -1,8 +1,8 @@
 ---
 icon: lucide/bar-chart-3
 tags:
-  - API
-  - visualization
+  - results
+  - plotting
 ---
 
 # Postprocessing

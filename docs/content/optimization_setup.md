@@ -1,8 +1,8 @@
 ---
 icon: lucide/sliders-horizontal
 tags:
-  - LCA
-  - LCO
+  - optimization
+  - setup
 ---
 
 # Optimization Setup

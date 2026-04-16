@@ -1,8 +1,8 @@
 ---
 icon: lucide/code-2
 tags:
-  - pipeline
-  - Python
+  - API
+  - reference
 ---
 
 # API Reference

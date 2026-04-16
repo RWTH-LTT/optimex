@@ -1,8 +1,8 @@
 ---
 icon: lucide/zap
 tags:
+  - getting started
   - tutorial
-  - workflow
 ---
 
 # Quick Start

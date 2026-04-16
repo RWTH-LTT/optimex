@@ -1,8 +1,8 @@
 ---
 icon: lucide/layout-grid
 tags:
-  - notebooks
-  - tutorial
+  - learning
+  - examples
 ---
 
 # Example Collection

@@ -1,9 +1,8 @@
 ---
 icon: lucide/book-open
 tags:
-  - LCA
-  - LCO
-  - temporal
+  - background
+  - methodology
 ---
 
 # Theory

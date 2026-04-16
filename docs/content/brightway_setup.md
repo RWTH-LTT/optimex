@@ -1,8 +1,8 @@
 ---
 icon: lucide/database
 tags:
-  - LCA
-  - databases
+  - brightway setup
+  - database
 ---
 
 # Setting Up Brightway

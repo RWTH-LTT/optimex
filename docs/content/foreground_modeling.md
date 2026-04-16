@@ -1,8 +1,8 @@
 ---
 icon: lucide/pencil
 tags:
-  - brightway
-  - temporal distribution
+  - modeling
+  - supply chain
 ---
 
 # Foreground Modeling

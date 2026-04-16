@@ -1,8 +1,8 @@
 ---
 icon: lucide/download
 tags:
-  - pip
-  - conda
+  - installation
+  - setup
 ---
 
 # Installation

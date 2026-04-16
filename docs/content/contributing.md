@@ -1,8 +1,8 @@
 ---
 icon: lucide/git-pull-request
 tags:
-  - development
-  - community
+  - contributing
+  - open source
 ---
 
 --8<-- "CONTRIBUTING.md"

@@ -1,8 +1,8 @@
 ---
 icon: lucide/lock
 tags:
-  - LCO
-  - capacity
+  - optimization
+  - constraints
 ---
 
 # Optimization Constraints

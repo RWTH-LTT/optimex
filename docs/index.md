@@ -2,9 +2,8 @@
 title: optimex
 icon: lucide/house
 tags:
-  - LCA
-  - LCO
-  - temporal
+  - introduction
+  - getting started
 ---
 
 # Time-Explicit Life Cycle Optimization
