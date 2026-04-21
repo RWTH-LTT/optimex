@@ -6,13 +6,27 @@ tags:
   - getting started
 ---
 
-# Time-Explicit Life Cycle Optimization
+# Time-Explicit Life Cycle Optimization with optimex
 
-Transition pathway optimization typically collapses all life cycle stages and emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades (*temporal distribution*), and the production systems behind them are evolving (*temporal evolution*). Ignoring this interplay means pathways may appear sustainable while violating time-specific limits during intensive infrastructure buildup, or miscounting cumulative impacts when decommissioning happens in a fundamentally different future.
+`optimex` is an open-source Python package for **time-explicit Life Cycle Optimization (LCO)**. It finds optimal technology transition pathways while accounting for *when* emissions occur and *how* product systems evolve over time.
 
-`optimex` jointly models both dimensions — *when* exchanges occur and *how* their magnitudes change over time — to design pathways that respect time-specific and cumulative environmental constraints.
+Standard LCA evaluates predefined product systems. But transition planning asks a different question: *which technologies should be deployed, when, and at what scale*? That is the domain of Life Cycle Optimization. In fast-changing energy and industrial systems, static formulations can be misleading because construction, operation, and end-of-life happen at different times, while background supply chains and technology performance evolve in parallel.
+
+`optimex` closes this gap by combining temporalized LCA with optimization in one workflow, so pathways can be assessed against both time-specific and cumulative environmental constraints.
 
 [:lucide-rocket: Get Started](content/quickstart.md){ .md-button .md-button--primary } [:fontawesome-brands-github: View on GitHub](https://github.com/RWTH-LTT/optimex){ .md-button }
+
+---
+
+## Why Go Time-Explicit?
+
+Making optimization time-explicit unlocks insights that static approaches miss:
+
+- **Temporal distribution of flows** — Construction, operation, and end-of-life occur over years or decades and should be modeled where they actually happen in time
+- **Temporal evolution of technologies** — Process performance improves over time; `optimex` tracks vintages so technologies are evaluated with the parameters available at their installation date
+- **Time-varying background systems** — Foreground demands are linked to time-specific background databases so future activity is assessed against future supply chains
+- **Flexible operation and dispatch** — Installation and operation are separate decisions, enabling vintage-specific utilization where cleaner cohorts are preferred
+- **Dynamic impact assessment** — Time-dependent characterization (e.g., radiative forcing and dynamic climate metrics) captures how impacts accumulate over the planning horizon
 
 ---
 
@@ -59,6 +73,24 @@ Time-explicit LCO reveals transition strategies that are invisible to static app
 
 ---
 
+## Built on Brightway
+
+`optimex` is deeply integrated with [Brightway](https://brightway.dev). You can model foreground systems with familiar Brightway workflows, add temporal metadata, and convert those models directly into optimization problems.
+
+This means:
+
+- **No lock-in** — Use Brightway-compatible databases, including custom inventories
+- **Familiar modeling workflow** — Build and maintain product systems with tools you already use
+- **Reuse existing models** — Temporalize and optimize product systems created for conventional LCA
+
+For optimization, `optimex` uses [Pyomo](https://www.pyomo.org), a powerful open-source algebraic modeling framework.
+
+For time-explicit LCA without optimization, see [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
+
+`optimex` is free and open source software, published under the [BSD 3-Clause License](content/license.md).
+
+---
+
 ## Use Cases
 
 `optimex` is broadly applicable across sectors where temporal dynamics are decisive for sustainability:
@@ -70,20 +102,6 @@ Time-explicit LCO reveals transition strategies that are invisible to static app
 - **Multi-regional supply chains** — Sourcing decisions across regions with divergent decarbonization trajectories
 
 ---
-
-## Built On
-
-`optimex` integrates with established open-source tools:
-
-- [Pyomo](https://github.com/Pyomo/pyomo) for mathematical optimization
-- [Brightway](https://docs.brightway.dev/en/latest) for life cycle assessment
-- [bw_temporalis](https://github.com/brightway-lca/bw_temporalis) for temporal distributions
-- [dynamic_characterization](https://github.com/brightway-lca/dynamic_characterization) for dynamic impact assessment
-- [premise](https://github.com/polca/premise) for prospective background databases
-
-For time-explicit LCA without optimization, see [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
-
-`optimex` is free and open source software, published under the [BSD 3-Clause License](content/license.md).
 
 ## Support
 

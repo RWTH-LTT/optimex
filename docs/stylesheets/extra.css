@@ -1,3 +1,7 @@
+:root > * {
+  --md-code-fg-color: var(--md-default-fg-color);
+}
+
 .md-content .md-typeset .md-button {
   background-color: transparent;
   border-color: transparent;

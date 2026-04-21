@@ -13,25 +13,30 @@
 [![Conda - License](https://img.shields.io/conda/l/diepers/optimex)](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/TimoDiepers/optimex/main?urlpath=%2Fdoc%2Ftree%2Fnotebooks%2Fbasic_optimex_example.ipynb)
 
-**Time-explicit life cycle optimization for transition pathways.**
+## What is optimex?
 
-Current life cycle optimization tools collapse all emissions to a single point in time, hiding critical temporal interdependencies: life cycles are distributed across years or decades, and the production systems behind them are evolving. `optimex` jointly models both dimensions — *when* exchanges occur and *how* their magnitudes change over time — to design pathways that respect time-specific and cumulative environmental constraints.
+`optimex` is an open-source Python package for **time-explicit Life Cycle Optimization (LCO)** — a framework that finds optimal technology transition pathways while fully accounting for *when* emissions occur and *how* the product systems and technologies evolve over time.
 
-## Key Capabilities
+If you already do Life Cycle Assessment (LCA) with [Brightway](https://brightway.dev), `optimex` lets you take your existing product system models, temporalize them, and turn them into fully-fledged optimization problems — without having to rebuild anything from scratch.
 
-- **Temporal Distribution** — Maps life cycle exchanges across their actual timeframes via convolution, capturing time lags between construction, operation, and end-of-life
-- **Technology Evolution** — Tracks vintage-dependent foreground improvements and links to prospective background databases reflecting supply chain decarbonization
-- **Flexible Operation** — Separates capacity installation from operational dispatch, enabling vintage-specific merit order where cleaner cohorts are utilized first
-- **Dynamic Characterization** — Retains emission timing for dynamic LCIA (e.g., Radiative Forcing, dynamic GWP), capturing how impacts accumulate over time
+## Why LCA users need this
 
-## What This Enables
+Standard LCA tells you the environmental impact of a predefined product system. But what if you want to choose *between* competing technologies, or find the best deployment schedule for a set of processes over a 25-year horizon? That's the domain of **Life Cycle Optimization**. LCO extends LCA by treating technology selection and capacity planning as decision variables, and minimizes an environmental objective subject to system constraints.
 
-Time-explicit LCO reveals transition strategies invisible to static approaches:
+However, both LCA and LCO are traditionally *static*: all flows are collapsed to a single point in time, background supply chains are fixed, and the timing of real-world activities — construction, multi-year operation, end-of-life — is ignored. This matters enormously in a rapidly decarbonizing world where the same technology installed in 2025 versus 2035 carries very different lifecycle impacts.
 
-- **Strategic overcapacity** — Early clean technology investment that offsets stranded fossil assets when net emission savings outweigh embodied impacts
-- **Vintage-specific dispatch** — Emissions-aware merit order that preferentially utilizes cleaner technology cohorts
-- **Resource bottleneck navigation** — Technology diversification driven by time-specific constraints on water, critical minerals, or other resources
-- **Cumulative budget compliance** — Pathway verification against carbon budgets and absolute limits through exact emission timing
+`optimex` solves this by making both the assessment and the optimization **time-explicit**.
+
+## Why go time-explicit?
+
+Making your optimization time-explicit unlocks insights that static approaches simply cannot provide:
+
+- **Temporal distribution of flows** — Construction, operation, and end-of-life happen at different points in time. An electric vehicle built today will consume electricity over the next, say, 15 years; the underlying electricity mix might change a lot over this time period, affecting environmental impacts.
+- **Temporal evolution of technologies** — A process installed in 2030 will be more efficient than one installed today. `optimex` locks in technology parameters at the time of installation (the *vintage*), so improving technologies are correctly credited when they are actually deployed.
+- **Time-varying background systems** — Upstream supply chains decarbonize. `optimex` links foreground demands to time-specific background databases (e.g., generated with [premise](https://premise.readthedocs.io)), so that future electricity, hydrogen, or steel inputs are assessed against future grid mixes rather than today's.
+- **Flexible process operation** - Because `optimex` can differentiate process installation from operation, it can also scale their operation independent of installation. Together with the vintage-tracking abilities, this enables vintage-specific dispatch preferring more efficient vintages.
+- **Dynamic impact assessment** — Characterization factors can vary over time. For climate change, `optimex` directly integrates dynamic LCIA methods from [dynamic_characterization](https://dynamic-characterization.readthedocs.io), enabling radiative forcing, AGWP, or AGTP as objective metrics.
+- **Novel transition strategies** — Time-explicit LCO reveals strategies invisible to static models: strategic overcapacity that accepts stranded fossil assets to accelerate clean deployment, preferential dispatch of cleaner vintages, and technology diversification to navigate transient resource bottlenecks.
 
 ## Use Cases
 
@@ -43,11 +48,26 @@ Time-explicit LCO reveals transition strategies invisible to static approaches:
 - **Time-resolved carbon accounting** — Biogenic feedstocks, temporary carbon storage, or CO2 removal with varying temporal profiles
 - **Multi-regional supply chains** — Sourcing across regions with divergent decarbonization trajectories
 
+## Built on Brightway
+
+`optimex` is deeply integrated with the [Brightway](https://brightway.dev) LCA ecosystem. You model your foreground system exactly as you would for a standard LCA — defining products, processes, and exchanges. You then add temporal metadata (relative temporal distributions, vintage-dependent scaling factors, operation-vs-installation flow classifications) as flow-level attributes. The rest is handled by `optimex`.
+
+This means:
+- **No lock-in** — Use any Brightway-compatible inventory database (ecoinvent, custom databases, etc.).
+- **Familiar workflows** — If you know Brightway, you already know how to build foreground systems for `optimex`.
+- **Reuse existing models** — Temporalize and optimize a product system you have already built for standard LCA.
+
+> **Tip:** you can also directly re-use temporalized product system models made with `bw_timex`, our time-explicit **assessment* framework. 
+
+For optimization, `optimex` uses [Pyomo](https://www.pyomo.org), a powerful open-source algebraic modeling language for mathematical programming.
+
 ## Installation
 
 ```bash
 pip install optimex
 ```
+
+More complete installation instructions are available [here](https://optimex.readthedocs.io/en/latest/content/installation/).
 
 ## Documentation
 
