@@ -13,7 +13,7 @@ This section contains the API documentation automatically generated from the `op
 
 <div class="grid cards" markdown>
 
--   :lucide-database:{ style="color: #4dabf7" } **1. LCA Processor**
+-   :lucide-database:{ style="color: #4dabf7; margin-right: 0.25rem;" } **1. LCA Processor**
 
     ---
 
@@ -21,7 +21,7 @@ This section contains the API documentation automatically generated from the `op
 
     [:lucide-arrow-right: `lca_processor`](lca_processor.md)
 
--   :lucide-arrow-right-left:{ style="color: #69db7c" } **2. Converter**
+-   :lucide-arrow-right-left:{ style="color: #69db7c; margin-right: 0.25rem;" } **2. Converter**
 
     ---
 
@@ -29,7 +29,7 @@ This section contains the API documentation automatically generated from the `op
 
     [:lucide-arrow-right: `converter`](converter.md)
 
--   :lucide-refresh-cw:{ style="color: #ffa94d" } **3. Optimizer**
+-   :lucide-refresh-cw:{ style="color: #ffa94d; margin-right: 0.25rem;" } **3. Optimizer**
 
     ---
 
@@ -37,7 +37,7 @@ This section contains the API documentation automatically generated from the `op
 
     [:lucide-arrow-right: `optimizer`](optimizer.md)
 
--   :lucide-bar-chart-3:{ style="color: #da77f2" } **4. Postprocessing**
+-   :lucide-bar-chart-3:{ style="color: #da77f2; margin-right: 0.25rem;" } **4. Postprocessing**
 
     ---
 

@@ -11,7 +11,7 @@ Here are some examples on how you can use the `optimex` package.
 
 <div class="grid cards" markdown>
 
--   :lucide-play:{ style="color: #4dabf7" } **Basic Example**
+-   :lucide-play:{ style="color: #4dabf7; margin-right: 0.25rem;" } **Basic Example**
 
     ---
 
@@ -19,7 +19,7 @@ Here are some examples on how you can use the `optimex` package.
 
     [:lucide-arrow-right: View Example](./basic_example.md)
 
--   :lucide-flask-conical:{ style="color: #69db7c" } **Methanol & Pig Iron Case Study**
+-   :lucide-flask-conical:{ style="color: #69db7c; margin-right: 0.25rem;" } **Methanol & Pig Iron Case Study**
 
     ---
 
@@ -27,7 +27,7 @@ Here are some examples on how you can use the `optimex` package.
 
     [:lucide-arrow-right: View Example](./methanol_and_iron.md)
 
--   :lucide-circle-help:{ style="color: #da77f2" } **Do you have anything to add?**
+-   :lucide-circle-help:{ style="color: #da77f2; margin-right: 0.25rem;" } **Do you have anything to add?**
 
     ---
 

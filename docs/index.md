@@ -20,43 +20,31 @@ Standard LCA evaluates predefined product systems. But transition planning asks 
 
 ## Why Go Time-Explicit?
 
-Making optimization time-explicit unlocks insights that static approaches miss:
-
-- **Temporal distribution of flows** — Construction, operation, and end-of-life occur over years or decades and should be modeled where they actually happen in time
-- **Temporal evolution of technologies** — Process performance improves over time; `optimex` tracks vintages so technologies are evaluated with the parameters available at their installation date
-- **Time-varying background systems** — Foreground demands are linked to time-specific background databases so future activity is assessed against future supply chains
-- **Flexible operation and dispatch** — Installation and operation are separate decisions, enabling vintage-specific utilization where cleaner cohorts are preferred
-- **Dynamic impact assessment** — Time-dependent characterization (e.g., radiative forcing and dynamic climate metrics) captures how impacts accumulate over the planning horizon
-
----
-
-## Key Capabilities
-
 <div class="grid cards" markdown>
 
--   :lucide-hourglass:{ style="color: #4dabf7" } **Temporal Distribution**
+-   :lucide-hourglass:{ style="color: #4dabf7; margin-right: 0.25rem;" } **Distribution of Flows**
 
     ---
 
-    Maps life cycle exchanges across their actual timeframes via convolution, capturing time lags between construction, operation, and end-of-life.
+    Map life cycle exchanges across their actual timeframes via convolution, capturing time lags between construction, operation, and end-of-life.
 
--   :lucide-settings:{ style="color: #69db7c" } **Technology Evolution**
-
-    ---
-
-    Tracks vintage-dependent foreground improvements and links to prospective background databases reflecting supply chain decarbonization.
-
--   :lucide-arrow-up-down:{ style="color: #ffa94d" } **Flexible Operation**
+-   :lucide-settings:{ style="color: #69db7c; margin-right: 0.25rem;" } **Technology Evolution**
 
     ---
 
-    Separates capacity installation from operational dispatch, enabling vintage-specific merit order where cleaner cohorts are utilized first.
+    Track vintage-dependent foreground improvements and links to prospective background databases reflecting supply chain decarbonization.
 
--   :lucide-trending-up:{ style="color: #da77f2" } **Dynamic Characterization**
+-   :lucide-arrow-up-down:{ style="color: #ffa94d; margin-right: 0.25rem;" } **Flexible Operation**
 
     ---
 
-    Retains emission timing for dynamic LCIA (e.g., Radiative Forcing, dynamic GWP), capturing how impacts accumulate over time.
+    Separate capacity installation from operational dispatch, enabling vintage-specific merit order where cleaner cohorts are utilized first.
+
+-   :lucide-trending-up:{ style="color: #da77f2; margin-right: 0.25rem;" } **Dynamic Impact Assessment**
+
+    ---
+
+    Retain emission timing for dynamic impact assessment (e.g., Radiative Forcing, dynamic GWP), capturing how impacts accumulate over time.
 
 </div>
 
@@ -66,9 +54,9 @@ Making optimization time-explicit unlocks insights that static approaches miss:
 
 Time-explicit LCO reveals transition strategies that are invisible to static approaches:
 
-- **Strategic overcapacity** — Early investment in clean technologies can offset stranded fossil assets when the net emission savings outweigh the embodied impacts of idle infrastructure
 - **Vintage-specific dispatch** — When multiple cohorts of the same technology coexist, the optimizer preferentially utilizes cleaner vintages, creating an emissions-aware merit order
 - **Resource bottleneck navigation** — Time-specific constraints on water use, critical minerals, or other resources force technology diversification, revealing realistic pathways through transient scarcity
+- **Strategic overcapacity** — Early investment in clean technologies can offset stranded fossil assets when the net emission savings outweigh the embodied impacts of idle infrastructure
 - **Cumulative budget compliance** — By tracking exact emission timing alongside dynamic characterization, pathways can be verified against carbon budgets and other absolute limits
 
 ---
