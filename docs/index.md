@@ -65,15 +65,9 @@ Time-explicit LCO reveals transition strategies that are invisible to static app
 
 `optimex` is deeply integrated with [Brightway](https://brightway.dev). You can model foreground systems with familiar Brightway workflows, add temporal metadata, and convert those models directly into optimization problems.
 
-This means:
+!!! tip "Re-use Temporalized System Models"
 
-- **No lock-in** — Use Brightway-compatible databases, including custom inventories
-- **Familiar modeling workflow** — Build and maintain product systems with tools you already use
-- **Reuse existing models** — Temporalize and optimize product systems created for conventional LCA
-
-For optimization, `optimex` uses [Pyomo](https://www.pyomo.org), a powerful open-source algebraic modeling framework.
-
-For time-explicit LCA without optimization, see [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
+    If you already have a temporalized product system model, e.g., because you made a time-explicit LCA with [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/) before, you can directly re-use it with `optimex`.
 
 `optimex` is free and open source software, published under the [BSD 3-Clause License](content/license.md).
 
