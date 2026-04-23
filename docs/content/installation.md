@@ -68,7 +68,7 @@ If you just want to get started quickly:
         ```bash
         uv run https://raw.githubusercontent.com/RWTH-LTT/optimex/refs/heads/main/scripts/uv_setup.py my-optimex-example
         ```
-        You can of course customize the project name, just replace "my-optimex-example".
+        You can of course customize the project name, just replace the "my-optimex-example" at the end.
 
 === "New Environment"
 
