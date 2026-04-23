@@ -66,7 +66,7 @@ If you just want to get started quickly:
     !!! tip "One-line `optimex` setup"
         For your convenience, we've prepared a [setup script](https://raw.githubusercontent.com/RWTH-LTT/optimex/refs/heads/main/scripts/uv_setup.py) that initiates a new uv project and fetches our `optimex` example notebook, so you can directly get started. Just run:
         ```bash
-        uv run https://gist.github.com/TimoDiepers/2944d28249cbc4a0594cde4dfa2d56ea/raw/0a1f554f61d949516da605dc6ec9727c7e937351/optimex_setup.py my-optimex-example
+        uv run https://raw.githubusercontent.com/RWTH-LTT/optimex/refs/heads/main/scripts/uv_setup.py my-optimex-example
         ```
         You can of course customize the project name, just replace "my-optimex-example".
 
