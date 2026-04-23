@@ -6,6 +6,7 @@ claude.md
 docs_local/
 visualizations/
 media/
+conda-out/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
