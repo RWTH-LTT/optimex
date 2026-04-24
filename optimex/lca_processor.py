@@ -239,6 +239,12 @@ class LCADataProcessor:
         self._characterization = {}
         self._operation_flow = {}
         self._operation_time_limits = {}
+        self._process_capital_costs = {}
+        self._flow_operational_costs = {}
+        self._process_capital_costs_vintages = {}
+        self._process_capital_cost_improvements = {}
+        self._flow_operational_costs_vintages = {}
+        self._flow_operational_cost_improvements = {}
         
         # Vintage-dependent parameters extracted from exchange attributes
         self._foreground_technosphere_vintages = {}
@@ -337,6 +343,36 @@ class LCADataProcessor:
     def products(self) -> dict:
         """Read-only access to the products dictionary."""
         return self._products
+
+    @property
+    def process_capital_costs(self) -> dict:
+        """Read-only access to process-level capital costs."""
+        return self._process_capital_costs
+
+    @property
+    def flow_operational_costs(self) -> dict:
+        """Read-only access to flow-level operational costs."""
+        return self._flow_operational_costs
+
+    @property
+    def process_capital_costs_vintages(self) -> Optional[dict]:
+        """Read-only access to vintage-specific process capital costs."""
+        return self._process_capital_costs_vintages if self._process_capital_costs_vintages else None
+
+    @property
+    def process_capital_cost_improvements(self) -> Optional[dict]:
+        """Read-only access to vintage-specific process capital cost scaling."""
+        return self._process_capital_cost_improvements if self._process_capital_cost_improvements else None
+
+    @property
+    def flow_operational_costs_vintages(self) -> Optional[dict]:
+        """Read-only access to vintage-specific operational costs."""
+        return self._flow_operational_costs_vintages if self._flow_operational_costs_vintages else None
+
+    @property
+    def flow_operational_cost_improvements(self) -> Optional[dict]:
+        """Read-only access to vintage-specific operational cost scaling."""
+        return self._flow_operational_cost_improvements if self._flow_operational_cost_improvements else None
 
     @property
     def internal_demand_technosphere(self) -> dict:
@@ -480,6 +516,27 @@ class LCADataProcessor:
             self._processes.setdefault(act["code"], act["name"])
             if (limits := act.get("operation_time_limits")) is not None:
                 self._operation_time_limits[act["code"]] = limits
+            if (capital_cost := act.get("capital_cost")) is not None:
+                self._process_capital_costs[act["code"]] = capital_cost
+            capital_cost_vintage_amounts = act.get("capital_cost_vintage_amounts")
+            if isinstance(capital_cost_vintage_amounts, dict):
+                for vintage_year, amount in capital_cost_vintage_amounts.items():
+                    self._reference_vintages.add(vintage_year)
+                    self._process_capital_costs_vintages[(act["code"], vintage_year)] = amount
+            elif capital_cost_vintage_amounts is not None:
+                logger.warning(
+                    f"capital_cost_vintage_amounts on process {act['code']} must be a dict."
+                )
+
+            capital_cost_vintage_improvements = act.get("capital_cost_vintage_improvements")
+            if isinstance(capital_cost_vintage_improvements, dict):
+                for vintage_year, factor in capital_cost_vintage_improvements.items():
+                    self._reference_vintages.add(vintage_year)
+                    self._process_capital_cost_improvements[(act["code"], vintage_year)] = factor
+            elif capital_cost_vintage_improvements is not None:
+                logger.warning(
+                    f"capital_cost_vintage_improvements on process {act['code']} must be a dict."
+                )
 
             for exc in act.exchanges():
                 # Extract temporal distribution
@@ -495,6 +552,9 @@ class LCADataProcessor:
                     year for year in years if year not in self._process_time
                 )
                 temporal_factor = temporal_dist.amount
+                active_years = [
+                    year for year, factor in zip(years, temporal_factor) if factor != 0
+                ]
 
                 # Skip if temporal distribution is missing or invalid (empty arrays)
                 if years.size == 0 or temporal_factor.size == 0:
@@ -506,6 +566,47 @@ class LCADataProcessor:
                 input_code = exc.input["code"]
                 input_name = exc.input["name"]
                 input_db = exc.input["database"]
+                if (operational_cost := exc.get("cost")) is not None:
+                    self._flow_operational_costs.update(
+                        {
+                            (act["code"], input_code, year): operational_cost
+                            for year in active_years
+                        }
+                    )
+                cost_vintage_improvements = exc.get("cost_vintage_improvements")
+                if isinstance(cost_vintage_improvements, dict):
+                    for vintage_year, scaling_factor in cost_vintage_improvements.items():
+                        self._reference_vintages.add(vintage_year)
+                        self._flow_operational_cost_improvements[(act["code"], input_code, vintage_year)] = scaling_factor
+                elif cost_vintage_improvements is not None:
+                    logger.warning(
+                        f"cost_vintage_improvements on exchange {exc.input} must be a dict."
+                    )
+
+                cost_vintage_amounts = exc.get("cost_vintage_amounts")
+                if isinstance(cost_vintage_amounts, dict):
+                    for vintage_key, vintage_cost in cost_vintage_amounts.items():
+                        if isinstance(vintage_key, tuple):
+                            process_time_vintage, vintage_year = vintage_key
+                        elif isinstance(vintage_key, int):
+                            vintage_year = vintage_key
+                            process_time_vintage = None
+                        else:
+                            logger.warning(
+                                f"Invalid cost_vintage_amounts key {vintage_key} on exchange {exc.input}."
+                            )
+                            continue
+
+                        self._reference_vintages.add(vintage_year)
+                        process_times_to_update = [process_time_vintage] if process_time_vintage is not None else active_years
+                        for tau in process_times_to_update:
+                            self._flow_operational_costs_vintages[
+                                (act["code"], input_code, tau, vintage_year)
+                            ] = vintage_cost
+                elif cost_vintage_amounts is not None:
+                    logger.warning(
+                        f"cost_vintage_amounts on exchange {exc.input} must be a dict."
+                    )
                 
                 # ========== Extract Vintage Parameters from Exchange Attributes ==========
                 # Vintage parameters allow foreground exchanges to vary based on installation year.

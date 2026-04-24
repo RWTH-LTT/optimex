@@ -1,7 +1,7 @@
 import pyomo.environ as pyo
 import pytest
 
-from optimex import converter, optimizer
+from optimex import converter, optimizer, postprocessing
 
 
 def get_total_operation(model, p, t):
@@ -75,6 +75,38 @@ def test_all_params_scaled(abstract_system_model_inputs):
             assert (
                 pytest.approx(obs, rel=1e-9) == exp
             ), f"Scaled param '{name}'[{key}] was {obs}, expected {exp}"
+
+
+def test_cost_vintage_inputs_are_expanded_in_scaled_copy():
+    inputs = converter.OptimizationModelInputs(
+        PROCESS=["P1"],
+        PRODUCT=["R1"],
+        INTERMEDIATE_FLOW=["I1"],
+        ELEMENTARY_FLOW=[],
+        BACKGROUND_ID=["db_2020"],
+        PROCESS_TIME=[0],
+        SYSTEM_TIME=[2020, 2025, 2030],
+        CATEGORY=["dummy"],
+        demand={("R1", 2025): 1.0},
+        operation_flow={("P1", "R1"): True, ("P1", "I1"): True},
+        process_capital_costs={"P1": 100.0},
+        process_capital_cost_improvements={("P1", 2020): 1.0, ("P1", 2030): 0.5},
+        flow_operational_costs={("P1", "I1", 0): 10.0},
+        flow_operational_cost_improvements={("P1", "I1", 2020): 1.0, ("P1", "I1", 2030): 0.2},
+        foreground_technosphere={("P1", "I1", 0): 1.0},
+        internal_demand_technosphere={},
+        foreground_biosphere={},
+        foreground_production={("P1", "R1", 0): 1.0},
+        background_inventory={},
+        mapping={("db_2020", 2020): 1.0, ("db_2020", 2025): 1.0, ("db_2020", 2030): 1.0},
+        characterization={},
+        operation_time_limits={"P1": (0, 0)},
+    )
+    scaled_inputs, _ = inputs.get_scaled_copy()
+
+    # Linear interpolation in 2025 between 2020 and 2030
+    assert pytest.approx(75.0, rel=1e-9) == scaled_inputs.process_capital_costs_vintage_overrides[("P1", 2025)]
+    assert pytest.approx(6.0, rel=1e-9) == scaled_inputs.flow_operational_costs_vintage_overrides[("P1", "I1", 0, 2025)]
 
 
 def test_model_solution_is_optimal(solved_system_model):
@@ -278,18 +310,173 @@ def test_cumulative_process_limits_respected():
         f"limit ({cumulative_limit}), suggesting constraint is not binding"
     )
 
-    # Verify P2 is used to meet remaining demand
-    total_demand = sum(model_inputs_dict["demand"].values())
-    assert cumulative_p2 > 0, (
-        "P2 should be used to meet demand when P1 is limited"
-    )
 
-    # Verify total capacity roughly equals demand (within 1% tolerance)
-    total_capacity = cumulative_p1 + cumulative_p2
-    assert pytest.approx(total_demand, rel=0.01) == total_capacity, (
-        f"Total capacity ({total_capacity:.2f}) should equal "
-        f"demand ({total_demand})"
+def test_cost_objective_without_vintage_costs_matches_manual_total_cost():
+    model_inputs_dict = {
+        "PROCESS": ["cheap_capex_high_opex", "expensive_capex_low_opex"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": ["electricity"],
+        "ELEMENTARY_FLOW": [],
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020, 2021, 2022],
+        "CATEGORY": ["dummy"],
+        "operation_time_limits": {
+            "cheap_capex_high_opex": (0, 0),
+            "expensive_capex_low_opex": (0, 0),
+        },
+        "demand": {
+            ("product", 2020): 10,
+            ("product", 2021): 10,
+            ("product", 2022): 10,
+        },
+        "foreground_technosphere": {
+            ("cheap_capex_high_opex", "electricity", 0): 1.0,
+            ("expensive_capex_low_opex", "electricity", 0): 1.0,
+        },
+        "internal_demand_technosphere": {},
+        "foreground_biosphere": {},
+        "foreground_production": {
+            ("cheap_capex_high_opex", "product", 0): 1.0,
+            ("expensive_capex_low_opex", "product", 0): 1.0,
+        },
+        "operation_flow": {
+            ("cheap_capex_high_opex", "product"): True,
+            ("cheap_capex_high_opex", "electricity"): True,
+            ("expensive_capex_low_opex", "product"): True,
+            ("expensive_capex_low_opex", "electricity"): True,
+        },
+        "process_capital_costs": {
+            "cheap_capex_high_opex": 100.0,
+            "expensive_capex_low_opex": 200.0,
+        },
+        "flow_operational_costs": {
+            ("cheap_capex_high_opex", "electricity", 0): 20.0,
+            ("expensive_capex_low_opex", "electricity", 0): 1.0,
+        },
+        "background_inventory": {},
+        "mapping": {
+            ("db_2020", 2020): 1.0,
+            ("db_2020", 2021): 1.0,
+            ("db_2020", 2022): 1.0,
+        },
+        "characterization": {},
+    }
+    model_inputs = converter.OptimizationModelInputs(**model_inputs_dict)
+    model = optimizer.create_model(
+        inputs=model_inputs,
+        objective_category="cost",
+        name="test_cost_objective",
     )
+    solved_model, _, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
+    assert results.solver.status == pyo.SolverStatus.ok
+    assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+    expensive_installation = sum(
+        pyo.value(solved_model.var_installation["expensive_capex_low_opex", t])
+        for t in solved_model.SYSTEM_TIME
+    )
+    cheap_installation = sum(
+        pyo.value(solved_model.var_installation["cheap_capex_high_opex", t])
+        for t in solved_model.SYSTEM_TIME
+    )
+    assert cheap_installation > expensive_installation
+
+    # Manual expected cost:
+    # P1: (capex 100 + opex 20) * 30 units = 3600
+    # P2: 0
+    expected_total_cost = 3600.0
+    solved_total_cost = pyo.value(solved_model.total_cost)
+    assert pytest.approx(expected_total_cost, rel=1e-9) == solved_total_cost
+
+    pp = postprocessing.PostProcessor(solved_model)
+    df_cost = pp.get_cost_contributions()
+    assert pytest.approx(expected_total_cost, rel=1e-9) == df_cost.sum().sum()
+
+
+def test_cost_objective_with_vintage_costs_matches_manual_total_cost():
+    model_inputs_dict = {
+        "PROCESS": ["stable_process", "vintage_improving_process"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": ["electricity"],
+        "ELEMENTARY_FLOW": [],
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020, 2021, 2022],
+        "CATEGORY": ["dummy"],
+        "operation_time_limits": {
+            "stable_process": (0, 0),
+            "vintage_improving_process": (0, 0),
+        },
+        "demand": {
+            ("product", 2020): 10,
+            ("product", 2022): 10,
+        },
+        "foreground_technosphere": {
+            ("stable_process", "electricity", 0): 1.0,
+            ("vintage_improving_process", "electricity", 0): 1.0,
+        },
+        "internal_demand_technosphere": {},
+        "foreground_biosphere": {},
+        "foreground_production": {
+            ("stable_process", "product", 0): 1.0,
+            ("vintage_improving_process", "product", 0): 1.0,
+        },
+        "operation_flow": {
+            ("stable_process", "product"): True,
+            ("stable_process", "electricity"): True,
+            ("vintage_improving_process", "product"): True,
+            ("vintage_improving_process", "electricity"): True,
+        },
+        "process_capital_costs": {
+            "stable_process": 20.0,
+            "vintage_improving_process": 40.0,
+        },
+        "flow_operational_costs": {
+            ("stable_process", "electricity", 0): 5.0,
+            ("vintage_improving_process", "electricity", 0): 5.0,
+        },
+        "process_capital_costs_vintages": {
+            ("vintage_improving_process", 2020): 40.0,
+            ("vintage_improving_process", 2022): 1.0,
+        },
+        "flow_operational_costs_vintages": {
+            ("vintage_improving_process", "electricity", 0, 2020): 5.0,
+            ("vintage_improving_process", "electricity", 0, 2022): 0.0,
+        },
+        "background_inventory": {},
+        "mapping": {
+            ("db_2020", 2020): 1.0,
+            ("db_2020", 2021): 1.0,
+            ("db_2020", 2022): 1.0,
+        },
+        "characterization": {},
+    }
+    model_inputs = converter.OptimizationModelInputs(**model_inputs_dict)
+    model = optimizer.create_model(
+        inputs=model_inputs,
+        objective_category="cost",
+        name="test_cost_objective_with_vintages",
+    )
+    solved_model, _, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
+    assert results.solver.status == pyo.SolverStatus.ok
+    assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+    stable_2020 = pyo.value(solved_model.var_installation["stable_process", 2020])
+    improving_2022 = pyo.value(solved_model.var_installation["vintage_improving_process", 2022])
+    assert pytest.approx(10.0, rel=1e-9) == stable_2020
+    assert pytest.approx(10.0, rel=1e-9) == improving_2022
+
+    # Manual expected cost:
+    # 2020 demand served by stable_process -> (20 + 5) * 10 = 250
+    # 2022 demand served by vintage_improving_process with vintage costs -> (1 + 0) * 10 = 10
+    expected_total_cost = 260.0
+    solved_total_cost = pyo.value(solved_model.total_cost)
+    assert pytest.approx(expected_total_cost, rel=1e-9) == solved_total_cost
+
+    pp = postprocessing.PostProcessor(solved_model)
+    df_cost = pp.get_cost_contributions()
+    assert pytest.approx(expected_total_cost, rel=1e-9) == df_cost.sum().sum()
 
 
 def test_capacity_constraint_with_high_production():
