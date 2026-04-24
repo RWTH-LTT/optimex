@@ -311,7 +311,7 @@ def test_cumulative_process_limits_respected():
     )
 
 
-def test_cost_objective_uses_capital_and_operational_costs():
+def test_cost_objective_without_vintage_costs_matches_manual_total_cost():
     model_inputs_dict = {
         "PROCESS": ["cheap_capex_high_opex", "expensive_capex_low_opex"],
         "PRODUCT": ["product"],
@@ -381,6 +381,94 @@ def test_cost_objective_uses_capital_and_operational_costs():
         for t in solved_model.SYSTEM_TIME
     )
     assert cheap_installation > expensive_installation
+
+    # Manual expected cost:
+    # P1: (capex 100 + opex 20) * 30 units = 3600
+    # P2: 0
+    expected_total_cost = 3600.0
+    solved_total_cost = pyo.value(solved_model.total_cost)
+    assert pytest.approx(expected_total_cost, rel=1e-9) == solved_total_cost
+
+
+def test_cost_objective_with_vintage_costs_matches_manual_total_cost():
+    model_inputs_dict = {
+        "PROCESS": ["stable_process", "vintage_improving_process"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": ["electricity"],
+        "ELEMENTARY_FLOW": [],
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020, 2021, 2022],
+        "CATEGORY": ["dummy"],
+        "operation_time_limits": {
+            "stable_process": (0, 0),
+            "vintage_improving_process": (0, 0),
+        },
+        "demand": {
+            ("product", 2020): 10,
+            ("product", 2022): 10,
+        },
+        "foreground_technosphere": {
+            ("stable_process", "electricity", 0): 1.0,
+            ("vintage_improving_process", "electricity", 0): 1.0,
+        },
+        "internal_demand_technosphere": {},
+        "foreground_biosphere": {},
+        "foreground_production": {
+            ("stable_process", "product", 0): 1.0,
+            ("vintage_improving_process", "product", 0): 1.0,
+        },
+        "operation_flow": {
+            ("stable_process", "product"): True,
+            ("stable_process", "electricity"): True,
+            ("vintage_improving_process", "product"): True,
+            ("vintage_improving_process", "electricity"): True,
+        },
+        "process_capital_costs": {
+            "stable_process": 20.0,
+            "vintage_improving_process": 40.0,
+        },
+        "flow_operational_costs": {
+            ("stable_process", "electricity", 0): 5.0,
+            ("vintage_improving_process", "electricity", 0): 5.0,
+        },
+        "process_capital_costs_vintages": {
+            ("vintage_improving_process", 2020): 40.0,
+            ("vintage_improving_process", 2022): 1.0,
+        },
+        "flow_operational_costs_vintages": {
+            ("vintage_improving_process", "electricity", 0, 2020): 5.0,
+            ("vintage_improving_process", "electricity", 0, 2022): 0.0,
+        },
+        "background_inventory": {},
+        "mapping": {
+            ("db_2020", 2020): 1.0,
+            ("db_2020", 2021): 1.0,
+            ("db_2020", 2022): 1.0,
+        },
+        "characterization": {},
+    }
+    model_inputs = converter.OptimizationModelInputs(**model_inputs_dict)
+    model = optimizer.create_model(
+        inputs=model_inputs,
+        objective_category="cost",
+        name="test_cost_objective_with_vintages",
+    )
+    solved_model, _, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
+    assert results.solver.status == pyo.SolverStatus.ok
+    assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+
+    stable_2020 = pyo.value(solved_model.var_installation["stable_process", 2020])
+    improving_2022 = pyo.value(solved_model.var_installation["vintage_improving_process", 2022])
+    assert pytest.approx(10.0, rel=1e-9) == stable_2020
+    assert pytest.approx(10.0, rel=1e-9) == improving_2022
+
+    # Manual expected cost:
+    # 2020 demand served by stable_process -> (20 + 5) * 10 = 250
+    # 2022 demand served by vintage_improving_process with vintage costs -> (1 + 0) * 10 = 10
+    expected_total_cost = 260.0
+    solved_total_cost = pyo.value(solved_model.total_cost)
+    assert pytest.approx(expected_total_cost, rel=1e-9) == solved_total_cost
 
 
 def test_capacity_constraint_with_high_production():
