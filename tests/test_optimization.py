@@ -1,7 +1,7 @@
 import pyomo.environ as pyo
 import pytest
 
-from optimex import converter, optimizer
+from optimex import converter, optimizer, postprocessing
 
 
 def get_total_operation(model, p, t):
@@ -389,6 +389,10 @@ def test_cost_objective_without_vintage_costs_matches_manual_total_cost():
     solved_total_cost = pyo.value(solved_model.total_cost)
     assert pytest.approx(expected_total_cost, rel=1e-9) == solved_total_cost
 
+    pp = postprocessing.PostProcessor(solved_model)
+    df_cost = pp.get_cost_contributions()
+    assert pytest.approx(expected_total_cost, rel=1e-9) == df_cost.sum().sum()
+
 
 def test_cost_objective_with_vintage_costs_matches_manual_total_cost():
     model_inputs_dict = {
@@ -469,6 +473,10 @@ def test_cost_objective_with_vintage_costs_matches_manual_total_cost():
     expected_total_cost = 260.0
     solved_total_cost = pyo.value(solved_model.total_cost)
     assert pytest.approx(expected_total_cost, rel=1e-9) == solved_total_cost
+
+    pp = postprocessing.PostProcessor(solved_model)
+    df_cost = pp.get_cost_contributions()
+    assert pytest.approx(expected_total_cost, rel=1e-9) == df_cost.sum().sum()
 
 
 def test_capacity_constraint_with_high_production():

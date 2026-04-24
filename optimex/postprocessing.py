@@ -782,6 +782,142 @@ class PostProcessor:
         self.df_demand = df_pivot
         return self.df_demand
 
+    def get_cost_contributions(self) -> pd.DataFrame:
+        """
+        Calculate cost contributions by time, process, and cost type.
+
+        Returns
+        -------
+        pd.DataFrame
+            Pivoted DataFrame indexed by Time with MultiIndex columns
+            (CostType, Process), where CostType is one of
+            {"capital_cost", "operational_cost"}.
+        """
+        if hasattr(self, "df_cost_contributions"):
+            return self.df_cost_contributions
+
+        if not hasattr(self.m, "total_cost"):
+            raise ValueError("Model has no cost objective expressions available.")
+
+        fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
+        process_time_set = list(self.m.PROCESS_TIME)
+        system_time_set = list(self.m.SYSTEM_TIME)
+
+        technosphere_overrides = getattr(self.m, "_technosphere_vintage_overrides", {})
+        biosphere_overrides = getattr(self.m, "_biosphere_vintage_overrides", {})
+        flow_cost_overrides = getattr(self.m, "_flow_operational_costs_vintage_overrides", {})
+        capex_overrides = getattr(self.m, "_process_capital_costs_vintage_overrides", {})
+
+        def in_operation_phase(p, tau):
+            return (
+                pyo.value(self.m.process_operation_start[p])
+                <= tau
+                <= pyo.value(self.m.process_operation_end[p])
+            )
+
+        def flow_value(p, f, tau, vintage):
+            if f in self.m.INTERMEDIATE_FLOW:
+                return technosphere_overrides.get(
+                    (p, f, tau, vintage), pyo.value(self.m.foreground_technosphere[p, f, tau])
+                )
+            if f in self.m.ELEMENTARY_FLOW:
+                return biosphere_overrides.get(
+                    (p, f, tau, vintage), pyo.value(self.m.foreground_biosphere[p, f, tau])
+                )
+            if f in self.m.PRODUCT:
+                return pyo.value(self.m.internal_demand_technosphere[p, f, tau])
+            return 0.0
+
+        def flow_cost(p, f, tau, vintage):
+            return flow_cost_overrides.get(
+                (p, f, tau, vintage), pyo.value(self.m.flow_operational_costs[p, f, tau])
+            )
+
+        def capital_cost(p, vintage):
+            return capex_overrides.get((p, vintage), pyo.value(self.m.process_capital_costs[p]))
+
+        records = []
+        for p in self.m.PROCESS:
+            for t in system_time_set:
+                # Capital cost contribution at installation year t
+                capex = capital_cost(p, t) * pyo.value(self.m.var_installation[p, t])
+
+                # Operational cost contribution at system year t
+                opex = 0.0
+                for f in self.m.FLOW:
+                    op_flag = int(pyo.value(self.m.operation_flow[p, f]))
+                    op_start = pyo.value(self.m.process_operation_start[p])
+                    op_end = pyo.value(self.m.process_operation_end[p])
+                    for tau in process_time_set:
+                        vintage = t - tau
+                        if vintage not in self.m.SYSTEM_TIME:
+                            continue
+
+                        # Installation-dependent part
+                        if not (in_operation_phase(p, tau) and op_flag == 1):
+                            opex += (
+                                flow_cost(p, f, tau, vintage)
+                                * flow_value(p, f, tau, vintage)
+                                * pyo.value(self.m.var_installation[p, vintage])
+                            )
+
+                        # Operation-dependent part
+                        if op_flag == 1 and op_start <= tau <= op_end:
+                            for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
+                                if proc == p and time == t:
+                                    opex += (
+                                        flow_cost(p, f, tau, v)
+                                        * flow_value(p, f, tau, v)
+                                        * pyo.value(self.m.var_operation[p, v, t])
+                                    )
+
+                # Opex terms are built on scaled flow values in the optimizer
+                opex *= fg_scale
+
+                records.append((t, "capital_cost", p, capex))
+                records.append((t, "operational_cost", p, opex))
+
+        df = pd.DataFrame(records, columns=["Time", "CostType", "Process", "Value"])
+        df_pivot = df.pivot(index="Time", columns=["CostType", "Process"], values="Value")
+        self.df_cost_contributions = df_pivot
+        return self.df_cost_contributions
+
+    def plot_cost_contributions(self, df_cost_contributions: pd.DataFrame = None, annotated: bool = True):
+        """
+        Plot cost contribution analysis (by process and by cost type).
+        """
+        if df_cost_contributions is None:
+            df_cost_contributions = self.get_cost_contributions()
+
+        # 1) Total cost by process
+        by_process = df_cost_contributions.groupby(level=1, axis=1).sum()
+        by_process = self._annotate_dataframe(by_process.copy(), annotated)
+        colors_proc = self._get_colors_for_dataframe(by_process)
+
+        # 2) Total cost by type
+        by_type = df_cost_contributions.groupby(level=0, axis=1).sum()
+        by_type = self._annotate_dataframe(by_type.copy(), annotated=False)
+        type_colors = {
+            "capital_cost": self._plot_config["colormap"][0],
+            "operational_cost": self._plot_config["colormap"][3],
+        }
+        colors_type = [type_colors.get(c, self._plot_config["colormap"][0]) for c in by_type.columns]
+
+        fig, axes = self._create_clean_axes(nrows=1, ncols=2, figsize=(12, 4))
+
+        self._plot_stacked_bar(by_process, axes[0], colors_proc, title="Total Cost by Process")
+        axes[0].set_xlabel("Time")
+        axes[0].set_ylabel("Cost")
+        self._add_legend(axes[0], position="right")
+
+        self._plot_stacked_bar(by_type, axes[1], colors_type, title="Cost Type Split")
+        axes[1].set_xlabel("Time")
+        axes[1].set_ylabel("Cost")
+        self._add_legend(axes[1], position="right")
+
+        fig.tight_layout()
+        plt.show()
+
     def plot_impacts(self, df_impacts=None, annotated=True):
         """
         Plot a stacked bar chart for impacts by category and process over time.
