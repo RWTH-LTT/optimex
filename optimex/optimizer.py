@@ -110,6 +110,7 @@ def create_model(
 
     model = pyo.ConcreteModel(name=name)
     model._objective_category = objective_category
+    model._objective_is_cost = objective_category == "cost"
     scaled_inputs, scales = inputs.get_scaled_copy()
     model.scales = scales  # Store scales for denormalization later
 
@@ -211,6 +212,12 @@ def create_model(
     model._production_vintage_overrides = getattr(
         scaled_inputs, 'foreground_production_vintage_overrides', None
     ) or {}
+    model._flow_operational_costs_vintage_overrides = getattr(
+        scaled_inputs, "flow_operational_costs_vintage_overrides", None
+    ) or {}
+    model._process_capital_costs_vintage_overrides = getattr(
+        scaled_inputs, "process_capital_costs_vintage_overrides", None
+    ) or {}
 
     # Precompute sets of (process, flow) pairs that have overrides for O(1) lookup
     model._technosphere_overrides_index = frozenset(
@@ -265,6 +272,22 @@ def create_model(
         doc="operation flow matrix",
         default=0,
         initialize=scaled_inputs.operation_flow,
+    )
+    model.process_capital_costs = pyo.Param(
+        model.PROCESS,
+        within=pyo.Reals,
+        doc="Process-level capital cost per installation unit",
+        default=0,
+        initialize=scaled_inputs.process_capital_costs,
+    )
+    model.flow_operational_costs = pyo.Param(
+        model.PROCESS,
+        model.FLOW,
+        model.PROCESS_TIME,
+        within=pyo.Reals,
+        doc="Flow-level operational cost coefficients",
+        default=0,
+        initialize=scaled_inputs.flow_operational_costs,
     )
     model.process_operation_start = pyo.Param(
         model.PROCESS,
@@ -1006,7 +1029,82 @@ def create_model(
         model.FLOW, rule=cumulative_flow_limit_min_rule
     )
 
+    def get_flow_value_for_tau(model, p, f, tau, vintage):
+        if f in model.INTERMEDIATE_FLOW:
+            key = (p, f, tau, vintage)
+            return model._technosphere_vintage_overrides.get(
+                key, model.foreground_technosphere[p, f, tau]
+            )
+        if f in model.ELEMENTARY_FLOW:
+            key = (p, f, tau, vintage)
+            return model._biosphere_vintage_overrides.get(
+                key, model.foreground_biosphere[p, f, tau]
+            )
+        if f in model.PRODUCT:
+            return model.internal_demand_technosphere[p, f, tau]
+        return 0
+
+    def get_capital_cost_for_vintage(model, p, vintage):
+        return model._process_capital_costs_vintage_overrides.get(
+            (p, vintage), model.process_capital_costs[p]
+        )
+
+    def get_operational_cost_for_vintage(model, p, f, tau, vintage):
+        return model._flow_operational_costs_vintage_overrides.get(
+            (p, f, tau, vintage), model.flow_operational_costs[p, f, tau]
+        )
+
+    model.total_capital_cost = pyo.Expression(
+        expr=sum(
+            get_capital_cost_for_vintage(model, p, t) * model.var_installation[p, t]
+            for p in model.PROCESS
+            for t in model.SYSTEM_TIME
+        )
+    )
+    model.total_operational_cost = pyo.Expression(
+        expr=sum(
+            (
+                sum(
+                    # Installation-dependent contribution for this tau
+                    (
+                        0
+                        if (
+                            in_operation_phase(p, tau)
+                            and pyo.value(model.operation_flow[p, f]) == 1
+                        )
+                        else get_operational_cost_for_vintage(model, p, f, tau, t - tau)
+                        * get_flow_value_for_tau(model, p, f, tau, t - tau)
+                        * model.var_installation[p, t - tau]
+                    )
+                    # Operation-dependent contribution for this tau
+                    + (
+                        sum(
+                            get_operational_cost_for_vintage(model, p, f, tau, v)
+                            *
+                            get_flow_value_for_tau(model, p, f, tau, v)
+                            * model.var_operation[p, v, t]
+                            for (proc, v, time) in model.ACTIVE_VINTAGE_TIME
+                            if proc == p
+                            and time == t
+                            and pyo.value(model.operation_flow[p, f]) == 1
+                            and pyo.value(model.process_operation_start[p]) <= tau <= pyo.value(model.process_operation_end[p])
+                        )
+                    )
+                    for t in model.SYSTEM_TIME
+                    if (t - tau) in model.SYSTEM_TIME
+                )
+            )
+            * model.scales["foreground"]
+            for p in model.PROCESS
+            for f in model.FLOW
+            for tau in model.PROCESS_TIME
+        )
+    )
+    model.total_cost = pyo.Expression(expr=model.total_capital_cost + model.total_operational_cost)
+
     def objective_function(model):
+        if model._objective_is_cost:
+            return model.total_cost
         return model.total_impact[model._objective_category]
 
     model.OBJ = pyo.Objective(sense=pyo.minimize, rule=objective_function)
@@ -1123,7 +1221,10 @@ def solve_model(
     else:
         cat_scale = 1.0
 
-    true_obj = scaled_obj * fg_scale * cat_scale
+    if getattr(model, "_objective_is_cost", False):
+        true_obj = scaled_obj
+    else:
+        true_obj = scaled_obj * fg_scale * cat_scale
     logger.info(f"Objective (scaled): {scaled_obj:.6g}")
     logger.info(f"Objective (real):   {true_obj:.6g}")
 

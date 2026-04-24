@@ -53,11 +53,23 @@ def test_foreground_tensors(mock_lca_data_processor, abstract_system_model_input
     fg_biosphere_expected = expected["foreground_biosphere"]
     fg_production_expected = expected["foreground_production"]
     operation_time_limits_expected = expected["operation_time_limits"]
+    process_capital_costs_expected = expected["process_capital_costs"]
+    flow_operational_costs_expected = expected["flow_operational_costs"]
+    process_capital_costs_vintages_expected = expected["process_capital_costs_vintages"]
+    process_capital_cost_improvements_expected = expected["process_capital_cost_improvements"]
+    flow_operational_costs_vintages_expected = expected["flow_operational_costs_vintages"]
+    flow_operational_cost_improvements_expected = expected["flow_operational_cost_improvements"]
 
     assert_dicts_equal_allowing_zeros(fg_technosphere, fg_technosphere_expected)
     assert_dicts_equal_allowing_zeros(fg_biosphere, fg_biosphere_expected)
     assert_dicts_equal_allowing_zeros(fg_production, fg_production_expected)
     assert operation_time_limits_expected == operation_time_limits
+    assert process_capital_costs_expected == mock_lca_data_processor.process_capital_costs
+    assert flow_operational_costs_expected == mock_lca_data_processor.flow_operational_costs
+    assert process_capital_costs_vintages_expected == mock_lca_data_processor.process_capital_costs_vintages
+    assert process_capital_cost_improvements_expected == mock_lca_data_processor.process_capital_cost_improvements
+    assert flow_operational_costs_vintages_expected == mock_lca_data_processor.flow_operational_costs_vintages
+    assert flow_operational_cost_improvements_expected == mock_lca_data_processor.flow_operational_cost_improvements
 
 
 def test_sequential_inventory_tensor_calculation(

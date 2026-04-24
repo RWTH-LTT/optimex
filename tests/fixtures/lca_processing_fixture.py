@@ -126,6 +126,8 @@ def setup_brightway_databases():
                 "name": "process P1",
                 "location": "somewhere",
                 "type": bd.labels.process_node_default,
+                "capital_cost": 1000,
+                "capital_cost_vintage_improvements": {2020: 1.0, 2030: 0.8},
                 "operation_time_limits": (
                     1,
                     2,
@@ -145,6 +147,8 @@ def setup_brightway_databases():
                         "amount": 27.5,
                         "type": bd.labels.consumption_edge_default,
                         "input": ("db_2020", "I1"),
+                        "cost": 2.0,
+                        "cost_vintage_improvements": {2020: 1.0, 2030: 0.5},
                         "temporal_distribution": TemporalDistribution(
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([1, 0, 0, 0]),
@@ -166,6 +170,8 @@ def setup_brightway_databases():
                 "name": "process P2",
                 "location": "somewhere",
                 "type": bd.labels.process_node_default,
+                "capital_cost": 1500,
+                "capital_cost_vintage_amounts": {2020: 1500, 2030: 1200},
                 "operation_time_limits": (
                     1,
                     2,
@@ -185,6 +191,8 @@ def setup_brightway_databases():
                         "amount": 1,
                         "type": bd.labels.consumption_edge_default,
                         "input": ("db_2020", "I2"),
+                        "cost": 5.0,
+                        "cost_vintage_amounts": {(0, 2020): 5.0, (0, 2030): 3.0},
                         "temporal_distribution": TemporalDistribution(
                             date=np.array(range(4), dtype="timedelta64[Y]"),
                             amount=np.array([1, 0, 0, 0]),

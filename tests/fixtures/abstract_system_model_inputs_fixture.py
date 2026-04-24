@@ -53,6 +53,27 @@ def abstract_system_model_inputs():
             ("P2", "R1"): True,
             ("P2", "CO2"): True,
         },
+        "process_capital_costs": {"P1": 1000, "P2": 1500},
+        "process_capital_cost_improvements": {
+            ("P1", 2020): 1.0,
+            ("P1", 2030): 0.8,
+        },
+        "process_capital_costs_vintages": {
+            ("P2", 2020): 1500,
+            ("P2", 2030): 1200,
+        },
+        "flow_operational_costs": {
+            ("P1", "I1", 0): 2.0,
+            ("P2", "I2", 0): 5.0,
+        },
+        "flow_operational_cost_improvements": {
+            ("P1", "I1", 2020): 1.0,
+            ("P1", "I1", 2030): 0.5,
+        },
+        "flow_operational_costs_vintages": {
+            ("P2", "I2", 0, 2020): 5.0,
+            ("P2", "I2", 0, 2030): 3.0,
+        },
         "background_inventory": {
             ("db_2020", "I1", "CO2"): 1,
             ("db_2020", "I2", "CH4"): 1,

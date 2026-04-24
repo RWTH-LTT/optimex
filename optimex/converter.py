@@ -82,6 +82,47 @@ class OptimizationModelInputs(BaseModel):
             "the operation phase of the process."
         ),
     )
+    process_capital_costs: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Maps process identifiers to capital costs per installation unit.",
+    )
+    process_capital_costs_vintages: Optional[Dict[Tuple[str, int], float]] = Field(
+        None,
+        description=(
+            "Vintage-specific capital costs. Maps (process, vintage_year) to cost. "
+            "Values are linearly interpolated between reference vintages."
+        ),
+    )
+    process_capital_cost_improvements: Optional[Dict[Tuple[str, int], float]] = Field(
+        None,
+        description=(
+            "Vintage-specific scaling factors for process capital costs. "
+            "Maps (process, vintage_year) to multiplier for base capital cost."
+        ),
+    )
+    flow_operational_costs: Dict[Tuple[str, str, int], float] = Field(
+        default_factory=dict,
+        description=(
+            "Maps (process, flow, process_time) to operational cost coefficients "
+            "applied to flow quantities."
+        ),
+    )
+    flow_operational_costs_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+        None,
+        description=(
+            "Vintage-specific operational costs. Maps (process, flow, process_time, "
+            "vintage_year) to cost. Values are linearly interpolated between "
+            "reference vintages."
+        ),
+    )
+    flow_operational_cost_improvements: Optional[Dict[Tuple[str, str, int], float]] = Field(
+        None,
+        description=(
+            "Vintage-specific scaling factors for operational costs. Maps "
+            "(process, flow, vintage_year) to multiplier for base "
+            "flow_operational_costs."
+        ),
+    )
 
     foreground_technosphere: Dict[Tuple[str, str, int], float] = Field(
         ...,
@@ -173,6 +214,16 @@ class OptimizationModelInputs(BaseModel):
     foreground_production_vintage_overrides: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
         None,
         description="[Internal] Computed sparse overrides. Do not set directly.",
+        exclude=True,
+    )
+    process_capital_costs_vintage_overrides: Optional[Dict[Tuple[str, int], float]] = Field(
+        None,
+        description="[Internal] Computed sparse vintage capital costs. Do not set directly.",
+        exclude=True,
+    )
+    flow_operational_costs_vintage_overrides: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+        None,
+        description="[Internal] Computed sparse vintage operational costs. Do not set directly.",
         exclude=True,
     )
 
@@ -441,6 +492,30 @@ class OptimizationModelInputs(BaseModel):
             )
             validate_keys([key[2]], system_times, "characterization system times")
 
+        for key in data.get("process_capital_costs", {}).keys():
+            validate_keys([key], processes, "process_capital_costs processes")
+        if data.get("process_capital_costs_vintages") is not None:
+            for key in data["process_capital_costs_vintages"].keys():
+                validate_keys([key[0]], processes, "process_capital_costs_vintages processes")
+        if data.get("process_capital_cost_improvements") is not None:
+            for key in data["process_capital_cost_improvements"].keys():
+                validate_keys([key[0]], processes, "process_capital_cost_improvements processes")
+
+        all_flows = products | intermediate_flows | elementary_flows
+        for key in data.get("flow_operational_costs", {}).keys():
+            validate_keys([key[0]], processes, "flow_operational_costs processes")
+            validate_keys([key[1]], all_flows, "flow_operational_costs flows")
+            validate_keys([key[2]], process_times, "flow_operational_costs process times")
+        if data.get("flow_operational_costs_vintages") is not None:
+            for key in data["flow_operational_costs_vintages"].keys():
+                validate_keys([key[0]], processes, "flow_operational_costs_vintages processes")
+                validate_keys([key[1]], all_flows, "flow_operational_costs_vintages flows")
+                validate_keys([key[2]], process_times, "flow_operational_costs_vintages process times")
+        if data.get("flow_operational_cost_improvements") is not None:
+            for key in data["flow_operational_cost_improvements"].keys():
+                validate_keys([key[0]], processes, "flow_operational_cost_improvements processes")
+                validate_keys([key[1]], all_flows, "flow_operational_cost_improvements flows")
+
         if data.get("category_impact_limits") is not None:
             for key in data["category_impact_limits"].keys():
                 validate_keys([key[0]], categories, "category_impact_limits categories")
@@ -507,7 +582,6 @@ class OptimizationModelInputs(BaseModel):
                     )
 
         # Flow limits validation - flows can be from PRODUCT, INTERMEDIATE_FLOW, or ELEMENTARY_FLOW
-        all_flows = products | intermediate_flows | elementary_flows
 
         if data.get("flow_limits_max") is not None:
             for key in data["flow_limits_max"].keys():
@@ -542,6 +616,18 @@ class OptimizationModelInputs(BaseModel):
                 inferred_vintages.add(key[3])
         if data.get("vintage_improvements") is not None:
             for key in data["vintage_improvements"].keys():
+                inferred_vintages.add(key[2])
+        if data.get("process_capital_costs_vintages") is not None:
+            for key in data["process_capital_costs_vintages"].keys():
+                inferred_vintages.add(key[1])
+        if data.get("process_capital_cost_improvements") is not None:
+            for key in data["process_capital_cost_improvements"].keys():
+                inferred_vintages.add(key[1])
+        if data.get("flow_operational_costs_vintages") is not None:
+            for key in data["flow_operational_costs_vintages"].keys():
+                inferred_vintages.add(key[3])
+        if data.get("flow_operational_cost_improvements") is not None:
+            for key in data["flow_operational_cost_improvements"].keys():
                 inferred_vintages.add(key[2])
 
         # Set REFERENCE_VINTAGES to the inferred values (sorted list)
@@ -913,6 +999,37 @@ class OptimizationModelInputs(BaseModel):
                 "PRODUCT",
             )
 
+        # Handle process capital costs
+        if self.process_capital_costs_vintages:
+            self.process_capital_costs_vintage_overrides = expand_process_parameter_with_vintages(
+                self.process_capital_costs_vintages,
+                self.REFERENCE_VINTAGES,
+                system_times,
+            )
+        elif self.process_capital_cost_improvements and self.process_capital_costs:
+            self.process_capital_costs_vintage_overrides = expand_process_parameter_with_evolution(
+                self.process_capital_costs,
+                self.process_capital_cost_improvements,
+                self.REFERENCE_VINTAGES,
+                system_times,
+            )
+
+        # Handle operational costs
+        if self.flow_operational_costs_vintages:
+            self.flow_operational_costs_vintage_overrides = expand_foreground_tensor_with_vintages(
+                self.flow_operational_costs_vintages,
+                self.REFERENCE_VINTAGES,
+                system_times,
+            )
+        elif self.flow_operational_cost_improvements and self.flow_operational_costs:
+            self.flow_operational_costs_vintage_overrides = expand_foreground_tensor_with_evolution(
+                self.flow_operational_costs,
+                self.flow_operational_cost_improvements,
+                self.REFERENCE_VINTAGES,
+                system_times,
+                "FLOW",
+            )
+
     def get_scaled_copy(self) -> Tuple["OptimizationModelInputs", Dict[str, Any]]:
         """
         Create a scaled copy of inputs for numerical stability in optimization.
@@ -1103,6 +1220,12 @@ class ModelInputManager:
             "CATEGORY": list(lca_processor.category),
             "demand": lca_processor.demand,
             "operation_flow": lca_processor.operation_flow,
+            "process_capital_costs": lca_processor.process_capital_costs,
+            "process_capital_costs_vintages": lca_processor.process_capital_costs_vintages,
+            "process_capital_cost_improvements": lca_processor.process_capital_cost_improvements,
+            "flow_operational_costs": lca_processor.flow_operational_costs,
+            "flow_operational_costs_vintages": lca_processor.flow_operational_costs_vintages,
+            "flow_operational_cost_improvements": lca_processor.flow_operational_cost_improvements,
             "foreground_technosphere": lca_processor.foreground_technosphere,
             "internal_demand_technosphere": lca_processor.internal_demand_technosphere,
             "foreground_biosphere": lca_processor.foreground_biosphere,
@@ -1281,6 +1404,11 @@ class ModelInputManager:
             tuple_key_fields = [
                 "demand",
                 "operation_flow",
+                "process_capital_costs_vintages",
+                "process_capital_cost_improvements",
+                "flow_operational_costs",
+                "flow_operational_costs_vintages",
+                "flow_operational_cost_improvements",
                 "foreground_technosphere",
                 "internal_demand_technosphere",
                 "foreground_biosphere",
@@ -1355,6 +1483,11 @@ class ModelInputManager:
             tuple_key_fields = [
                 "demand",
                 "operation_flow",
+                "process_capital_costs_vintages",
+                "process_capital_cost_improvements",
+                "flow_operational_costs",
+                "flow_operational_costs_vintages",
+                "flow_operational_cost_improvements",
                 "foreground_technosphere",
                 "internal_demand_technosphere",
                 "foreground_biosphere",
@@ -1617,4 +1750,58 @@ def expand_foreground_tensor_with_evolution(
 
             expanded[(proc, flow, tau, install_year)] = base_value * factor
 
+    return expanded
+
+
+def expand_process_parameter_with_vintages(
+    vintage_values: Dict[Tuple[str, int], float],
+    reference_vintages: List[int],
+    system_times: List[int],
+) -> Dict[Tuple[str, int], float]:
+    """Expand vintage-specific process parameters to all installation years."""
+    if not vintage_values or not reference_vintages:
+        return {}
+
+    vintage_mapping = construct_vintage_mapping(reference_vintages, system_times)
+    grouped: Dict[str, Dict[int, float]] = {}
+    for (proc, vintage), value in vintage_values.items():
+        grouped.setdefault(proc, {})[vintage] = value
+
+    expanded: Dict[Tuple[str, int], float] = {}
+    for proc, values in grouped.items():
+        for install_year in system_times:
+            interpolated_value = 0.0
+            for vintage in reference_vintages:
+                weight = vintage_mapping.get((vintage, install_year), 0.0)
+                if weight > 0 and vintage in values:
+                    interpolated_value += weight * values[vintage]
+            expanded[(proc, install_year)] = interpolated_value
+    return expanded
+
+
+def expand_process_parameter_with_evolution(
+    base_values: Dict[str, float],
+    vintage_improvements: Dict[Tuple[str, int], float],
+    reference_vintages: List[int],
+    system_times: List[int],
+) -> Dict[Tuple[str, int], float]:
+    """Expand process parameters with vintage improvement multipliers."""
+    if not base_values:
+        return {}
+    vintage_mapping = construct_vintage_mapping(reference_vintages, system_times)
+    evolved_processes = set(k[0] for k in vintage_improvements.keys())
+
+    expanded: Dict[Tuple[str, int], float] = {}
+    for proc, base_value in base_values.items():
+        if proc not in evolved_processes:
+            continue
+        for install_year in system_times:
+            factor = 0.0
+            for vintage in reference_vintages:
+                weight = vintage_mapping.get((vintage, install_year), 0.0)
+                if weight > 0:
+                    factor += weight * vintage_improvements.get((proc, vintage), 1.0)
+            if factor == 0.0:
+                factor = 1.0
+            expanded[(proc, install_year)] = base_value * factor
     return expanded
