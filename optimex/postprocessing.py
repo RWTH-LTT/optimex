@@ -891,8 +891,8 @@ class PostProcessor:
 
         # 1) Total cost by process
         by_process = df_cost_contributions.groupby(level=1, axis=1).sum()
-        by_process = self._annotate_dataframe(by_process.copy(), annotated)
         colors_proc = self._get_colors_for_dataframe(by_process)
+        by_process = self._annotate_dataframe(by_process.copy(), annotated)
 
         # 2) Total cost by type
         by_type = df_cost_contributions.groupby(level=0, axis=1).sum()
@@ -903,17 +903,21 @@ class PostProcessor:
         }
         colors_type = [type_colors.get(c, self._plot_config["colormap"][0]) for c in by_type.columns]
 
-        fig, axes = self._create_clean_axes(nrows=1, ncols=2, figsize=(12, 4))
+        base_w, base_h = self._plot_config["figsize"]
+        fig, axes = self._create_clean_axes(
+            nrows=2,
+            ncols=1,
+            figsize=(base_w, base_h * 2.2),
+        )
+        fig.subplots_adjust(hspace=0.65)
 
-        self._plot_stacked_bar(by_process, axes[0], colors_proc, title="Total Cost by Process")
-        axes[0].set_xlabel("Time")
+        self._apply_bar_styles(by_process, axes[0], colors_proc, title="Total Cost by Process")
         axes[0].set_ylabel("Cost")
-        self._add_legend(axes[0], position="right")
+        self._add_legend(axes[0], position="bottom", bbox_to_anchor=(0.5, -0.14))
 
-        self._plot_stacked_bar(by_type, axes[1], colors_type, title="Cost Type Split")
-        axes[1].set_xlabel("Time")
+        self._apply_bar_styles(by_type, axes[1], colors_type, title="Cost Type Split")
         axes[1].set_ylabel("Cost")
-        self._add_legend(axes[1], position="right")
+        self._add_legend(axes[1], position="bottom", bbox_to_anchor=(0.5, -0.14))
 
         fig.tight_layout()
         plt.show()
