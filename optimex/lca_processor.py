@@ -552,6 +552,9 @@ class LCADataProcessor:
                     year for year in years if year not in self._process_time
                 )
                 temporal_factor = temporal_dist.amount
+                active_years = [
+                    year for year, factor in zip(years, temporal_factor) if factor != 0
+                ]
 
                 # Skip if temporal distribution is missing or invalid (empty arrays)
                 if years.size == 0 or temporal_factor.size == 0:
@@ -567,7 +570,7 @@ class LCADataProcessor:
                     self._flow_operational_costs.update(
                         {
                             (act["code"], input_code, year): operational_cost
-                            for year in years
+                            for year in active_years
                         }
                     )
                 cost_vintage_improvements = exc.get("cost_vintage_improvements")
@@ -595,7 +598,7 @@ class LCADataProcessor:
                             continue
 
                         self._reference_vintages.add(vintage_year)
-                        process_times_to_update = [process_time_vintage] if process_time_vintage is not None else years
+                        process_times_to_update = [process_time_vintage] if process_time_vintage is not None else active_years
                         for tau in process_times_to_update:
                             self._flow_operational_costs_vintages[
                                 (act["code"], input_code, tau, vintage_year)

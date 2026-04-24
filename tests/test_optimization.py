@@ -380,7 +380,7 @@ def test_cost_objective_uses_capital_and_operational_costs():
         pyo.value(solved_model.var_installation["cheap_capex_high_opex", t])
         for t in solved_model.SYSTEM_TIME
     )
-    assert expensive_installation > cheap_installation
+    assert cheap_installation > expensive_installation
 
 
 def test_capacity_constraint_with_high_production():
