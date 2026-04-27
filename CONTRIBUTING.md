@@ -40,11 +40,7 @@ Request features on the [Issue Tracker][Issue Tracker].
 
 We recommend using [uv](https://docs.astral.sh/uv/) to manage the project environment.
 
-1. Install `uv` (if needed):
-
-```console
-$ curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+1. Install `uv` (if needed), see [uv installation instructions.](https://docs.astral.sh/uv/getting-started/installation/#installation-methods)
 
 2. Sync the project with development, docs, and testing dependencies:
 
@@ -101,17 +97,11 @@ Your pull request needs to meet the following guidelines for acceptance:
 - Include unit tests.
 - If your changes add functionality, update the documentation accordingly.
 
-To run linting and code formatting checks before committing your change, you can install pre-commit as a Git hook by running one of following commands, depending on your dependencies manager:
+To run linting and code formatting checks before committing your change, install pre-commit hooks and run checks before pushing:
 
 ```console
-# conda or mamba
-$ conda install pre-commit
-```
-
-or
-
-```
-$ pip install pre-commit
+$ uv run pre-commit install
+$ uv run pre-commit run --all-files
 ```
 
 
