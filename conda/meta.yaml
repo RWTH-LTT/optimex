@@ -2,7 +2,8 @@
 # https://docs.conda.io/projects/conda-build/en/latest/resources/define-metadata.html#loading-data-from-other-files
 # Originald documentation implies that the __init__.py only has one line with __version__
 {% set version_match = load_file_regex(load_file="../src/optimex/__init__.py",
-regex_pattern='(?:.*)__version__ = "(.+)"') %}
+regex_pattern='(?:.*)__version__ = "(.+)"',
+from_recipe_dir=True) %}
 {% set version = version_match[1] %}
 # conda build --output-folder ./conda-out/ ./conda/ -c conda-forge -c cmutel -c diepers
 
