@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-04-27
+* Convert to src package layout and use absolute imports
+
 ## [0.4.0] - 2026-04-21
 * Added Vintage-dependent foreground parameters: Model how process characteristics change based on installation year (vintage). Supports two approaches:
   - Explicit values per vintage via `foreground_*_vintages` fields
