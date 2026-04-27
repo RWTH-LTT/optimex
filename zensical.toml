@@ -11,8 +11,8 @@ edit_uri = "edit/main/docs/"
 copyright = "Copyright &copy; 2026 Institute of Technical Thermodynamics, RWTH Aachen University"
 
 nav = [
-  { Home = [
-    { Overview = "index.md" },
+  { Home = "index.md" },
+  { Project = [
     { Changelog = "content/changelog.md" },
     { License = "content/license.md" },
     { Contributing = "content/contributing.md" },
