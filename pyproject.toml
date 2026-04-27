@@ -78,7 +78,11 @@ gurobi = [
 [tool.setuptools]
 license-files = ["LICENSE"]
 include-package-data = true
-packages = ["optimex"]
+package-dir = {"" = "src"}
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools.dynamic]
 version = {attr = "optimex.__version__"}
@@ -91,6 +95,7 @@ norecursedirs = [
     ".tox"
 ]
 testpaths = ["tests/*.py"]
+pythonpath = ["src"]
 
 [tool.flake8]
 # Some sane defaults for the code style checker flake8
