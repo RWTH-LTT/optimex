@@ -25,11 +25,11 @@ jobs:
           auto-activate-base: true
       - name: Publish distribution 📦 to conda channels
         if: startsWith(github.ref, 'refs/tags')
+        shell: bash -l {0}
+        env:
+          ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
         run: |
           conda info
-          conda config --set auto_update_conda False
           conda install -y -q conda-build anaconda-client
-          anaconda login --username ${{ secrets.ANACONDA_USER }} --password ${{ secrets.ANACONDA_PASSWORD }}
-          conda config --set anaconda_upload yes
           cd conda
-          conda build -c conda-forge -c cmutel -c diepers .
+          conda build -c conda-forge -c cmutel -c diepers . --user ${{ secrets.ANACONDA_USER }} --token $ANACONDA_TOKEN
