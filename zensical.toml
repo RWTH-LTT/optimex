@@ -60,6 +60,8 @@ logo = "_static/favicons/favicon.svg"
 favicon = "_static/favicons/favicon.svg"
 features = [
   "announce.dismiss",
+  "content.action.edit",
+  "content.action.view",
   "content.code.copy",
   "content.code.annotate",
   "content.tabs.link",
@@ -92,6 +94,9 @@ primary = "indigo"
 accent = "indigo"
 toggle.icon = "lucide/moon-star"
 toggle.name = "Switch to light mode"
+
+[project.theme.icon]
+repo = "fontawesome/brands/github"
 
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
@@ -144,7 +149,7 @@ enabled = true
 default_handler = "python"
 
 [project.plugins.mkdocstrings.handlers.python]
-paths = ["optimex"]
+paths = ["src/optimex"]
 
 [project.plugins.mkdocstrings.handlers.python.options]
 docstring_style = "numpy"
