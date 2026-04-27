@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field, model_validator
 
+from optimex.html_repr import simple_repr_html
 from optimex.lca_processor import LCADataProcessor
 
 
@@ -333,6 +334,24 @@ class OptimizationModelInputs(BaseModel):
             "specified."
         ),
     )
+
+    def _repr_html_(self) -> str:
+        """Rich HTML representation for Jupyter notebooks."""
+        return simple_repr_html(
+            "OptimizationModelInputs",
+            {
+                "PROCESS": self.PROCESS,
+                "PRODUCT": self.PRODUCT,
+                "SYSTEM_TIME": self.SYSTEM_TIME,
+                "CATEGORY": self.CATEGORY,
+                "demand": self.demand,
+                "foreground_technosphere": self.foreground_technosphere,
+                "foreground_biosphere": self.foreground_biosphere,
+                "foreground_production": self.foreground_production,
+                "background_inventory": self.background_inventory,
+                "characterization": self.characterization,
+            },
+        )
 
     @model_validator(mode="before")
     def check_all_keys(cls, data):
@@ -1083,6 +1102,16 @@ class ModelInputManager:
         previously saved inputs from disk.
         """
         self.model_inputs = None
+
+    def _repr_html_(self) -> str:
+        """Rich HTML representation for Jupyter notebooks."""
+        return simple_repr_html(
+            "ModelInputManager",
+            {
+                "has_model_inputs": self.model_inputs is not None,
+                "model_inputs": self.model_inputs,
+            },
+        )
 
     def parse_from_lca_processor(
         self, lca_processor: LCADataProcessor

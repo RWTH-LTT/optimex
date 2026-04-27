@@ -18,6 +18,8 @@ import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 
+from optimex.html_repr import simple_repr_html
+
 
 class _EngineeringFormatter(mticker.ScalarFormatter):
     """Y-axis formatter that always shows values as X.X with a 10^n offset.
@@ -43,6 +45,15 @@ class _EngineeringFormatter(mticker.ScalarFormatter):
 
     def _set_format(self):
         self.format = "%1.1f"
+
+    def _repr_html_(self) -> str:
+        return simple_repr_html(
+            "_EngineeringFormatter",
+            {
+                "order_of_magnitude": getattr(self, "orderOfMagnitude", None),
+                "format": getattr(self, "format", None),
+            },
+        )
 
 
 class PostProcessor:
@@ -131,6 +142,18 @@ class PostProcessor:
 
         # Pre-populate cache for code -> name lookups (batch load for performance)
         self._name_cache = self._build_name_cache()
+
+    def _repr_html_(self) -> str:
+        return simple_repr_html(
+            "PostProcessor",
+            {
+                "num_processes": len(self.m.PROCESS),
+                "num_products": len(self.m.PRODUCT),
+                "plot_config": self._plot_config,
+                "color_map": self._color_map,
+                "name_cache": self._name_cache,
+            },
+        )
 
     def _create_color_map(self):
         """

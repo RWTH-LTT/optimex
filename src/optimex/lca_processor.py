@@ -25,6 +25,8 @@ from loguru import logger
 from pydantic import BaseModel, Field
 from tqdm import tqdm
 
+from optimex.html_repr import simple_repr_html
+
 
 class MetricEnum(str, Enum):
     """
@@ -38,6 +40,9 @@ class MetricEnum(str, Enum):
     GWP = "GWP"
     CRF = "CRF"
 
+    def _repr_html_(self) -> str:
+        return simple_repr_html("MetricEnum", {"value": self.value})
+
 
 class TemporalResolutionEnum(str, Enum):
     """
@@ -48,6 +53,9 @@ class TemporalResolutionEnum(str, Enum):
     """
 
     year = "year"
+
+    def _repr_html_(self) -> str:
+        return simple_repr_html("TemporalResolutionEnum", {"value": self.value})
 
 
 class CharacterizationMethodConfig(BaseModel):
@@ -89,6 +97,17 @@ class CharacterizationMethodConfig(BaseModel):
         """Indicates whether this is a dynamic characterization method."""
         return self.metric is not None
 
+    def _repr_html_(self) -> str:
+        return simple_repr_html(
+            "CharacterizationMethodConfig",
+            {
+                "category_name": self.category_name,
+                "brightway_method": self.brightway_method,
+                "metric": self.metric,
+                "dynamic": self.dynamic,
+            },
+        )
+
 
 class TemporalConfig(BaseModel):
     """
@@ -124,6 +143,18 @@ class TemporalConfig(BaseModel):
         description="Mapping from database names to their respective reference dates.",
     )
 
+    def _repr_html_(self) -> str:
+        return simple_repr_html(
+            "TemporalConfig",
+            {
+                "start_date": self.start_date,
+                "temporal_resolution": self.temporal_resolution,
+                "time_horizon": self.time_horizon,
+                "fixed_time_horizon": self.fixed_time_horizon,
+                "database_dates": self.database_dates,
+            },
+        )
+
 
 class BackgroundInventoryConfig(BaseModel):
     """
@@ -155,6 +186,17 @@ class BackgroundInventoryConfig(BaseModel):
         "If provided, the tensor will be loaded instead of calculated.",
     )
 
+    def _repr_html_(self) -> str:
+        return simple_repr_html(
+            "BackgroundInventoryConfig",
+            {
+                "cutoff": self.cutoff,
+                "calculation_method": self.calculation_method,
+                "path_to_save": self.path_to_save,
+                "path_to_load": self.path_to_load,
+            },
+        )
+
 
 class LCAConfig(BaseModel):
     """
@@ -177,6 +219,17 @@ class LCAConfig(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
+
+    def _repr_html_(self) -> str:
+        return simple_repr_html(
+            "LCAConfig",
+            {
+                "demand": self.demand,
+                "temporal": self.temporal,
+                "characterization_methods": self.characterization_methods,
+                "background_inventory": self.background_inventory,
+            },
+        )
 
 
 class LCADataProcessor:
@@ -252,6 +305,21 @@ class LCADataProcessor:
         self._prepare_background_inventory()
         self._construct_characterization_tensor()
         self._construct_mapping_matrix()
+
+    def _repr_html_(self) -> str:
+        return simple_repr_html(
+            "LCADataProcessor",
+            {
+                "foreground_db": getattr(self.foreground_db, "name", None),
+                "background_databases": self.background_dbs,
+                "processes": self._processes,
+                "products": self._products,
+                "intermediate_flows": self._intermediate_flows,
+                "elementary_flows": self._elementary_flows,
+                "system_time": self._system_time,
+                "categories": self._category,
+            },
+        )
 
     @property
     def processes(self) -> dict:
