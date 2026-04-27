@@ -44,8 +44,7 @@ jobs:
           conda config --set anaconda_upload no
           
           # 3. Build and Upload in one command using the Token
-          cd conda
-          conda build conda \
+          conda build conda/ \
             -c conda-forge \
             -c cmutel \
             -c diepers \
