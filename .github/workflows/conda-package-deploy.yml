@@ -4,32 +4,50 @@ name: Build and deploy conda packages optimex
 on:
   push:
     branches: [main, develop]
-    tags: '*'
-    paths-ignore:
-      # Don't re-build if we only change README.md Or CHANGES.md
-      - '**.md'
+    tags:
+      - '*'
+  # Allows you to run this manually from the Actions tab
+  workflow_dispatch:
+
 jobs:
   conda-pkg-build:
-    name: build  
-    runs-on: "ubuntu-latest"
-    defaults:
-      run:
-        shell: bash -el {0}
+    name: Build and Publish
+    runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: conda-incubator/setup-miniconda@v3
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: 3.11
           auto-activate-base: true
-      - name: Publish distribution 📦 to conda channels
-        if: startsWith(github.ref, 'refs/tags')
+          # This helps ensure conda-build is ready to go
+          activate-environment: base
+
+      - name: Publish to Anaconda
+        # Only run this step if a tag was pushed
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash -l {0}
         env:
           ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+          ANACONDA_USER: ${{ secrets.ANACONDA_USER }}
         run: |
-          conda info
+          # 1. Install necessary tools silently
           conda install -y -q conda-build anaconda-client
+          
+          # 2. Configure conda to NOT attempt automatic uploads 
+          # (We handle the upload explicitly via the build command)
+          conda config --set anaconda_upload no
+          
+          # 3. Build and Upload in one command using the Token
           cd conda
-          conda build -c conda-forge -c cmutel -c diepers . --user ${{ secrets.ANACONDA_USER }} --token $ANACONDA_TOKEN
+          conda build . \
+            -c conda-forge \
+            -c cmutel \
+            -c diepers \
+            --user "$ANACONDA_USER" \
+            --token "$ANACONDA_TOKEN"
