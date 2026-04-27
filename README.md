@@ -57,7 +57,7 @@ This means:
 - **Familiar workflows** — If you know Brightway, you already know how to build foreground systems for `optimex`.
 - **Reuse existing models** — Temporalize and optimize a product system you have already built for standard LCA.
 
-> **Tip:** you can also directly re-use temporalized product system models made with [`bw_timex`](https://github.com/brightway-lca/bw_timex), our time-explicit *assessment* framework. 
+> **Tip:** you can also directly re-use temporalized product system models made with [`bw_timex`](https://github.com/brightway-lca/bw_timex), our time-explicit *assessment* framework.
 
 For optimization, `optimex` uses [Pyomo](https://www.pyomo.org), a powerful open-source algebraic modeling language for mathematical programming.
 
@@ -86,7 +86,7 @@ Full documentation, tutorials, and examples are available at **[optimex.readthed
 
 ## Contributing
 
-[Open an Issue](https://github.com/TimoDiepers/optimex/issues) or [Send a Pull Request](https://github.com/TimoDiepers/optimex/pulls) — contributions are welcome.
+[Open an Issue](https://github.com/TimoDiepers/optimex/issues) or [Send a Pull Request](https://github.com/TimoDiepers/optimex/pulls) — contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor setup and workflow.
 
 ## License
 

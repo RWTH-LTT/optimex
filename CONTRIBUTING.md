@@ -38,24 +38,22 @@ Request features on the [Issue Tracker][Issue Tracker].
 
 ## How to set up your development environment
 
-Install the package with development requirements:
+We recommend using [uv](https://docs.astral.sh/uv/) to manage the project environment.
+
+1. Install `uv` (if needed), see [uv installation instructions.](https://docs.astral.sh/uv/getting-started/installation/#installation-methods)
+
+2. Sync the project with development, docs, and testing dependencies:
 
 ```console
-$ pip install -e ".[dev]"
+$ uv sync --extra dev --extra docs --extra testing
 ```
 
 ## How to build the documentation locally
 
-Make sure you have installed the `docs` extras of the package.
-
-```console
-$ pip install -e ".[docs]"
-```
-
 Serve the documentation locally with live reload:
 
 ```console
-$ mkdocs serve
+$ uv run zensical serve
 ```
 
 The documentation will be available at `http://127.0.0.1:8000/`.
@@ -63,7 +61,7 @@ The documentation will be available at `http://127.0.0.1:8000/`.
 To build static documentation files:
 
 ```console
-$ mkdocs build
+$ uv run zensical build
 ```
 
 The built documentation will be in the `site` directory.
@@ -74,13 +72,13 @@ The built documentation will be in the `site` directory.
 1. Install the package with development requirements:
 
 ```console
-$ pip install -e ".[testing]"
+$ uv sync --extra testing
 ```
 
 2. Run the full test suite:
 
 ```console
-$ pytest
+$ uv run pytest
 ```
 
 
@@ -99,17 +97,11 @@ Your pull request needs to meet the following guidelines for acceptance:
 - Include unit tests.
 - If your changes add functionality, update the documentation accordingly.
 
-To run linting and code formatting checks before committing your change, you can install pre-commit as a Git hook by running one of following commands, depending on your dependencies manager:
+To run linting and code formatting checks before committing your change, install pre-commit hooks and run checks before pushing:
 
 ```console
-# conda or mamba
-$ conda install pre-commit
-```
-
-or
-
-```
-$ pip install pre-commit
+$ uv run pre-commit install
+$ uv run pre-commit run --all-files
 ```
 
 
