@@ -19,7 +19,7 @@ Intermediate products (hydrogen, captured CO2) create cross-linkages between the
 **Prerequisites**: ecoinvent 3.12 + premise databases must be set up (see `premise_database_setup.ipynb`).
 
 
-![Product system flowchart](data/product_system.svg){ .example-flowchart }
+<div class="example-flowchart"><img src="data/product_system.svg" alt="Product system flowchart"></div>
 
 
 ```python

@@ -87,16 +87,29 @@ def convert(
     body = re.sub(r"src=(['\"])data/", r"src=\1data/", body)
     body = body.replace("](../data/", "](data/")
 
-    # Prefer standard Markdown image syntax over raw HTML for notebook figures
-    # so docs rendering stays consistent across builders.
+    # Preserve the explicit white backdrop around the product-system SVG, as the
+    # source asset itself is transparent and otherwise disappears in dark mode.
     body = re.sub(
         r'<div style="display: flex; background-color: white; border-radius: 15px; '
         r'padding: 10px; width: 100%; max-width: 800px; margin: 0 auto;">\s*'
         r'<img src="(data/[^"]+)" style="border-radius: 15px; width: 100%;">\s*'
         r"</div>",
-        r'![Product system flowchart](\1){ .example-flowchart }',
+        (
+            r'<div class="example-flowchart">'
+            r'<img src="\1" alt="Product system flowchart">'
+            r"</div>"
+        ),
         body,
         flags=re.MULTILINE,
+    )
+    body = re.sub(
+        r"!\[Product system flowchart\]\((data/product_system\.svg)\)\{ \.example-flowchart \}",
+        (
+            r'<div class="example-flowchart">'
+            r'<img src="\1" alt="Product system flowchart">'
+            r"</div>"
+        ),
+        body,
     )
 
     source_path = NOTEBOOK_SOURCE_PATHS.get(stem)
