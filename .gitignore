@@ -147,8 +147,3 @@ notebooks/results
 
 # Generated plot files
 notebooks/plots/figs/*.png
-
-# Generated docs from notebooks (produced by docs/convert_notebooks.py)
-docs/content/examples/*_files/
-docs/content/examples/basic_example.md
-docs/content/examples/methanol_and_iron.md
