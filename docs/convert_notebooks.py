@@ -34,6 +34,11 @@ NOTEBOOK_META: dict[str, tuple[str, list[str]]] = {
     ),
 }
 
+NOTEBOOK_SOURCE_PATHS: dict[str, str] = {
+    "basic_example": "notebooks/basic_example.ipynb",
+    "methanol_and_iron": "notebooks/methanol_and_iron.ipynb",
+}
+
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mK]")
 
 
@@ -76,15 +81,37 @@ def convert(
     )
 
     # Rewrite notebook-local data asset paths for rendered docs pages.
-    # In notebooks, assets live at data/<file>; once rendered under
-    # /content/examples/<page>/ they must resolve via ../data/<file>.
-    body = re.sub(r"src=(['\"])data/", r"src=\1../data/", body)
-    body = body.replace("](data/", "](../data/")
+    # In notebooks, assets live at data/<file>; in the generated docs source,
+    # they should remain relative to the examples section root. The builder
+    # then rebases them correctly for /content/examples/<page>/ URLs.
+    body = re.sub(r"src=(['\"])data/", r"src=\1data/", body)
+    body = body.replace("](../data/", "](data/")
+
+    # Prefer standard Markdown image syntax over raw HTML for notebook figures
+    # so docs rendering stays consistent across builders.
+    body = re.sub(
+        r'<div style="display: flex; background-color: white; border-radius: 15px; '
+        r'padding: 10px; width: 100%; max-width: 800px; margin: 0 auto;">\s*'
+        r'<img src="(data/[^"]+)" style="border-radius: 15px; width: 100%;">\s*'
+        r"</div>",
+        r'![Product system flowchart](\1){ .example-flowchart }',
+        body,
+        flags=re.MULTILINE,
+    )
+
+    source_path = NOTEBOOK_SOURCE_PATHS.get(stem)
+    source_override = ""
+    if source_path:
+        source_override = (
+            "\n"
+            f'<div hidden data-source-edit-path="{source_path}" '
+            f'data-source-view-path="{source_path}"></div>\n'
+        )
 
     # Build YAML front-matter lines
     tags_yaml = "\n".join(f"  - {t}" for t in tags)
     frontmatter = f"---\nicon: {icon}\ntags:\n{tags_yaml}\n---\n\n"
-    body = frontmatter + body
+    body = frontmatter + source_override + body
 
     # Write markdown file
     md_path = output_dir / f"{stem}.md"

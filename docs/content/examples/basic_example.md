@@ -5,6 +5,8 @@ tags:
   - tutorial
 ---
 
+
+<div hidden data-source-edit-path="notebooks/basic_example.ipynb" data-source-view-path="notebooks/basic_example.ipynb"></div>
 # Basic `optimex` Example
 
 This notebook demonstrates the core `optimex` workflow using dummy processes — no external databases required.

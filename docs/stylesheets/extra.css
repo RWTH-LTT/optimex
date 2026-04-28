@@ -65,3 +65,17 @@
     text-transform: none;
     font-weight: normal;
 }
+
+.md-content .md-typeset img {
+  border-radius: 0.4rem;
+}
+
+.example-flowchart {
+  display: block;
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 0.625rem;
+  background: #fff;
+  border-radius: 0.4rem;
+}

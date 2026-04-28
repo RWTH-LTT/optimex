@@ -48,6 +48,7 @@ nav = [
 
 extra_javascript = [
   "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.0/es5/tex-mml-chtml.min.js",
+  "javascripts/source-overrides.js",
 ]
 
 extra_css = [

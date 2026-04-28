@@ -5,6 +5,8 @@ tags:
   - industry
 ---
 
+
+<div hidden data-source-edit-path="notebooks/methanol_and_iron.ipynb" data-source-view-path="notebooks/methanol_and_iron.ipynb"></div>
 # Methanol & Pig Iron Case Study
 
 This notebook demonstrates `optimex` on a realistic case study using **ecoinvent** and **premise** (REMIND-EU SSP2-NDC scenario) databases. It optimizes the transition pathway for two coupled product systems:
@@ -17,9 +19,7 @@ Intermediate products (hydrogen, captured CO2) create cross-linkages between the
 **Prerequisites**: ecoinvent 3.12 + premise databases must be set up (see `premise_database_setup.ipynb`).
 
 
-<div style="display: flex; background-color: white; border-radius: 15px; padding: 10px; width: 100%; max-width: 800px; margin: 0 auto;">
-  <img src="../data/product_system.svg" style="border-radius: 15px; width: 100%;">
-</div>
+![Product system flowchart](data/product_system.svg){ .example-flowchart }
 
 
 ```python
