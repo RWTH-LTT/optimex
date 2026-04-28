@@ -15,7 +15,7 @@ function applyNotebookSourceOverrides() {
     '.md-content__button:not([rel="edit"])[title="View source of this page"]'
   );
   if (viewButton) {
-    viewButton.href = `https://github.com/RWTH-LTT/optimex/raw/main/${viewPath}`;
+    viewButton.href = `https://github.com/RWTH-LTT/optimex/blob/main/${viewPath}`;
   }
 }
 
