@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 # Configuration
-NB_URL = "https://raw.githubusercontent.com/RWTH-LTT/optimex/refs/heads/main/scripts/uv_setup.py"
+NB_URL = "https://raw.githubusercontent.com/RWTH-LTT/optimex/refs/heads/main/notebooks/basic_example.ipynb"
 DEPS = ["optimex"]
 
 def main():
