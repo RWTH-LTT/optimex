@@ -11,6 +11,7 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/optimex?color=%2300549f)](https://pypi.org/project/optimex/)
 [![Conda Version](https://img.shields.io/conda/v/diepers/optimex?label=conda)](https://anaconda.org/diepers/optimex)
 [![Conda - License](https://img.shields.io/conda/l/diepers/optimex)](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
+[![DOI](https://img.shields.io/badge/DOI-10.21203%2Frs.3.rs--9630408%2Fv1-blue)](https://doi.org/10.21203/rs.3.rs-9630408/v1)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/TimoDiepers/optimex/main?urlpath=%2Fdoc%2Ftree%2Fnotebooks%2Fbasic_optimex_example.ipynb)
 
 ## What is optimex?
