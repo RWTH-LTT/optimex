@@ -79,6 +79,12 @@ Full documentation, tutorials, and examples are available at **[optimex.readthed
 
 `optimex` builds on [Pyomo](https://github.com/Pyomo/pyomo) and [Brightway](https://docs.brightway.dev/en/latest). For time-explicit LCA without optimization, see [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
 
+## Citation
+
+If you use `optimex` in your research, please consider citing our preprint:
+
+> Diepers, T., Tautorus, J., Hartmann, J. M., & von der Assen, N. (2026). *A Framework for Time-Explicit Life Cycle Optimization*. Preprint. https://doi.org/10.21203/rs.3.rs-9630408/v1
+
 ## Support
 
 - Timo Diepers ([timo.diepers@ltt.rwth-aachen.de](mailto:timo.diepers@ltt.rwth-aachen.de))

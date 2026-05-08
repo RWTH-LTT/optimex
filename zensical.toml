@@ -57,6 +57,7 @@ extra_css = [
 
 [project.theme]
 language = "en"
+custom_dir = "docs/overrides"
 logo = "_static/favicons/favicon.svg"
 favicon = "_static/favicons/favicon.svg"
 features = [

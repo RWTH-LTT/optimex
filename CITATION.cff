@@ -1,0 +1,52 @@
+cff-version: 1.2.0
+message: "If you use optimex in your research, please cite the preprint below."
+title: "optimex: Time-Explicit Life Cycle Optimization"
+abstract: "Open-source Python package for time-explicit Life Cycle Optimization (LCO). Identifies optimal technology transition pathways while accounting for when emissions occur and how product systems evolve over time."
+type: software
+url: "https://optimex.readthedocs.io"
+repository-code: "https://github.com/RWTH-LTT/optimex"
+license: BSD-3-Clause
+authors:
+  - family-names: Diepers
+    given-names: Timo
+    orcid: "https://orcid.org/0009-0002-8566-8618"
+    affiliation: "RWTH Aachen University"
+  - family-names: Tautorus
+    given-names: Jan
+    orcid: "https://orcid.org/0009-0002-9216-870X"
+    affiliation: "Interdisciplinary Transformation University Austria"
+  - family-names: Hartmann
+    given-names: Jan Marcus
+    orcid: "https://orcid.org/0000-0002-4295-1299"
+    affiliation: "RWTH Aachen University"
+  - family-names: von der Assen
+    given-names: Niklas
+    orcid: "https://orcid.org/0000-0001-8855-9420"
+    affiliation: "RWTH Aachen University"
+preferred-citation:
+  type: article
+  title: "A Framework for Time-Explicit Life Cycle Optimization"
+  year: 2026
+  month: 5
+  doi: "10.21203/rs.3.rs-9630408/v1"
+  url: "https://doi.org/10.21203/rs.3.rs-9630408/v1"
+  publisher:
+    name: "Research Square"
+  notes: "Preprint, In Review"
+  authors:
+    - family-names: Diepers
+      given-names: Timo
+      orcid: "https://orcid.org/0009-0002-8566-8618"
+      affiliation: "RWTH Aachen University"
+    - family-names: Tautorus
+      given-names: Jan
+      orcid: "https://orcid.org/0009-0002-9216-870X"
+      affiliation: "Interdisciplinary Transformation University Austria"
+    - family-names: Hartmann
+      given-names: Jan Marcus
+      orcid: "https://orcid.org/0000-0002-4295-1299"
+      affiliation: "RWTH Aachen University"
+    - family-names: von der Assen
+      given-names: Niklas
+      orcid: "https://orcid.org/0000-0001-8855-9420"
+      affiliation: "RWTH Aachen University"
