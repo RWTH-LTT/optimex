@@ -470,6 +470,22 @@ class OptimizationModelInputs(BaseModel):
             )
             validate_keys([key[2]], system_times, "characterization system times")
 
+        if data.get("intermediate_costs_cap") is not None:
+            for key in data["intermediate_costs_cap"].keys():
+                validate_keys([key[0]], intermediate_flows, "intermediate_costs_cap intermediate flows")
+                validate_keys([key[1]], system_times, "intermediate_costs_cap system times")
+
+        if data.get("intermediate_costs_op") is not None:
+            for key in data["intermediate_costs_op"].keys():
+                validate_keys([key[0]], intermediate_flows, "intermediate_costs_op intermediate flows")
+                validate_keys([key[1]], system_times, "intermediate_costs_op system times")
+
+        if data.get("discount_rate") is not None:
+            if data["discount_rate"] < 0:
+                raise ValueError(
+                    f"discount_rate must be non-negative, got {data['discount_rate']}"
+                )
+
         if data.get("category_impact_limits") is not None:
             for key in data["category_impact_limits"].keys():
                 validate_keys([key[0]], categories, "category_impact_limits categories")
