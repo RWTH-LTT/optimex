@@ -205,6 +205,35 @@ class OptimizationModelInputs(BaseModel):
         ),
     )
 
+    # ==================== Economic Parameters ====================
+    # Prices for first-level background purchases. These are applied only to direct
+    # foreground demands for background products and are not recursively propagated
+    # through the background inventory.
+    # ========================================================================
+
+    intermediate_costs_cap: Optional[Dict[Tuple[str, int], float]] = Field(
+        None,
+        description=(
+            "Time-specific prices for installation-related first-level background "
+            "purchases. Maps (intermediate_flow, system_time) to price per real unit."
+        ),
+    )
+    intermediate_costs_op: Optional[Dict[Tuple[str, int], float]] = Field(
+        None,
+        description=(
+            "Time-specific prices for operation-related first-level background "
+            "purchases. Maps (intermediate_flow, system_time) to price per real unit."
+        ),
+    )
+    discount_rate: Optional[float] = Field(
+        None,
+        description="Discount rate for cost objective, e.g. 0.05 for 5%.",
+    )
+    discount_reference_year: Optional[int] = Field(
+        None,
+        description="Reference year for discounting. Defaults to min(SYSTEM_TIME).",
+    )
+
     category_impact_limits: Optional[Dict[Tuple[str, int], float]] = Field(
         None,
         description=(
