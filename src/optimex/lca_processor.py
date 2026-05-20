@@ -166,6 +166,7 @@ class LCAConfig(BaseModel):
         temporal: Temporal configuration for model time behavior.
         characterization_methods: List of characterization method configurations.
         background_inventory: Configuration for background inventory data calculation.
+        foreground_db_name: Name of the foreground Brightway database.
     """
 
     demand: Dict[bd.backends.proxies.Activity, TemporalDistribution]
@@ -173,6 +174,10 @@ class LCAConfig(BaseModel):
     characterization_methods: List[CharacterizationMethodConfig]
     background_inventory: Optional[BackgroundInventoryConfig] = Field(
         default_factory=BackgroundInventoryConfig
+    )
+    foreground_db_name: str = Field(
+        "foreground",
+        description="Name of the foreground Brightway database.",
     )
 
     class Config:
@@ -190,7 +195,9 @@ class LCADataProcessor:
     calculations and retrieve LCA results.
     """
 
-    def __init__(self, config: LCAConfig) -> None:
+    def __init__(
+        self, config: LCAConfig, foreground_db_name: str = "foreground"
+    ) -> None:
         """
         Initialize the LCADataProcessor with the LCA configuration.
 
@@ -199,11 +206,15 @@ class LCADataProcessor:
         config : LCAConfig
             The configuration object containing all settings for demand,
             temporal parameters, characterization methods, and background inventory.
+        foreground_db_name : str, optional
+            The name of the foreground Brightway database, by default "foreground".
         """
         self.config = config
-        if "foreground" not in bd.databases:
-            raise ValueError("Foreground database 'foreground' is not defined.")
-        self.foreground_db = bd.Database("foreground")
+        if foreground_db_name not in bd.databases:
+            raise ValueError(
+                f"Foreground database '{foreground_db_name}' is not defined."
+            )
+        self.foreground_db = bd.Database(foreground_db_name)
         self.background_dbs = {}
         if config.temporal.database_dates is not None:
             self.background_dbs = {
