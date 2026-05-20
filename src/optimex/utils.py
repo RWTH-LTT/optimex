@@ -2,9 +2,8 @@
 Utility functions for optimex.
 """
 
-import numpy as np
 import bw2data as bd
-
+import numpy as np
 from bw_temporalis import TemporalDistribution, easy_timedelta_distribution
 
 

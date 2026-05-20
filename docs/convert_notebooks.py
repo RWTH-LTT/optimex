@@ -46,9 +46,7 @@ def strip_ansi(text: str) -> str:
     return ANSI_ESCAPE.sub("", text)
 
 
-def convert(
-    notebook_path: Path, output_dir: Path, icon: str, tags: list[str]
-) -> Path:
+def convert(notebook_path: Path, output_dir: Path, icon: str, tags: list[str]) -> Path:
     """Convert *notebook_path* to Markdown in *output_dir*, strip ANSI codes,
     organise images into a <stem>_files/ sub-directory, and inject the Zensical
     icon and tags front-matter.  Returns the output file path."""

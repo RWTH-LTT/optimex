@@ -97,9 +97,12 @@ def test_model_solution_is_optimal(solved_system_model):
     [
         # ("fixed", 3.15417e-10),  # Expected value for the fixed model
         ("flex", 1.9172462799736082e-10),  # Expected value for the flexible model
-        ("constrained", 1.9197314619763485e-10),  # Constrained by limiting P1 to 10 installations (0.13% higher)
+        (
+            "constrained",
+            1.9197314619763485e-10,
+        ),  # Constrained by limiting P1 to 10 installations (0.13% higher)
     ],
-    ids=["flex_result", "constrained_process_limit"], # "fixed_result",
+    ids=["flex_result", "constrained_process_limit"],  # "fixed_result",
 )
 def test_system_model(model_type, expected_value, solved_system_model):
     # Get the model from the solved system model fixture
@@ -233,9 +236,7 @@ def test_cumulative_process_limits_respected():
     # Set cumulative limit on low-emission process (30 units total across all years)
     # Total demand is 50, so P2 must provide at least 20
     cumulative_limit = 30.0
-    model_inputs.cumulative_process_limits_max = {
-        "P1_low_emission": cumulative_limit
-    }
+    model_inputs.cumulative_process_limits_max = {"P1_low_emission": cumulative_limit}
 
     # Create and solve model
     model = optimizer.create_model(
@@ -245,9 +246,7 @@ def test_cumulative_process_limits_respected():
     )
 
     solved_model, objective, results = optimizer.solve_model(
-        model,
-        solver_name="glpk",
-        tee=False
+        model, solver_name="glpk", tee=False
     )
 
     # Verify solution is optimal
@@ -280,9 +279,7 @@ def test_cumulative_process_limits_respected():
 
     # Verify P2 is used to meet remaining demand
     total_demand = sum(model_inputs_dict["demand"].values())
-    assert cumulative_p2 > 0, (
-        "P2 should be used to meet demand when P1 is limited"
-    )
+    assert cumulative_p2 > 0, "P2 should be used to meet demand when P1 is limited"
 
     # Verify total capacity roughly equals demand (within 1% tolerance)
     total_capacity = cumulative_p1 + cumulative_p2
@@ -351,17 +348,17 @@ def test_capacity_constraint_with_high_production():
     # - Need var_operation = 10/5 = 2 to produce 10 units
     # - Capacity = 5.0 * installations, so need 5.0 * inst >= 2
     # - Minimum installations = 2/5 = 0.4
-    assert pytest.approx(0.4, rel=0.01) == inst, (
-        f"With production=5.0, only 0.4 installations needed, got {inst}"
-    )
-    assert pytest.approx(2.0, rel=0.01) == oper, (
-        f"Operation should be 2.0 to produce 10 units, got {oper}"
-    )
+    assert (
+        pytest.approx(0.4, rel=0.01) == inst
+    ), f"With production=5.0, only 0.4 installations needed, got {inst}"
+    assert (
+        pytest.approx(2.0, rel=0.01) == oper
+    ), f"Operation should be 2.0 to produce 10 units, got {oper}"
 
     # Verify emissions (capacity-dependent) = 0.4 * 10 = 4 kg CO2
-    assert pytest.approx(4.0, rel=0.01) == objective, (
-        f"Emissions should be 4.0 kg CO2, got {objective}"
-    )
+    assert (
+        pytest.approx(4.0, rel=0.01) == objective
+    ), f"Emissions should be 4.0 kg CO2, got {objective}"
 
 
 def test_operation_limits_respected():
@@ -450,12 +447,12 @@ def test_operation_limits_respected():
         get_total_operation(solved_baseline, "P2_high_emission", t)
         for t in solved_baseline.SYSTEM_TIME
     )
-    assert pytest.approx(300, rel=0.01) == p1_operation_baseline, (
-        f"Without limits, P1 should handle all demand (300), got {p1_operation_baseline}"
-    )
-    assert pytest.approx(0, abs=0.01) == p2_operation_baseline, (
-        f"Without limits, P2 should not be used, got {p2_operation_baseline}"
-    )
+    assert (
+        pytest.approx(300, rel=0.01) == p1_operation_baseline
+    ), f"Without limits, P1 should handle all demand (300), got {p1_operation_baseline}"
+    assert (
+        pytest.approx(0, abs=0.01) == p2_operation_baseline
+    ), f"Without limits, P2 should not be used, got {p2_operation_baseline}"
 
     # Now solve WITH operation limits on P1
     # Limit P1 operation to 50 per year (150 total), forcing P2 to handle the rest
@@ -486,9 +483,9 @@ def test_operation_limits_respected():
         p2_op = get_total_operation(solved_limited, "P2_high_emission", t)
 
         # P1 should be at the limit (binding constraint)
-        assert p1_op <= operation_limit * 1.001, (
-            f"P1 operation at {t} ({p1_op:.2f}) exceeds limit ({operation_limit})"
-        )
+        assert (
+            p1_op <= operation_limit * 1.001
+        ), f"P1 operation at {t} ({p1_op:.2f}) exceeds limit ({operation_limit})"
         assert p1_op >= operation_limit * 0.999, (
             f"P1 operation at {t} ({p1_op:.2f}) should be at limit ({operation_limit}), "
             "constraint may not be binding"
@@ -496,19 +493,19 @@ def test_operation_limits_respected():
 
         # P2 should handle the remaining demand (100 - 50 = 50)
         expected_p2 = 100 - operation_limit
-        assert pytest.approx(expected_p2, rel=0.01) == p2_op, (
-            f"P2 operation at {t} should be {expected_p2}, got {p2_op}"
-        )
+        assert (
+            pytest.approx(expected_p2, rel=0.01) == p2_op
+        ), f"P2 operation at {t} should be {expected_p2}, got {p2_op}"
 
     # Verify that the limited solution has higher emissions
     # Baseline: 300 * 1 = 300 kg CO2
     # Limited: 150 * 1 + 150 * 10 = 150 + 1500 = 1650 kg CO2
-    assert obj_limited > obj_baseline, (
-        f"Limited objective ({obj_limited}) should be higher than baseline ({obj_baseline})"
-    )
-    assert pytest.approx(1650, rel=0.01) == obj_limited, (
-        f"Limited objective should be 1650 kg CO2, got {obj_limited}"
-    )
+    assert (
+        obj_limited > obj_baseline
+    ), f"Limited objective ({obj_limited}) should be higher than baseline ({obj_baseline})"
+    assert (
+        pytest.approx(1650, rel=0.01) == obj_limited
+    ), f"Limited objective should be 1650 kg CO2, got {obj_limited}"
 
 
 def test_cumulative_category_impact_limit_respected():
@@ -613,12 +610,12 @@ def test_cumulative_category_impact_limit_respected():
         get_total_operation(solved_baseline, "P1_low_co2", t)
         for t in solved_baseline.SYSTEM_TIME
     )
-    assert pytest.approx(50, rel=0.01) == p1_op_baseline, (
-        f"Without limits, P1 should handle all demand (50), got {p1_op_baseline}"
-    )
-    assert pytest.approx(50, rel=0.01) == obj_baseline, (
-        f"Baseline climate impact should be 50, got {obj_baseline}"
-    )
+    assert (
+        pytest.approx(50, rel=0.01) == p1_op_baseline
+    ), f"Without limits, P1 should handle all demand (50), got {p1_op_baseline}"
+    assert (
+        pytest.approx(50, rel=0.01) == obj_baseline
+    ), f"Baseline climate impact should be 50, got {obj_baseline}"
 
     # Calculate baseline land_use impact
     baseline_land_use = (
@@ -626,9 +623,9 @@ def test_cumulative_category_impact_limit_respected():
         * solved_baseline.scales["foreground"]
         * solved_baseline.scales["characterization"]["land_use"]
     )
-    assert pytest.approx(500, rel=0.01) == baseline_land_use, (
-        f"Baseline land_use should be 500, got {baseline_land_use}"
-    )
+    assert (
+        pytest.approx(500, rel=0.01) == baseline_land_use
+    ), f"Baseline land_use should be 500, got {baseline_land_use}"
 
     # Now solve WITH category impact limit on land_use
     # Limit land_use to 200 (requires 30 units from P2)
@@ -640,7 +637,9 @@ def test_cumulative_category_impact_limit_respected():
     land_use_limit = 200.0
 
     model_inputs_limited = converter.OptimizationModelInputs(**model_inputs_dict)
-    model_inputs_limited.cumulative_category_impact_limits = {"land_use": land_use_limit}
+    model_inputs_limited.cumulative_category_impact_limits = {
+        "land_use": land_use_limit
+    }
 
     model_limited = optimizer.create_model(
         inputs=model_inputs_limited,
@@ -663,9 +662,9 @@ def test_cumulative_category_impact_limit_respected():
     )
 
     # Verify land_use respects the limit (within 1% tolerance)
-    assert actual_land_use <= land_use_limit * 1.01, (
-        f"Actual land_use ({actual_land_use:.2f}) exceeds limit ({land_use_limit})"
-    )
+    assert (
+        actual_land_use <= land_use_limit * 1.01
+    ), f"Actual land_use ({actual_land_use:.2f}) exceeds limit ({land_use_limit})"
 
     # Verify land_use is at or near the limit (constraint should be binding)
     assert actual_land_use >= land_use_limit * 0.99, (
@@ -674,17 +673,17 @@ def test_cumulative_category_impact_limit_respected():
     )
 
     # Verify the limited solution has higher climate impact (forced to use P2)
-    assert obj_limited > obj_baseline, (
-        f"Limited objective ({obj_limited}) should be higher than baseline ({obj_baseline})"
-    )
+    assert (
+        obj_limited > obj_baseline
+    ), f"Limited objective ({obj_limited}) should be higher than baseline ({obj_baseline})"
 
     # Expected: P1 uses ~16.67, P2 uses ~33.33
     # With land_use constraint: 10*x + 1*(50-x) <= 200  =>  x <= 150/9 = 16.67
     # Climate impact = 1*x + 5*(50-x) = 250 - 4x = 250 - 4*(150/9) = 183.33
     expected_climate = 250 - 4 * (150 / 9)  # ~183.33
-    assert pytest.approx(expected_climate, rel=0.01) == obj_limited, (
-        f"Limited climate impact should be ~{expected_climate:.1f}, got {obj_limited}"
-    )
+    assert (
+        pytest.approx(expected_climate, rel=0.01) == obj_limited
+    ), f"Limited climate impact should be ~{expected_climate:.1f}, got {obj_limited}"
 
 
 def test_time_specific_category_impact_limit_respected():
@@ -795,14 +794,14 @@ def test_time_specific_category_impact_limit_respected():
     )
 
     # Verify land_use in 2021 respects the limit
-    assert actual_land_use_2021 <= land_use_limit_2021 * 1.01, (
-        f"Land_use in 2021 ({actual_land_use_2021:.2f}) exceeds limit ({land_use_limit_2021})"
-    )
+    assert (
+        actual_land_use_2021 <= land_use_limit_2021 * 1.01
+    ), f"Land_use in 2021 ({actual_land_use_2021:.2f}) exceeds limit ({land_use_limit_2021})"
 
     # Verify constraint is binding (at the limit)
-    assert actual_land_use_2021 >= land_use_limit_2021 * 0.99, (
-        f"Land_use in 2021 ({actual_land_use_2021:.2f}) is below limit, constraint not binding"
-    )
+    assert (
+        actual_land_use_2021 >= land_use_limit_2021 * 0.99
+    ), f"Land_use in 2021 ({actual_land_use_2021:.2f}) is below limit, constraint not binding"
 
     # Verify years without limits are not constrained (should be at 100)
     actual_land_use_2020 = (
@@ -810,18 +809,18 @@ def test_time_specific_category_impact_limit_respected():
         * fg_scale
         * cat_scale
     )
-    assert pytest.approx(100, rel=0.01) == actual_land_use_2020, (
-        f"Land_use in 2020 should be 100 (all P1), got {actual_land_use_2020}"
-    )
+    assert (
+        pytest.approx(100, rel=0.01) == actual_land_use_2020
+    ), f"Land_use in 2020 should be 100 (all P1), got {actual_land_use_2020}"
 
     actual_land_use_2022 = (
         pyo.value(solved_limited.time_specific_impact["land_use", 2022])
         * fg_scale
         * cat_scale
     )
-    assert pytest.approx(100, rel=0.01) == actual_land_use_2022, (
-        f"Land_use in 2022 should be 100 (all P1), got {actual_land_use_2022}"
-    )
+    assert (
+        pytest.approx(100, rel=0.01) == actual_land_use_2022
+    ), f"Land_use in 2022 should be 100 (all P1), got {actual_land_use_2022}"
 
 
 def test_time_specific_flow_limits_respected():
@@ -891,9 +890,9 @@ def test_time_specific_flow_limits_respected():
 
     # Without limits, P1 should handle all demand (lowest emissions)
     # Total CO2 = 30 * 1 = 30 kg
-    assert pytest.approx(30, rel=0.01) == obj_baseline, (
-        f"Baseline emissions should be 30, got {obj_baseline}"
-    )
+    assert (
+        pytest.approx(30, rel=0.01) == obj_baseline
+    ), f"Baseline emissions should be 30, got {obj_baseline}"
 
     # Test 1: MINIMUM flow limit - force higher emissions in 2022
     # Require CO2 >= 20 in 2022 (higher than optimal of 10)
@@ -924,12 +923,14 @@ def test_time_specific_flow_limits_respected():
 
     # Calculate actual CO2 emissions in 2022 (denormalize)
     fg_scale = solved_min.scales["foreground"]
-    actual_co2_2022 = pyo.value(solved_min.total_elementary_flow["CO2", 2022]) * fg_scale
+    actual_co2_2022 = (
+        pyo.value(solved_min.total_elementary_flow["CO2", 2022]) * fg_scale
+    )
 
     # Verify CO2 meets the minimum limit
-    assert actual_co2_2022 >= co2_min_2022 * 0.99, (
-        f"Actual CO2 in 2022 ({actual_co2_2022:.2f}) is below min limit ({co2_min_2022})"
-    )
+    assert (
+        actual_co2_2022 >= co2_min_2022 * 0.99
+    ), f"Actual CO2 in 2022 ({actual_co2_2022:.2f}) is below min limit ({co2_min_2022})"
 
     # Verify constraint is binding (optimizer should hit exactly the min)
     assert actual_co2_2022 <= co2_min_2022 * 1.01, (
@@ -940,9 +941,9 @@ def test_time_specific_flow_limits_respected():
     # Verify objective is higher than baseline (forced suboptimal in one year)
     # Expected: 2 years at 10 kg + 1 year at 20 kg = 40 kg
     expected_obj = 2 * 10 + 20  # 40 kg
-    assert pytest.approx(expected_obj, rel=0.01) == obj_min, (
-        f"Limited objective should be {expected_obj}, got {obj_min}"
-    )
+    assert (
+        pytest.approx(expected_obj, rel=0.01) == obj_min
+    ), f"Limited objective should be {expected_obj}, got {obj_min}"
 
     # Test 2: MAX flow limit below achievable minimum should be infeasible
     # Optimal CO2 per year is 10 kg (all P1). Limit to 8 kg should be infeasible.
@@ -1070,9 +1071,9 @@ def test_cumulative_flow_limits_respected():
     )
 
     # Verify total CO2 meets the minimum limit
-    assert total_co2 >= cumulative_min * 0.99, (
-        f"Total CO2 ({total_co2:.2f}) is below min limit ({cumulative_min})"
-    )
+    assert (
+        total_co2 >= cumulative_min * 0.99
+    ), f"Total CO2 ({total_co2:.2f}) is below min limit ({cumulative_min})"
 
     # Verify constraint is binding
     assert total_co2 <= cumulative_min * 1.01, (
@@ -1081,9 +1082,9 @@ def test_cumulative_flow_limits_respected():
     )
 
     # Verify objective matches expected (50 kg)
-    assert pytest.approx(cumulative_min, rel=0.01) == obj_min, (
-        f"Limited objective should be {cumulative_min}, got {obj_min}"
-    )
+    assert (
+        pytest.approx(cumulative_min, rel=0.01) == obj_min
+    ), f"Limited objective should be {cumulative_min}, got {obj_min}"
 
     # Test 2: MAX cumulative flow limit below achievable should be infeasible
     # Optimal total CO2 is 30 kg. Limit to 25 kg should be infeasible.
@@ -1166,7 +1167,9 @@ def test_product_flow_limits_respected():
     results = solver.solve(model_limited, tee=False)
 
     # Model should be infeasible since demand (10) > production limit (5)
-    assert results.solver.termination_condition == pyo.TerminationCondition.infeasible, (
+    assert (
+        results.solver.termination_condition == pyo.TerminationCondition.infeasible
+    ), (
         f"Model should be infeasible when product limit < demand, "
         f"got {results.solver.termination_condition}"
     )
@@ -1185,7 +1188,9 @@ def test_product_flow_limits_respected():
     results_cum = solver.solve(model_cumulative, tee=False)
 
     # Model should be infeasible since total demand (30) > cumulative limit (25)
-    assert results_cum.solver.termination_condition == pyo.TerminationCondition.infeasible, (
+    assert (
+        results_cum.solver.termination_condition == pyo.TerminationCondition.infeasible
+    ), (
         f"Model should be infeasible when cumulative product limit < total demand, "
         f"got {results_cum.solver.termination_condition}"
     )
@@ -1272,9 +1277,9 @@ def test_cumulative_flow_limits_background_inventory():
         pyo.value(solved_baseline.scaled_inventory["P1", "rare_element", t]) * fg_scale
         for t in solved_baseline.SYSTEM_TIME
     )
-    assert pytest.approx(15, rel=0.01) == total_inventory, (
-        f"Baseline total inventory should be 15, got {total_inventory}"
-    )
+    assert (
+        pytest.approx(15, rel=0.01) == total_inventory
+    ), f"Baseline total inventory should be 15, got {total_inventory}"
 
     # Now test with cumulative limit of 10 (less than the 15 needed)
     # This should make the model infeasible since rare_element comes from background
@@ -1298,7 +1303,9 @@ def test_cumulative_flow_limits_background_inventory():
     # - This generates 15 kg of rare_element from background (30 * 0.5)
     # - But cumulative limit is only 10 kg
     # Therefore, the constraint cannot be satisfied.
-    assert results.solver.termination_condition == pyo.TerminationCondition.infeasible, (
+    assert (
+        results.solver.termination_condition == pyo.TerminationCondition.infeasible
+    ), (
         f"Model should be infeasible when cumulative rare_element limit (10) < "
         f"required background flows (15), got {results.solver.termination_condition}. "
         "This indicates the cumulative flow constraint is not considering background inventory flows."
@@ -1378,7 +1385,9 @@ def test_time_specific_flow_limits_background_inventory():
     solver = pyo.SolverFactory("glpk")
     results = solver.solve(model_limited, tee=False)
 
-    assert results.solver.termination_condition == pyo.TerminationCondition.infeasible, (
+    assert (
+        results.solver.termination_condition == pyo.TerminationCondition.infeasible
+    ), (
         f"Model should be infeasible when time-specific rare_element limit (3) < "
         f"required background flows (5) in 2020, got {results.solver.termination_condition}. "
         "This indicates the time-specific flow constraint is not considering background inventory flows."

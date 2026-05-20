@@ -2,6 +2,7 @@
 Test serialization and deserialization of OptimizationModelInputs with tuple keys,
 and saving/loading of solved Pyomo models.
 """
+
 import json
 import tempfile
 from pathlib import Path
@@ -63,22 +64,25 @@ def test_json_serialization_round_trip(abstract_system_model_inputs):
 
             # Check that all keys are tuples in loaded data
             for key in loaded_dict.keys():
-                assert isinstance(key, tuple), (
-                    f"Key in {field} should be tuple, got {type(key)}"
-                )
+                assert isinstance(
+                    key, tuple
+                ), f"Key in {field} should be tuple, got {type(key)}"
 
             # Check that the dictionaries are equal
-            assert loaded_dict == original_dict, (
-                f"Field {field} not preserved after JSON round-trip"
-            )
+            assert (
+                loaded_dict == original_dict
+            ), f"Field {field} not preserved after JSON round-trip"
 
         # Verify operation_time_limits (values are tuples)
         if original_inputs.operation_time_limits is not None:
             for key, value in loaded_inputs.operation_time_limits.items():
-                assert isinstance(value, tuple), (
-                    f"Value in operation_time_limits should be tuple, got {type(value)}"
-                )
-            assert loaded_inputs.operation_time_limits == original_inputs.operation_time_limits
+                assert isinstance(
+                    value, tuple
+                ), f"Value in operation_time_limits should be tuple, got {type(value)}"
+            assert (
+                loaded_inputs.operation_time_limits
+                == original_inputs.operation_time_limits
+            )
 
         # Verify other fields
         assert loaded_inputs.PROCESS == original_inputs.PROCESS
@@ -151,10 +155,22 @@ def test_json_with_optional_fields():
         loaded_inputs = manager_loaded.load(str(json_path))
 
         # Verify optional fields with tuple keys are preserved
-        assert loaded_inputs.process_deployment_limits_max == original_inputs.process_deployment_limits_max
-        assert loaded_inputs.process_deployment_limits_min == original_inputs.process_deployment_limits_min
-        assert loaded_inputs.process_operation_limits_max == original_inputs.process_operation_limits_max
-        assert loaded_inputs.process_operation_limits_min == original_inputs.process_operation_limits_min
+        assert (
+            loaded_inputs.process_deployment_limits_max
+            == original_inputs.process_deployment_limits_max
+        )
+        assert (
+            loaded_inputs.process_deployment_limits_min
+            == original_inputs.process_deployment_limits_min
+        )
+        assert (
+            loaded_inputs.process_operation_limits_max
+            == original_inputs.process_operation_limits_max
+        )
+        assert (
+            loaded_inputs.process_operation_limits_min
+            == original_inputs.process_operation_limits_min
+        )
         assert loaded_inputs.process_coupling == original_inputs.process_coupling
 
 
@@ -225,15 +241,15 @@ def test_solved_model_save_and_load(solved_system_model):
             for t in model.SYSTEM_TIME:
                 original_install = pyo.value(model.var_installation[p, t])
                 loaded_install = pyo.value(loaded_model.var_installation[p, t])
-                assert abs(original_install - loaded_install) < 1e-9, (
-                    f"Installation value mismatch for ({p}, {t})"
-                )
+                assert (
+                    abs(original_install - loaded_install) < 1e-9
+                ), f"Installation value mismatch for ({p}, {t})"
 
                 original_op = get_total_operation(model, p, t)
                 loaded_op = get_total_operation(loaded_model, p, t)
-                assert abs(original_op - loaded_op) < 1e-9, (
-                    f"Operation value mismatch for ({p}, {t})"
-                )
+                assert (
+                    abs(original_op - loaded_op) < 1e-9
+                ), f"Operation value mismatch for ({p}, {t})"
 
         # Verify the loaded model works with PostProcessor
         pp = PostProcessor(loaded_model)

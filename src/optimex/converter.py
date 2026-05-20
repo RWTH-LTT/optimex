@@ -9,6 +9,7 @@ Key classes:
     - OptimizationModelInputs: Validated data structure for optimization inputs
     - ModelInputManager: Handles conversion, serialization, and constraint overrides
 """
+
 import copy
 import json
 import pickle
@@ -35,7 +36,8 @@ class OptimizationModelInputs(BaseModel):
         ..., description="Identifiers for all foreground products."
     )
     INTERMEDIATE_FLOW: List[str] = Field(
-        ..., description="Identifiers for background products (from background databases)."
+        ...,
+        description="Identifiers for background products (from background databases).",
     )
     ELEMENTARY_FLOW: List[str] = Field(
         ...,
@@ -85,11 +87,15 @@ class OptimizationModelInputs(BaseModel):
 
     foreground_technosphere: Dict[Tuple[str, str, int], float] = Field(
         ...,
-        description=("Maps (process, intermediate_flow, process_time) to background flow amount."),
+        description=(
+            "Maps (process, intermediate_flow, process_time) to background flow amount."
+        ),
     )
     internal_demand_technosphere: Dict[Tuple[str, str, int], float] = Field(
         ...,
-        description=("Maps (process, product, process_time) to internal product consumption amount."),
+        description=(
+            "Maps (process, product, process_time) to internal product consumption amount."
+        ),
     )
     foreground_biosphere: Dict[Tuple[str, str, int], float] = Field(
         ...,
@@ -100,9 +106,7 @@ class OptimizationModelInputs(BaseModel):
     )
     foreground_production: Dict[Tuple[str, str, int], float] = Field(
         ...,
-        description=(
-            "Maps (process, product, process_time) to produced amount."
-        ),
+        description=("Maps (process, product, process_time) to produced amount."),
     )
 
     # ==================== Vintage-Dependent Parameters ====================
@@ -119,7 +123,9 @@ class OptimizationModelInputs(BaseModel):
     # the same (process, flow), the explicit *_vintages values take precedence.
     # ========================================================================
 
-    foreground_technosphere_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+    foreground_technosphere_vintages: Optional[
+        Dict[Tuple[str, str, int, int], float]
+    ] = Field(
         None,
         description=(
             "Vintage-specific technosphere values. Maps (process, intermediate_flow, "
@@ -128,23 +134,27 @@ class OptimizationModelInputs(BaseModel):
             "Takes precedence over vintage_improvements for the same (process, flow)."
         ),
     )
-    foreground_biosphere_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
-        None,
-        description=(
-            "Vintage-specific biosphere values. Maps (process, elementary_flow, "
-            "process_time, vintage_year) to amount. Values are linearly interpolated "
-            "for installation years between specified vintages. "
-            "Takes precedence over vintage_improvements for the same (process, flow)."
-        ),
+    foreground_biosphere_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = (
+        Field(
+            None,
+            description=(
+                "Vintage-specific biosphere values. Maps (process, elementary_flow, "
+                "process_time, vintage_year) to amount. Values are linearly interpolated "
+                "for installation years between specified vintages. "
+                "Takes precedence over vintage_improvements for the same (process, flow)."
+            ),
+        )
     )
-    foreground_production_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
-        None,
-        description=(
-            "Vintage-specific production values. Maps (process, product, process_time, "
-            "vintage_year) to amount. Values are linearly interpolated "
-            "for installation years between specified vintages. "
-            "Takes precedence over vintage_improvements for the same (process, product)."
-        ),
+    foreground_production_vintages: Optional[Dict[Tuple[str, str, int, int], float]] = (
+        Field(
+            None,
+            description=(
+                "Vintage-specific production values. Maps (process, product, process_time, "
+                "vintage_year) to amount. Values are linearly interpolated "
+                "for installation years between specified vintages. "
+                "Takes precedence over vintage_improvements for the same (process, product)."
+            ),
+        )
     )
     vintage_improvements: Optional[Dict[Tuple[str, str, int], float]] = Field(
         None,
@@ -160,17 +170,23 @@ class OptimizationModelInputs(BaseModel):
 
     # Internal: Computed sparse overrides (populated by _expand_vintage_parameters)
     # Users should not set these directly - they are derived from the above inputs.
-    foreground_technosphere_vintage_overrides: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+    foreground_technosphere_vintage_overrides: Optional[
+        Dict[Tuple[str, str, int, int], float]
+    ] = Field(
         None,
         description="[Internal] Computed sparse overrides. Do not set directly.",
         exclude=True,  # Exclude from serialization
     )
-    foreground_biosphere_vintage_overrides: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+    foreground_biosphere_vintage_overrides: Optional[
+        Dict[Tuple[str, str, int, int], float]
+    ] = Field(
         None,
         description="[Internal] Computed sparse overrides. Do not set directly.",
         exclude=True,
     )
-    foreground_production_vintage_overrides: Optional[Dict[Tuple[str, str, int, int], float]] = Field(
+    foreground_production_vintage_overrides: Optional[
+        Dict[Tuple[str, str, int, int], float]
+    ] = Field(
         None,
         description="[Internal] Computed sparse overrides. Do not set directly.",
         exclude=True,
@@ -308,15 +324,13 @@ class OptimizationModelInputs(BaseModel):
     process_operation_limits_max_default: float = Field(
         default=float("inf"),
         description=(
-            "Default upper bound for process operation if not explicitly "
-            "specified."
+            "Default upper bound for process operation if not explicitly " "specified."
         ),
     )
     process_operation_limits_min_default: float = Field(
         default=0.0,
         description=(
-            "Default lower bound for process operation if not explicitly "
-            "specified."
+            "Default lower bound for process operation if not explicitly " "specified."
         ),
     )
     cumulative_process_limits_max_default: float = Field(
@@ -396,9 +410,7 @@ class OptimizationModelInputs(BaseModel):
 
         for key in data.get("internal_demand_technosphere", {}).keys():
             validate_keys([key[0]], processes, "internal_demand_technosphere processes")
-            validate_keys(
-                [key[1]], products, "internal_demand_technosphere products"
-            )
+            validate_keys([key[1]], products, "internal_demand_technosphere products")
             validate_keys(
                 [key[2]], process_times, "internal_demand_technosphere process times"
             )
@@ -412,9 +424,7 @@ class OptimizationModelInputs(BaseModel):
 
         for key in data.get("foreground_production", {}).keys():
             validate_keys([key[0]], processes, "foreground_production processes")
-            validate_keys(
-                [key[1]], products, "foreground_production products"
-            )
+            validate_keys([key[1]], products, "foreground_production products")
             validate_keys(
                 [key[2]], process_times, "foreground_production process times"
             )
@@ -444,7 +454,9 @@ class OptimizationModelInputs(BaseModel):
         if data.get("category_impact_limits") is not None:
             for key in data["category_impact_limits"].keys():
                 validate_keys([key[0]], categories, "category_impact_limits categories")
-                validate_keys([key[1]], system_times, "category_impact_limits system times")
+                validate_keys(
+                    [key[1]], system_times, "category_impact_limits system times"
+                )
 
         if data.get("cumulative_category_impact_limits") is not None:
             for key in data["cumulative_category_impact_limits"].keys():
@@ -452,23 +464,39 @@ class OptimizationModelInputs(BaseModel):
 
         if data.get("process_deployment_limits_max") is not None:
             for key in data["process_deployment_limits_max"].keys():
-                validate_keys([key[0]], processes, "process_deployment_limits_max processes")
-                validate_keys([key[1]], system_times, "process_deployment_limits_max system times")
+                validate_keys(
+                    [key[0]], processes, "process_deployment_limits_max processes"
+                )
+                validate_keys(
+                    [key[1]], system_times, "process_deployment_limits_max system times"
+                )
 
         if data.get("process_deployment_limits_min") is not None:
             for key in data["process_deployment_limits_min"].keys():
-                validate_keys([key[0]], processes, "process_deployment_limits_min processes")
-                validate_keys([key[1]], system_times, "process_deployment_limits_min system times")
+                validate_keys(
+                    [key[0]], processes, "process_deployment_limits_min processes"
+                )
+                validate_keys(
+                    [key[1]], system_times, "process_deployment_limits_min system times"
+                )
 
         if data.get("process_operation_limits_max") is not None:
             for key in data["process_operation_limits_max"].keys():
-                validate_keys([key[0]], processes, "process_operation_limits_max processes")
-                validate_keys([key[1]], system_times, "process_operation_limits_max system times")
+                validate_keys(
+                    [key[0]], processes, "process_operation_limits_max processes"
+                )
+                validate_keys(
+                    [key[1]], system_times, "process_operation_limits_max system times"
+                )
 
         if data.get("process_operation_limits_min") is not None:
             for key in data["process_operation_limits_min"].keys():
-                validate_keys([key[0]], processes, "process_operation_limits_min processes")
-                validate_keys([key[1]], system_times, "process_operation_limits_min system times")
+                validate_keys(
+                    [key[0]], processes, "process_operation_limits_min processes"
+                )
+                validate_keys(
+                    [key[1]], system_times, "process_operation_limits_min system times"
+                )
 
         if data.get("cumulative_process_limits_max") is not None:
             for key in data["cumulative_process_limits_max"].keys():
@@ -560,7 +588,9 @@ class OptimizationModelInputs(BaseModel):
                     "foreground_technosphere_vintages intermediate flows",
                 )
                 validate_keys(
-                    [key[2]], process_times, "foreground_technosphere_vintages process times"
+                    [key[2]],
+                    process_times,
+                    "foreground_technosphere_vintages process times",
                 )
 
         # Validate foreground_biosphere_vintages (processes, flows, process_times)
@@ -575,7 +605,9 @@ class OptimizationModelInputs(BaseModel):
                     "foreground_biosphere_vintages elementary flows",
                 )
                 validate_keys(
-                    [key[2]], process_times, "foreground_biosphere_vintages process times"
+                    [key[2]],
+                    process_times,
+                    "foreground_biosphere_vintages process times",
                 )
 
         # Validate foreground_production_vintages (processes, products, process_times)
@@ -588,7 +620,9 @@ class OptimizationModelInputs(BaseModel):
                     [key[1]], products, "foreground_production_vintages products"
                 )
                 validate_keys(
-                    [key[2]], process_times, "foreground_production_vintages process times"
+                    [key[2]],
+                    process_times,
+                    "foreground_production_vintages process times",
                 )
 
         # Validate vintage_improvements (processes, flows)
@@ -596,9 +630,7 @@ class OptimizationModelInputs(BaseModel):
             for key in data["vintage_improvements"].keys():
                 validate_keys([key[0]], processes, "vintage_improvements processes")
                 # Flow can be intermediate, elementary, or product
-                validate_keys(
-                    [key[1]], all_flows, "vintage_improvements flows"
-                )
+                validate_keys([key[1]], all_flows, "vintage_improvements flows")
 
         return data
 
@@ -625,6 +657,7 @@ class OptimizationModelInputs(BaseModel):
         ValueError
             If any operational flow has varying values across process time.
         """
+
         def check_constancy(
             flow_data: Dict[Tuple[str, str, int], float], flow_type: str
         ):
@@ -696,7 +729,7 @@ class OptimizationModelInputs(BaseModel):
                             f"Cumulative process limit min ({min_val}) > max ({max_val}) "
                             f"for {proc}. Constraints would be infeasible."
                         )
-                    
+
         # Cross-check cumulative vs. per-period limits
         if self.process_deployment_limits_max and self.cumulative_process_limits_min:
             for key in self.cumulative_process_limits_min:
@@ -723,23 +756,31 @@ class OptimizationModelInputs(BaseModel):
                         f"process limit max ({max_cum}) for {key}. Constraints would be infeasible."
                     )
 
-
         # Check defaults consistency
-        if self.process_deployment_limits_min_default > self.process_deployment_limits_max_default:
+        if (
+            self.process_deployment_limits_min_default
+            > self.process_deployment_limits_max_default
+        ):
             raise ValueError(
                 f"process_deployment_limits_min_default ({self.process_deployment_limits_min_default}) > "
                 f"process_deployment_limits_max_default ({self.process_deployment_limits_max_default}). "
                 "Constraints would be infeasible."
             )
 
-        if self.process_operation_limits_min_default > self.process_operation_limits_max_default:
+        if (
+            self.process_operation_limits_min_default
+            > self.process_operation_limits_max_default
+        ):
             raise ValueError(
                 f"process_operation_limits_min_default ({self.process_operation_limits_min_default}) > "
                 f"process_operation_limits_max_default ({self.process_operation_limits_max_default}). "
                 "Constraints would be infeasible."
             )
 
-        if self.cumulative_process_limits_min_default > self.cumulative_process_limits_max_default:
+        if (
+            self.cumulative_process_limits_min_default
+            > self.cumulative_process_limits_max_default
+        ):
             raise ValueError(
                 f"cumulative_process_limits_min_default ({self.cumulative_process_limits_min_default}) > "
                 f"cumulative_process_limits_max_default ({self.cumulative_process_limits_max_default}). "
@@ -791,8 +832,7 @@ class OptimizationModelInputs(BaseModel):
         if self.flow_limits_min and self.cumulative_flow_limits_max:
             for flow in self.cumulative_flow_limits_max:
                 total_min = sum(
-                    self.flow_limits_min.get((flow, t), 0.0)
-                    for t in self.SYSTEM_TIME
+                    self.flow_limits_min.get((flow, t), 0.0) for t in self.SYSTEM_TIME
                 )
                 max_cum = self.cumulative_flow_limits_max[flow]
                 if total_min > max_cum:
@@ -866,51 +906,63 @@ class OptimizationModelInputs(BaseModel):
 
         # Handle foreground_technosphere - only create overrides if vintage data exists
         if self.foreground_technosphere_vintages:
-            self.foreground_technosphere_vintage_overrides = expand_foreground_tensor_with_vintages(
-                self.foreground_technosphere_vintages,
-                self.REFERENCE_VINTAGES,
-                system_times,
+            self.foreground_technosphere_vintage_overrides = (
+                expand_foreground_tensor_with_vintages(
+                    self.foreground_technosphere_vintages,
+                    self.REFERENCE_VINTAGES,
+                    system_times,
+                )
             )
         elif self.vintage_improvements and self.foreground_technosphere:
-            self.foreground_technosphere_vintage_overrides = expand_foreground_tensor_with_evolution(
-                self.foreground_technosphere,
-                self.vintage_improvements,
-                self.REFERENCE_VINTAGES,
-                system_times,
-                "INTERMEDIATE_FLOW",
+            self.foreground_technosphere_vintage_overrides = (
+                expand_foreground_tensor_with_evolution(
+                    self.foreground_technosphere,
+                    self.vintage_improvements,
+                    self.REFERENCE_VINTAGES,
+                    system_times,
+                    "INTERMEDIATE_FLOW",
+                )
             )
         # else: no overrides, use base 3D tensor directly
 
         # Handle foreground_biosphere
         if self.foreground_biosphere_vintages:
-            self.foreground_biosphere_vintage_overrides = expand_foreground_tensor_with_vintages(
-                self.foreground_biosphere_vintages,
-                self.REFERENCE_VINTAGES,
-                system_times,
+            self.foreground_biosphere_vintage_overrides = (
+                expand_foreground_tensor_with_vintages(
+                    self.foreground_biosphere_vintages,
+                    self.REFERENCE_VINTAGES,
+                    system_times,
+                )
             )
         elif self.vintage_improvements and self.foreground_biosphere:
-            self.foreground_biosphere_vintage_overrides = expand_foreground_tensor_with_evolution(
-                self.foreground_biosphere,
-                self.vintage_improvements,
-                self.REFERENCE_VINTAGES,
-                system_times,
-                "ELEMENTARY_FLOW",
+            self.foreground_biosphere_vintage_overrides = (
+                expand_foreground_tensor_with_evolution(
+                    self.foreground_biosphere,
+                    self.vintage_improvements,
+                    self.REFERENCE_VINTAGES,
+                    system_times,
+                    "ELEMENTARY_FLOW",
+                )
             )
 
         # Handle foreground_production
         if self.foreground_production_vintages:
-            self.foreground_production_vintage_overrides = expand_foreground_tensor_with_vintages(
-                self.foreground_production_vintages,
-                self.REFERENCE_VINTAGES,
-                system_times,
+            self.foreground_production_vintage_overrides = (
+                expand_foreground_tensor_with_vintages(
+                    self.foreground_production_vintages,
+                    self.REFERENCE_VINTAGES,
+                    system_times,
+                )
             )
         elif self.vintage_improvements and self.foreground_production:
-            self.foreground_production_vintage_overrides = expand_foreground_tensor_with_evolution(
-                self.foreground_production,
-                self.vintage_improvements,
-                self.REFERENCE_VINTAGES,
-                system_times,
-                "PRODUCT",
+            self.foreground_production_vintage_overrides = (
+                expand_foreground_tensor_with_evolution(
+                    self.foreground_production,
+                    self.vintage_improvements,
+                    self.REFERENCE_VINTAGES,
+                    system_times,
+                    "PRODUCT",
+                )
             )
 
     def get_scaled_copy(self) -> Tuple["OptimizationModelInputs", Dict[str, Any]]:
@@ -1308,7 +1360,10 @@ class ModelInputManager:
                     data[field] = self._serialize_dict_with_tuple_keys(data[field])
 
             # Special handling for operation_time_limits (values are tuples, not keys)
-            if "operation_time_limits" in data and data["operation_time_limits"] is not None:
+            if (
+                "operation_time_limits" in data
+                and data["operation_time_limits"] is not None
+            ):
                 data["operation_time_limits"] = {
                     k: list(v) for k, v in data["operation_time_limits"].items()
                 }
@@ -1382,7 +1437,10 @@ class ModelInputManager:
                     data[field] = self._deserialize_dict_with_tuple_keys(data[field])
 
             # Special handling for operation_time_limits (convert lists back to tuples)
-            if "operation_time_limits" in data and data["operation_time_limits"] is not None:
+            if (
+                "operation_time_limits" in data
+                and data["operation_time_limits"] is not None
+            ):
                 data["operation_time_limits"] = {
                     k: tuple(v) for k, v in data["operation_time_limits"].items()
                 }
