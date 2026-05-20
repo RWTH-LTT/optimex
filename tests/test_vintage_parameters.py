@@ -28,12 +28,7 @@ class TestVintageDataModelExtensions:
             "SYSTEM_TIME": [2020, 2021, 2022, 2023, 2024, 2025],
             "CATEGORY": ["climate_change"],
             "operation_time_limits": {"EV": (1, 2)},
-            "demand": {
-                ("vkm", 2022): 100,
-                ("vkm", 2023): 100,
-                ("vkm", 2024): 100,
-                ("vkm", 2025): 100,
-            },
+            "demand": {("vkm", 2022): 100, ("vkm", 2023): 100, ("vkm", 2024): 100, ("vkm", 2025): 100},
             "foreground_technosphere": {
                 ("EV", "electricity", 0): 0,
                 ("EV", "electricity", 1): 50,
@@ -115,12 +110,8 @@ class TestVintageDataModelExtensions:
         }
         model = converter.OptimizationModelInputs(**base_model_inputs)
         assert ("EV", "electricity", 1, 2020) in model.foreground_technosphere_vintages
-        assert (
-            model.foreground_technosphere_vintages[("EV", "electricity", 1, 2020)] == 60
-        )
-        assert (
-            model.foreground_technosphere_vintages[("EV", "electricity", 1, 2025)] == 40
-        )
+        assert model.foreground_technosphere_vintages[("EV", "electricity", 1, 2020)] == 60
+        assert model.foreground_technosphere_vintages[("EV", "electricity", 1, 2025)] == 40
         assert model.REFERENCE_VINTAGES == [2020, 2025]
 
     def test_model_accepts_foreground_biosphere_vintages(self, base_model_inputs):
@@ -182,9 +173,7 @@ class TestVintageDataModelExtensions:
         with pytest.raises(ValueError, match="Invalid keys.*nonexistent_flow"):
             converter.OptimizationModelInputs(**base_model_inputs)
 
-    def test_validation_process_time_in_vintage_tensors_must_exist(
-        self, base_model_inputs
-    ):
+    def test_validation_process_time_in_vintage_tensors_must_exist(self, base_model_inputs):
         """Test that process times in vintage tensors must exist in PROCESS_TIME."""
         base_model_inputs["foreground_technosphere_vintages"] = {
             ("EV", "electricity", 99, 2020): 60,  # 99 not in PROCESS_TIME
@@ -307,9 +296,7 @@ class TestEffectiveForegroundTensors:
             },
             "operation_flow": {("EV", "vkm"): True, ("EV", "electricity"): True},
             "background_inventory": {("db_2020", "electricity", "CO2"): 0.5},
-            "mapping": {
-                ("db_2020", t): 1.0 for t in [2020, 2021, 2022, 2023, 2024, 2025]
-            },
+            "mapping": {("db_2020", t): 1.0 for t in [2020, 2021, 2022, 2023, 2024, 2025]},
             "characterization": {
                 ("climate_change", "CO2", t): 1.0
                 for t in [2020, 2021, 2022, 2023, 2024, 2025]
@@ -333,9 +320,7 @@ class TestEffectiveForegroundTensors:
         assert effective[("EV", "electricity", 1, 2025)] == 40
         assert effective[("EV", "electricity", 2, 2025)] == 40
 
-    def test_expand_foreground_technosphere_interpolated_vintage(
-        self, vintage_model_inputs
-    ):
+    def test_expand_foreground_technosphere_interpolated_vintage(self, vintage_model_inputs):
         """Test that effective tensor interpolates between reference vintages."""
         model = converter.OptimizationModelInputs(**vintage_model_inputs)
         effective = converter.expand_foreground_tensor_with_vintages(
@@ -434,9 +419,7 @@ class TestOptimizerWithVintages:
             },
             "operation_flow": {("EV", "vkm"): True, ("EV", "electricity"): True},
             "background_inventory": {("db_2020", "electricity", "CO2"): 0.5},
-            "mapping": {
-                ("db_2020", t): 1.0 for t in [2020, 2021, 2022, 2023, 2024, 2025]
-            },
+            "mapping": {("db_2020", t): 1.0 for t in [2020, 2021, 2022, 2023, 2024, 2025]},
             "characterization": {
                 ("climate_change", "CO2", t): 1.0
                 for t in [2020, 2021, 2022, 2023, 2024, 2025]
@@ -465,9 +448,7 @@ class TestOptimizerWithVintages:
             objective_category="climate_change",
             name="test_vintage_model",
         )
-        solved_model, obj, results = optimizer.solve_model(
-            model, solver_name="glpk", tee=False
-        )
+        solved_model, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
         assert results.solver.termination_condition.name == "optimal"
 
     def test_later_vintage_has_lower_impact(self, vintage_optimization_inputs):
@@ -480,9 +461,8 @@ class TestOptimizerWithVintages:
 
         So the optimizer should prefer later installations if given the choice.
         """
-        import pyomo.environ as pyo
-
         from optimex import optimizer
+        import pyomo.environ as pyo
 
         model_inputs = converter.OptimizationModelInputs(**vintage_optimization_inputs)
         model = optimizer.create_model(
@@ -490,9 +470,7 @@ class TestOptimizerWithVintages:
             objective_category="climate_change",
             name="test_vintage_model",
         )
-        solved_model, obj, results = optimizer.solve_model(
-            model, solver_name="glpk", tee=False
-        )
+        solved_model, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
 
         # Get total installations at different years
         # Earlier installations (2020-2022) should have higher per-unit impact
@@ -501,10 +479,12 @@ class TestOptimizerWithVintages:
         # Check that the model accounts for vintage differences
         # The exact behavior depends on demand timing and process lifetimes
         early_installations = sum(
-            pyo.value(solved_model.var_installation["EV", t]) for t in [2020, 2021]
+            pyo.value(solved_model.var_installation["EV", t])
+            for t in [2020, 2021]
         )
         late_installations = sum(
-            pyo.value(solved_model.var_installation["EV", t]) for t in [2023, 2024]
+            pyo.value(solved_model.var_installation["EV", t])
+            for t in [2023, 2024]
         )
 
         # Both should be non-negative (basic sanity check)
@@ -522,9 +502,8 @@ class TestOptimizerWithVintages:
         Optimizer should prefer installing in 2024 (gets 2025-interpolated efficiency)
         over installing earlier (gets worse efficiency).
         """
-        import pyomo.environ as pyo
-
         from optimex import optimizer
+        import pyomo.environ as pyo
 
         inputs = {
             "PROCESS": ["Plant"],
@@ -542,7 +521,7 @@ class TestOptimizerWithVintages:
             "foreground_technosphere": {},
             "foreground_technosphere_vintages": {
                 ("Plant", "electricity", 1, 2020): 100,  # Inefficient
-                ("Plant", "electricity", 1, 2025): 50,  # Efficient
+                ("Plant", "electricity", 1, 2025): 50,   # Efficient
             },
             "internal_demand_technosphere": {},
             "foreground_biosphere": {("Plant", "CO2", 0): 0},
@@ -551,10 +530,7 @@ class TestOptimizerWithVintages:
                 ("Plant", "output", 1, 2020): 100,
                 ("Plant", "output", 1, 2025): 100,
             },
-            "operation_flow": {
-                ("Plant", "output"): True,
-                ("Plant", "electricity"): True,
-            },
+            "operation_flow": {("Plant", "output"): True, ("Plant", "electricity"): True},
             "background_inventory": {("grid", "electricity", "CO2"): 1.0},
             "mapping": {("grid", t): 1.0 for t in range(2020, 2026)},
             "characterization": {("GWP", "CO2", t): 1.0 for t in range(2020, 2026)},
@@ -564,9 +540,7 @@ class TestOptimizerWithVintages:
         model = optimizer.create_model(
             inputs=model_inputs, objective_category="GWP", name="efficiency_test"
         )
-        solved, obj, results = optimizer.solve_model(
-            model, solver_name="glpk", tee=False
-        )
+        solved, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
         assert results.solver.termination_condition.name == "optimal"
 
         # Check installation pattern - should prefer later years (more efficient)
@@ -578,12 +552,9 @@ class TestOptimizerWithVintages:
         # 2024 vintage interpolates to 90% of way to 2025 efficiency: 100 - 0.8*(100-50) = 60
         # Earlier vintages are progressively worse
         # Optimizer should install as late as possible (2024)
-        assert (
-            installations[2024] > 0
-        ), "Optimizer should install in 2024 (most efficient vintage)"
-        assert sum(installations[t] for t in [2020, 2021, 2022]) == pytest.approx(
-            0, abs=1e-6
-        ), "Optimizer should avoid early installations (inefficient vintages)"
+        assert installations[2024] > 0, "Optimizer should install in 2024 (most efficient vintage)"
+        assert sum(installations[t] for t in [2020, 2021, 2022]) == pytest.approx(0, abs=1e-6), \
+            "Optimizer should avoid early installations (inefficient vintages)"
 
 
 class TestTechnologyEvolutionIntegration:
@@ -595,9 +566,8 @@ class TestTechnologyEvolutionIntegration:
 
         Same scenario as above but using evolution factors instead of explicit vintages.
         """
-        import pyomo.environ as pyo
-
         from optimex import optimizer
+        import pyomo.environ as pyo
 
         inputs = {
             "PROCESS": ["Plant"],
@@ -627,10 +597,7 @@ class TestTechnologyEvolutionIntegration:
                 ("Plant", "output", 0): 0,
                 ("Plant", "output", 1): 100,
             },
-            "operation_flow": {
-                ("Plant", "output"): True,
-                ("Plant", "electricity"): True,
-            },
+            "operation_flow": {("Plant", "output"): True, ("Plant", "electricity"): True},
             "background_inventory": {("grid", "electricity", "CO2"): 1.0},
             "mapping": {("grid", t): 1.0 for t in range(2020, 2026)},
             "characterization": {("GWP", "CO2", t): 1.0 for t in range(2020, 2026)},
@@ -640,9 +607,7 @@ class TestTechnologyEvolutionIntegration:
         model = optimizer.create_model(
             inputs=model_inputs, objective_category="GWP", name="evolution_test"
         )
-        solved, obj, results = optimizer.solve_model(
-            model, solver_name="glpk", tee=False
-        )
+        solved, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
         assert results.solver.termination_condition.name == "optimal"
 
         # Should prefer later installation (lower electricity consumption via evolution factor)
@@ -650,9 +615,7 @@ class TestTechnologyEvolutionIntegration:
         early_install = sum(
             pyo.value(solved.var_installation["Plant", t]) for t in [2020, 2021, 2022]
         )
-        assert (
-            late_install > early_install
-        ), "Optimizer should prefer later vintages with evolution factors"
+        assert late_install > early_install, "Optimizer should prefer later vintages with evolution factors"
 
 
 class TestMixedVintageScenarios:
@@ -667,9 +630,8 @@ class TestMixedVintageScenarios:
 
         Both should work correctly in the same model.
         """
-        import pyomo.environ as pyo
-
         from optimex import optimizer
+        import pyomo.environ as pyo
 
         inputs = {
             "PROCESS": ["ProcessA", "ProcessB"],
@@ -693,26 +655,20 @@ class TestMixedVintageScenarios:
             # ProcessA: vintage-dependent (4D sparse override)
             "foreground_technosphere_vintages": {
                 ("ProcessA", "electricity", 1, 2020): 100,  # Inefficient
-                ("ProcessA", "electricity", 1, 2025): 50,  # Efficient
+                ("ProcessA", "electricity", 1, 2025): 50,   # Efficient
             },
             "internal_demand_technosphere": {},
             "foreground_biosphere": {
-                ("ProcessA", "CO2", 0): 0,
-                ("ProcessA", "CO2", 1): 0,
-                ("ProcessB", "CO2", 0): 0,
-                ("ProcessB", "CO2", 1): 0,
+                ("ProcessA", "CO2", 0): 0, ("ProcessA", "CO2", 1): 0,
+                ("ProcessB", "CO2", 0): 0, ("ProcessB", "CO2", 1): 0,
             },
             "foreground_production": {
-                ("ProcessA", "output", 0): 0,
-                ("ProcessA", "output", 1): 100,
-                ("ProcessB", "output", 0): 0,
-                ("ProcessB", "output", 1): 100,
+                ("ProcessA", "output", 0): 0, ("ProcessA", "output", 1): 100,
+                ("ProcessB", "output", 0): 0, ("ProcessB", "output", 1): 100,
             },
             "operation_flow": {
-                ("ProcessA", "output"): True,
-                ("ProcessA", "electricity"): True,
-                ("ProcessB", "output"): True,
-                ("ProcessB", "electricity"): True,
+                ("ProcessA", "output"): True, ("ProcessA", "electricity"): True,
+                ("ProcessB", "output"): True, ("ProcessB", "electricity"): True,
             },
             "background_inventory": {("grid", "electricity", "CO2"): 1.0},
             "mapping": {("grid", t): 1.0 for t in range(2020, 2026)},
@@ -723,9 +679,7 @@ class TestMixedVintageScenarios:
         model = optimizer.create_model(
             inputs=model_inputs, objective_category="GWP", name="mixed_test"
         )
-        solved, obj, results = optimizer.solve_model(
-            model, solver_name="glpk", tee=False
-        )
+        solved, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
         assert results.solver.termination_condition.name == "optimal"
 
         # Model should solve and make sensible choices
@@ -818,16 +772,13 @@ class TestVintageResultsValidation:
         model = optimizer.create_model(
             inputs=model_inputs, objective_category="GWP", name="baseline"
         )
-        solved, obj, results = optimizer.solve_model(
-            model, solver_name="glpk", tee=False
-        )
+        solved, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
 
         assert results.solver.termination_condition.name == "optimal"
 
         # Check objective (total impact)
-        assert obj == pytest.approx(
-            100.0, rel=1e-5
-        ), "Baseline impact should be 100 kg CO2 (100 elec * 1 kg/elec * 1.0 CF)"
+        assert obj == pytest.approx(100.0, rel=1e-5), \
+            "Baseline impact should be 100 kg CO2 (100 elec * 1 kg/elec * 1.0 CF)"
 
     def test_vintage_50_percent_improvement_halves_impact(self, simple_system_base):
         """
@@ -855,16 +806,13 @@ class TestVintageResultsValidation:
         model = optimizer.create_model(
             inputs=model_inputs, objective_category="GWP", name="with_evolution"
         )
-        solved, obj, results = optimizer.solve_model(
-            model, solver_name="glpk", tee=False
-        )
+        solved, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
 
         assert results.solver.termination_condition.name == "optimal"
 
         # Check objective is halved (50% efficiency = 50% impact)
-        assert obj == pytest.approx(
-            50.0, rel=1e-5
-        ), "Impact should be 50 kg CO2 (50% of baseline due to efficiency improvement)"
+        assert obj == pytest.approx(50.0, rel=1e-5), \
+            "Impact should be 50 kg CO2 (50% of baseline due to efficiency improvement)"
 
     def test_vintage_explicit_values_affect_optimization(self):
         """
@@ -917,18 +865,15 @@ class TestVintageResultsValidation:
         model = optimizer.create_model(
             inputs=model_inputs, objective_category="GWP", name="explicit_vintages"
         )
-        solved, obj, results = optimizer.solve_model(
-            model, solver_name="glpk", tee=False
-        )
+        solved, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
 
         assert results.solver.termination_condition.name == "optimal"
 
         # Installing in 2021 (for operation in 2022) with interpolated 2021 vintage:
         # Interpolated electricity = (100 + 50) / 2 = 75
         # 75 electricity * 1 kg CO2/elec = 75 kg CO2
-        assert obj == pytest.approx(
-            75.0, rel=1e-5
-        ), "Impact should be 75 kg CO2 (interpolated 2021 vintage efficiency)"
+        assert obj == pytest.approx(75.0, rel=1e-5), \
+            "Impact should be 75 kg CO2 (interpolated 2021 vintage efficiency)"
 
     def test_compare_baseline_vs_improved_full_workflow(self, simple_system_base):
         """
@@ -966,9 +911,8 @@ class TestVintageResultsValidation:
         improvement_ratio = improved_obj / baseline_obj
         expected_ratio = 0.7  # 30% improvement means 70% of baseline
 
-        assert improvement_ratio == pytest.approx(
-            expected_ratio, rel=1e-5
-        ), f"Impact ratio should be {expected_ratio}, got {improvement_ratio}"
+        assert improvement_ratio == pytest.approx(expected_ratio, rel=1e-5), \
+            f"Impact ratio should be {expected_ratio}, got {improvement_ratio}"
 
     def test_biosphere_vintage_affects_direct_emissions(self):
         """
@@ -1018,9 +962,7 @@ class TestVintageResultsValidation:
         model_2020 = optimizer.create_model(
             inputs=model_inputs_2020, objective_category="GWP", name="biosphere_2020"
         )
-        _, obj_2020, results_2020 = optimizer.solve_model(
-            model_2020, solver_name="glpk", tee=False
-        )
+        _, obj_2020, results_2020 = optimizer.solve_model(model_2020, solver_name="glpk", tee=False)
         assert results_2020.solver.termination_condition.name == "optimal"
 
         # Test 2022 vintage: demand in 2022 allows 2021 installation (closer to 2022)
@@ -1031,22 +973,20 @@ class TestVintageResultsValidation:
         model_2022 = optimizer.create_model(
             inputs=model_inputs_2022, objective_category="GWP", name="biosphere_2022"
         )
-        _, obj_2022, results_2022 = optimizer.solve_model(
-            model_2022, solver_name="glpk", tee=False
-        )
+        _, obj_2022, results_2022 = optimizer.solve_model(model_2022, solver_name="glpk", tee=False)
         assert results_2022.solver.termination_condition.name == "optimal"
 
         # 2020 vintage should have higher emissions than 2021 vintage (interpolated toward 2022)
         # 2020 vintage: 200 kg CO2 per unit
         # 2021 vintage (interpolated): (200 + 100) / 2 = 150 kg CO2 per unit
         # Expected ratio: 200 / 150 = 1.33
-        assert obj_2022 < obj_2020, "Later vintage should have lower emissions"
+        assert obj_2022 < obj_2020, \
+            "Later vintage should have lower emissions"
 
         expected_ratio = 200 / 150  # 2020 emissions / 2021 interpolated emissions
         actual_ratio = obj_2020 / obj_2022
-        assert actual_ratio == pytest.approx(
-            expected_ratio, rel=1e-2
-        ), f"Emission ratio should be ~{expected_ratio:.2f}, got {actual_ratio:.2f}"
+        assert actual_ratio == pytest.approx(expected_ratio, rel=1e-2), \
+            f"Emission ratio should be ~{expected_ratio:.2f}, got {actual_ratio:.2f}"
 
     def test_production_vintage_affects_capacity(self):
         """
@@ -1101,9 +1041,7 @@ class TestVintageResultsValidation:
         model = optimizer.create_model(
             inputs=model_inputs, objective_category="GWP", name="production_vintage"
         )
-        solved, obj, results = optimizer.solve_model(
-            model, solver_name="glpk", tee=False
-        )
+        solved, obj, results = optimizer.solve_model(model, solver_name="glpk", tee=False)
 
         assert results.solver.termination_condition.name == "optimal"
 
@@ -1111,9 +1049,9 @@ class TestVintageResultsValidation:
         # Need 200/150 = 1.333 units to meet demand
         # Fuel: 1.333 * 50 = 66.67
         # Impact: 66.67 * 2 = 133.33 kg CO2
-        assert obj == pytest.approx(
-            133.33, rel=1e-3
-        ), "Impact should be ~133.33 kg CO2 (interpolated production capacity)"
+        assert obj == pytest.approx(133.33, rel=1e-3), \
+            "Impact should be ~133.33 kg CO2 (interpolated production capacity)"
+
 
 
 class TestDatabaseVintageParameterExtraction:
@@ -1123,7 +1061,6 @@ class TestDatabaseVintageParameterExtraction:
     def database_with_vintage_params(self, request):
         """Create a test database with vintage parameter attributes."""
         from datetime import datetime
-
         import bw2data as bd
         import numpy as np
         from bw2data.tests import bw2test
@@ -1132,144 +1069,132 @@ class TestDatabaseVintageParameterExtraction:
         # Set up test project
         project_name = "__test_vintage_db__"
         bd.projects.set_current(project_name)
-
+        
         # Register cleanup to delete project after test
         def cleanup():
             try:
                 bd.projects.delete_project(project_name, delete_dir=True)
             except:
                 pass  # Ignore cleanup errors
-
+        
         request.addfinalizer(cleanup)
-
+        
         # Create biosphere database
         bio_db = bd.Database("biosphere3")
-        bio_db.write(
-            {
-                ("biosphere3", "CO2"): {
-                    "type": "emission",
-                    "name": "carbon dioxide",
-                },
-            }
-        )
+        bio_db.write({
+            ("biosphere3", "CO2"): {
+                "type": "emission",
+                "name": "carbon dioxide",
+            },
+        })
         bio_db.register()
 
         # Create background database
         bg_db = bd.Database("db_2020")
-        bg_db.write(
-            {
-                ("db_2020", "electricity"): {
-                    "name": "electricity",
-                    "location": "GLO",
-                    "reference product": "electricity",
-                    "exchanges": [
-                        {
-                            "amount": 1,
-                            "type": "production",
-                            "input": ("db_2020", "electricity"),
-                        },
-                        {
-                            "amount": 0.5,
-                            "type": "biosphere",
-                            "input": ("biosphere3", "CO2"),
-                        },
-                    ],
-                },
-            }
-        )
+        bg_db.write({
+            ("db_2020", "electricity"): {
+                "name": "electricity",
+                "location": "GLO",
+                "reference product": "electricity",
+                "exchanges": [
+                    {
+                        "amount": 1,
+                        "type": "production",
+                        "input": ("db_2020", "electricity"),
+                    },
+                    {
+                        "amount": 0.5,
+                        "type": "biosphere",
+                        "input": ("biosphere3", "CO2"),
+                    },
+                ],
+            },
+        })
         bg_db.metadata["representative_time"] = datetime(2020, 1, 1).isoformat()
         bg_db.register()
 
         # Create foreground database with vintage parameters
         fg_db = bd.Database("foreground")
-        fg_db.write(
-            {
-                # Product node
-                ("foreground", "vkm"): {
-                    "name": "vehicle-km",
-                    "type": bd.labels.product_node_default,
-                    "unit": "km",
-                },
-                # Process node with vintage-dependent exchange
-                ("foreground", "EV"): {
-                    "name": "Electric Vehicle",
-                    "type": bd.labels.process_node_default,
-                    "operation_time_limits": (1, 2),
-                    "exchanges": [
-                        {
-                            "amount": 1,
-                            "type": bd.labels.production_edge_default,
-                            "input": ("foreground", "vkm"),
-                            "temporal_distribution": TemporalDistribution(
-                                date=np.array([0, 1, 2, 3], dtype="timedelta64[Y]"),
-                                amount=np.array([0, 0.5, 0.5, 0]),
-                            ),
-                            "operation": True,
+        fg_db.write({
+            # Product node
+            ("foreground", "vkm"): {
+                "name": "vehicle-km",
+                "type": bd.labels.product_node_default,
+                "unit": "km",
+            },
+            # Process node with vintage-dependent exchange
+            ("foreground", "EV"): {
+                "name": "Electric Vehicle",
+                "type": bd.labels.process_node_default,
+                "operation_time_limits": (1, 2),
+                "exchanges": [
+                    {
+                        "amount": 1,
+                        "type": bd.labels.production_edge_default,
+                        "input": ("foreground", "vkm"),
+                        "temporal_distribution": TemporalDistribution(
+                            date=np.array([0, 1, 2, 3], dtype="timedelta64[Y]"),
+                            amount=np.array([0, 0.5, 0.5, 0]),
+                        ),
+                        "operation": True,
+                    },
+                    {
+                        "amount": 60,  # Base amount (will be overridden by vintage_amounts)
+                        "type": bd.labels.consumption_edge_default,
+                        "input": ("db_2020", "electricity"),
+                        "temporal_distribution": TemporalDistribution(
+                            date=np.array([1, 2], dtype="timedelta64[Y]"),
+                            amount=np.array([0.5, 0.5]),
+                        ),
+                        "operation": True,
+                        # NEW: Vintage-specific values
+                        "vintage_amounts": {
+                            (1, 2020): 30,  # τ=1, 2020 vintage: 30 MJ/vkm
+                            (2, 2020): 30,  # τ=2, 2020 vintage: 30 MJ/vkm
+                            (1, 2030): 22.5,  # τ=1, 2030 vintage: 22.5 MJ/vkm
+                            (2, 2030): 22.5,  # τ=2, 2030 vintage: 22.5 MJ/vkm
                         },
-                        {
-                            "amount": 60,  # Base amount (will be overridden by vintage_amounts)
-                            "type": bd.labels.consumption_edge_default,
-                            "input": ("db_2020", "electricity"),
-                            "temporal_distribution": TemporalDistribution(
-                                date=np.array([1, 2], dtype="timedelta64[Y]"),
-                                amount=np.array([0.5, 0.5]),
-                            ),
-                            "operation": True,
-                            # NEW: Vintage-specific values
-                            "vintage_amounts": {
-                                (1, 2020): 30,  # τ=1, 2020 vintage: 30 MJ/vkm
-                                (2, 2020): 30,  # τ=2, 2020 vintage: 30 MJ/vkm
-                                (1, 2030): 22.5,  # τ=1, 2030 vintage: 22.5 MJ/vkm
-                                (2, 2030): 22.5,  # τ=2, 2030 vintage: 22.5 MJ/vkm
-                            },
+                    },
+                    {
+                        "amount": 5000,  # Manufacturing emissions
+                        "type": bd.labels.biosphere_edge_default,
+                        "input": ("biosphere3", "CO2"),
+                        "temporal_distribution": TemporalDistribution(
+                            date=np.array([0], dtype="timedelta64[Y]"),
+                            amount=np.array([1.0]),
+                        ),
+                        # Vintage improvement scaling
+                        "vintage_improvements": {
+                            2020: 1.0,   # 100% of base (5000 kg)
+                            2030: 0.8,   # 80% of base (4000 kg)
                         },
-                        {
-                            "amount": 5000,  # Manufacturing emissions
-                            "type": bd.labels.biosphere_edge_default,
-                            "input": ("biosphere3", "CO2"),
-                            "temporal_distribution": TemporalDistribution(
-                                date=np.array([0], dtype="timedelta64[Y]"),
-                                amount=np.array([1.0]),
-                            ),
-                            # Vintage improvement scaling
-                            "vintage_improvements": {
-                                2020: 1.0,  # 100% of base (5000 kg)
-                                2030: 0.8,  # 80% of base (4000 kg)
-                            },
-                        },
-                    ],
-                },
-            }
-        )
+                    },
+                ],
+            },
+        })
         fg_db.register()
 
         # Create LCIA method
-        bd.Method(("GWP", "example")).write(
-            [
-                (("biosphere3", "CO2"), 1.0),
-            ]
-        )
+        bd.Method(("GWP", "example")).write([
+            (("biosphere3", "CO2"), 1.0),
+        ])
 
         return fg_db
 
     def test_lca_processor_extracts_vintage_amounts(self, database_with_vintage_params):
         """Test that LCADataProcessor extracts vintage_amounts from exchanges."""
         from datetime import datetime
-
         import bw2data as bd
         import numpy as np
         from bw_temporalis import TemporalDistribution
-
         from optimex import lca_processor
 
         # Create demand
         product_node = bd.get_node(database="foreground", code="vkm")
-
+        
         demand = {
             product_node: TemporalDistribution(
-                date=np.array(
-                    [datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"
-                ),
+                date=np.array([datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"),
                 amount=np.array([100]),
             )
         }
@@ -1296,49 +1221,27 @@ class TestDatabaseVintageParameterExtraction:
         # Verify vintage parameters were extracted
         assert processor.foreground_technosphere_vintages is not None
         assert len(processor.foreground_technosphere_vintages) > 0
-
+        
         # Check specific vintage values
-        assert (
-            "EV",
-            "electricity",
-            1,
-            2020,
-        ) in processor.foreground_technosphere_vintages
-        assert (
-            processor.foreground_technosphere_vintages[("EV", "electricity", 1, 2020)]
-            == 30
-        )
-        assert (
-            "EV",
-            "electricity",
-            1,
-            2030,
-        ) in processor.foreground_technosphere_vintages
-        assert (
-            processor.foreground_technosphere_vintages[("EV", "electricity", 1, 2030)]
-            == 22.5
-        )
+        assert ("EV", "electricity", 1, 2020) in processor.foreground_technosphere_vintages
+        assert processor.foreground_technosphere_vintages[("EV", "electricity", 1, 2020)] == 30
+        assert ("EV", "electricity", 1, 2030) in processor.foreground_technosphere_vintages
+        assert processor.foreground_technosphere_vintages[("EV", "electricity", 1, 2030)] == 22.5
 
-    def test_lca_processor_extracts_vintage_improvements(
-        self, database_with_vintage_params
-    ):
+    def test_lca_processor_extracts_vintage_improvements(self, database_with_vintage_params):
         """Test that LCADataProcessor extracts vintage_improvements from exchanges."""
         from datetime import datetime
-
         import bw2data as bd
         import numpy as np
         from bw_temporalis import TemporalDistribution
-
         from optimex import lca_processor
 
         # Create demand
         product_node = bd.get_node(database="foreground", code="vkm")
-
+        
         demand = {
             product_node: TemporalDistribution(
-                date=np.array(
-                    [datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"
-                ),
+                date=np.array([datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"),
                 amount=np.array([100]),
             )
         }
@@ -1365,33 +1268,27 @@ class TestDatabaseVintageParameterExtraction:
         # Verify vintage improvements were extracted
         assert processor.vintage_improvements is not None
         assert len(processor.vintage_improvements) > 0
-
+        
         # Check specific vintage improvement values
         assert ("EV", "CO2", 2020) in processor.vintage_improvements
         assert processor.vintage_improvements[("EV", "CO2", 2020)] == 1.0
         assert ("EV", "CO2", 2030) in processor.vintage_improvements
         assert processor.vintage_improvements[("EV", "CO2", 2030)] == 0.8
 
-    def test_model_input_manager_uses_database_vintages(
-        self, database_with_vintage_params
-    ):
+    def test_model_input_manager_uses_database_vintages(self, database_with_vintage_params):
         """Test that ModelInputManager includes vintage parameters from database."""
         from datetime import datetime
-
         import bw2data as bd
         import numpy as np
         from bw_temporalis import TemporalDistribution
-
-        from optimex import converter, lca_processor
+        from optimex import lca_processor, converter
 
         # Create demand
         product_node = bd.get_node(database="foreground", code="vkm")
-
+        
         demand = {
             product_node: TemporalDistribution(
-                date=np.array(
-                    [datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"
-                ),
+                date=np.array([datetime(2025, 1, 1).isoformat()], dtype="datetime64[s]"),
                 amount=np.array([100]),
             )
         }
@@ -1420,13 +1317,8 @@ class TestDatabaseVintageParameterExtraction:
         # Verify vintage parameters are in model inputs
         assert model_inputs.foreground_technosphere_vintages is not None
         assert len(model_inputs.foreground_technosphere_vintages) > 0
-        assert (
-            "EV",
-            "electricity",
-            1,
-            2020,
-        ) in model_inputs.foreground_technosphere_vintages
-
+        assert ("EV", "electricity", 1, 2020) in model_inputs.foreground_technosphere_vintages
+        
         assert model_inputs.vintage_improvements is not None
         assert len(model_inputs.vintage_improvements) > 0
         assert ("EV", "CO2", 2020) in model_inputs.vintage_improvements

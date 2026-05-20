@@ -61,11 +61,11 @@ OperationLimit (RHS):
 ```
 """
 
+import dill
 import pickle
 from pathlib import Path
 from typing import Any, Dict, Tuple, Union
 
-import dill
 import pyomo.environ as pyo
 from loguru import logger
 from pyomo.contrib.iis import write_iis
@@ -132,7 +132,9 @@ def create_model(
         initialize=scaled_inputs.ELEMENTARY_FLOW,
     )
     model.FLOW = pyo.Set(
-        initialize=lambda m: m.PRODUCT | m.INTERMEDIATE_FLOW | m.ELEMENTARY_FLOW,
+        initialize=lambda m: m.PRODUCT
+        | m.INTERMEDIATE_FLOW
+        | m.ELEMENTARY_FLOW,
         doc="Set of all flows, indexed by f",
     )
     model.CATEGORY = pyo.Set(
@@ -200,15 +202,15 @@ def create_model(
 
     # Store sparse vintage overrides as Python dicts (not Pyomo params)
     # These are looked up at expression construction time
-    model._technosphere_vintage_overrides = (
-        getattr(scaled_inputs, "foreground_technosphere_vintage_overrides", None) or {}
-    )
-    model._biosphere_vintage_overrides = (
-        getattr(scaled_inputs, "foreground_biosphere_vintage_overrides", None) or {}
-    )
-    model._production_vintage_overrides = (
-        getattr(scaled_inputs, "foreground_production_vintage_overrides", None) or {}
-    )
+    model._technosphere_vintage_overrides = getattr(
+        scaled_inputs, 'foreground_technosphere_vintage_overrides', None
+    ) or {}
+    model._biosphere_vintage_overrides = getattr(
+        scaled_inputs, 'foreground_biosphere_vintage_overrides', None
+    ) or {}
+    model._production_vintage_overrides = getattr(
+        scaled_inputs, 'foreground_production_vintage_overrides', None
+    ) or {}
 
     # Precompute sets of (process, flow) pairs that have overrides for O(1) lookup
     model._technosphere_overrides_index = frozenset(
@@ -420,7 +422,7 @@ def create_model(
     model.ACTIVE_VINTAGE_TIME = pyo.Set(
         dimen=3,
         initialize=_build_active_vintage_index,
-        doc="Set of (process, vintage, time) tuples where vintage is in operation phase at time t",
+        doc="Set of (process, vintage, time) tuples where vintage is in operation phase at time t"
     )
 
     # Store category impact limit data for constraint generation
@@ -455,15 +457,13 @@ def create_model(
     model.ProcessDeploymentLimitMax = pyo.Constraint(
         model.PROCESS,
         model.SYSTEM_TIME,
-        rule=lambda m, p, t: m.var_installation[p, t]
-        <= m.process_deployment_limits_max[p, t],
+        rule=lambda m, p, t: m.var_installation[p, t] <= m.process_deployment_limits_max[p, t],
     )
 
     model.ProcessDeploymentLimitMin = pyo.Constraint(
         model.PROCESS,
         model.SYSTEM_TIME,
-        rule=lambda m, p, t: m.var_installation[p, t]
-        >= m.process_deployment_limits_min[p, t],
+        rule=lambda m, p, t: m.var_installation[p, t] >= m.process_deployment_limits_min[p, t],
     )
 
     model.CumulativeProcessLimitMax = pyo.Constraint(
@@ -513,9 +513,7 @@ def create_model(
         ]
         if not active_vintages:
             return pyo.Constraint.Skip
-        total_op = sum(
-            m.var_operation[proc, v, time] for (proc, v, time) in active_vintages
-        )
+        total_op = sum(m.var_operation[proc, v, time] for (proc, v, time) in active_vintages)
         return total_op <= m.process_operation_limits_max[p, t]
 
     model.ProcessOperationLimitMax = pyo.Constraint(
@@ -532,9 +530,7 @@ def create_model(
         ]
         if not active_vintages:
             return pyo.Constraint.Skip
-        total_op = sum(
-            m.var_operation[proc, v, time] for (proc, v, time) in active_vintages
-        )
+        total_op = sum(m.var_operation[proc, v, time] for (proc, v, time) in active_vintages)
         return total_op >= m.process_operation_limits_min[p, t]
 
     model.ProcessOperationLimitMin = pyo.Constraint(
@@ -545,9 +541,7 @@ def create_model(
 
     # Expression builders using sparse vintage override lookup
     # Base tensor is always 3D; overrides are checked first for vintage-specific values
-    def scale_tensor_by_installation(
-        tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset
-    ):
+    def scale_tensor_by_installation(tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset):
         def expr(m, p, x, t):
             result = 0
             for tau in m.PROCESS_TIME:
@@ -568,16 +562,13 @@ def create_model(
             model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
         )
 
-    def scale_tensor_by_operation(
-        tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset
-    ):
+    def scale_tensor_by_operation(tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset):
         """
         Scale tensor by operation, summing flows across active vintages.
 
         With 3D var_operation[p, v, t], we sum flow contributions from each
         vintage cohort operating at time t.
         """
-
         def expr(m, p, x, t):
             # Only apply operational scaling to flows marked as operational
             if pyo.value(m.operation_flow[p, x]) == 0:
@@ -588,7 +579,7 @@ def create_model(
 
             total = 0
             # Sum flows across all active vintages at time t
-            for proc, v, time in m.ACTIVE_VINTAGE_TIME:
+            for (proc, v, time) in m.ACTIVE_VINTAGE_TIME:
                 if proc != p or time != t:
                     continue
 
@@ -617,11 +608,13 @@ def create_model(
         )
 
     # Create expressions with sparse vintage override lookup
-    model.scaled_technosphere_dependent_on_installation = scale_tensor_by_installation(
-        model.foreground_technosphere,
-        "INTERMEDIATE_FLOW",
-        model._technosphere_vintage_overrides,
-        model._technosphere_overrides_index,
+    model.scaled_technosphere_dependent_on_installation = (
+        scale_tensor_by_installation(
+            model.foreground_technosphere,
+            "INTERMEDIATE_FLOW",
+            model._technosphere_vintage_overrides,
+            model._technosphere_overrides_index,
+        )
     )
     model.scaled_biosphere_dependent_on_installation = scale_tensor_by_installation(
         model.foreground_biosphere,
@@ -648,8 +641,10 @@ def create_model(
             model.internal_demand_technosphere, "PRODUCT", {}, _empty_index
         )
     )
-    model.scaled_internal_demand_dependent_on_operation = scale_tensor_by_operation(
-        model.internal_demand_technosphere, "PRODUCT", {}, _empty_index
+    model.scaled_internal_demand_dependent_on_operation = (
+        scale_tensor_by_operation(
+            model.internal_demand_technosphere, "PRODUCT", {}, _empty_index
+        )
     )
 
     def scaled_inventory_tensor(model, p, e, t):
@@ -740,7 +735,7 @@ def create_model(
     # Build constraint over ACTIVE_VINTAGE_TIME × PRODUCT
     def _build_operation_capacity_constraints(m):
         """Generate constraint indices for per-vintage capacity bounds."""
-        for p, v, t in m.ACTIVE_VINTAGE_TIME:
+        for (p, v, t) in m.ACTIVE_VINTAGE_TIME:
             for r in m.PRODUCT:
                 yield (p, v, t, r)
 
@@ -759,7 +754,7 @@ def create_model(
         total_production = 0
 
         # Sum production across all active vintages at time t
-        for p, v, time in model.ACTIVE_VINTAGE_TIME:
+        for (p, v, time) in model.ACTIVE_VINTAGE_TIME:
             if time != t:
                 continue
 
@@ -830,10 +825,7 @@ def create_model(
     # Time-specific category impact limits
     def category_impact_limits_rule(model, c, t):
         if (c, t) in model._category_impact_limits:
-            return (
-                model.time_specific_impact[c, t]
-                <= model._category_impact_limits[(c, t)]
-            )
+            return model.time_specific_impact[c, t] <= model._category_impact_limits[(c, t)]
         return pyo.Constraint.Skip
 
     model.CategoryImpactLimits = pyo.Constraint(
@@ -878,7 +870,7 @@ def create_model(
         Consistent with 3D var_operation[p, v, t].
         """
         total = 0
-        for p, v, time in model.ACTIVE_VINTAGE_TIME:
+        for (p, v, time) in model.ACTIVE_VINTAGE_TIME:
             if time != t:
                 continue
 
@@ -1118,7 +1110,9 @@ def solve_model(
         raise RuntimeError(msg)
 
     model.solutions.load_from(results)
-    logger.info(f"Solver [{solver_name}] termination: {termination}")
+    logger.info(
+        f"Solver [{solver_name}] termination: {termination}"
+    )
 
     # 4) Denormalize objective
     scaled_obj = pyo.value(model.OBJ)
@@ -1151,9 +1145,7 @@ def solve_model(
     return model, true_obj, results
 
 
-def validate_operation_bounds(
-    model: pyo.ConcreteModel, tolerance: float = 1e-6
-) -> Dict[str, Any]:
+def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6) -> Dict[str, Any]:
     """
     Validate that operation levels respect capacity constraints.
 
@@ -1194,9 +1186,7 @@ def validate_operation_bounds(
 
     # Get sparse overrides for production with precomputed index for O(1) lookup
     production_overrides = getattr(model, "_production_vintage_overrides", {}) or {}
-    production_overrides_index = getattr(
-        model, "_production_overrides_index", frozenset()
-    )
+    production_overrides_index = getattr(model, "_production_overrides_index", frozenset())
     existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
 
     def get_prod_value(p, r, tau, vintage):
@@ -1211,7 +1201,7 @@ def validate_operation_bounds(
         return (p, r) in production_overrides_index
 
     # Validate per-vintage operation bounds
-    for p, v, t in model.ACTIVE_VINTAGE_TIME:
+    for (p, v, t) in model.ACTIVE_VINTAGE_TIME:
         operation_value = pyo.value(model.var_operation[p, v, t])
         op_start = pyo.value(model.process_operation_start[p])
         op_end = pyo.value(model.process_operation_end[p])
@@ -1254,9 +1244,7 @@ def validate_operation_bounds(
             max_violation = max(max_violation, violation)
         elif max_capacity > 0 and operation_value > max_capacity * (1.0 + tolerance):
             violation = operation_value - max_capacity
-            violations.append(
-                (p, v, t, operation_value, max_capacity, "exceeds_capacity")
-            )
+            violations.append((p, v, t, operation_value, max_capacity, "exceeds_capacity"))
             max_violation = max(max_violation, violation)
 
     # Generate summary

@@ -5,7 +5,6 @@ Based on notebooks/basic_optimex_example_two_decision_layers.ipynb
 This test verifies that optimex produces the same results as a standard LCA
 when there are no optimization choices (single route).
 """
-
 from datetime import datetime
 
 import bw2calc as bc
@@ -26,144 +25,137 @@ def setup_two_level_system():
 
     # Biosphere
     bio_db = bd.Database("biosphere3")
-    bio_db.write(
-        {
-            ("biosphere3", "CO2"): {
-                "type": "emission",
-                "name": "carbon dioxide",
-            },
-        }
-    )
+    bio_db.write({
+        ("biosphere3", "CO2"): {
+            "type": "emission",
+            "name": "carbon dioxide",
+        },
+    })
     bio_db.register()
 
     # Background database
     bg_2020 = bd.Database("db_2020")
-    bg_2020.write(
-        {
-            ("db_2020", "I1"): {
-                "name": "node I1",
-                "location": "somewhere",
-                "reference product": "I1",
-                "exchanges": [
-                    {"amount": 1, "type": "production", "input": ("db_2020", "I1")},
-                    {"amount": 1, "type": "biosphere", "input": ("biosphere3", "CO2")},
-                ],
-            },
-        }
-    )
+    bg_2020.write({
+        ("db_2020", "I1"): {
+            "name": "node I1",
+            "location": "somewhere",
+            "reference product": "I1",
+            "exchanges": [
+                {"amount": 1, "type": "production", "input": ("db_2020", "I1")},
+                {"amount": 1, "type": "biosphere", "input": ("biosphere3", "CO2")},
+            ],
+        },
+    })
     bg_2020.metadata["representative_time"] = datetime(2020, 1, 1).isoformat()
     bg_2020.register()
 
     # Foreground with two-level supply chain
     fg = bd.Database("foreground")
-    fg.write(
-        {
-            # Product 1 (intermediate product)
-            ("foreground", "Product 1"): {
-                "name": "Product 1",
-                "unit": "kg",
-                "type": bd.labels.product_node_default,
-            },
-            ("foreground", "P1R1"): {
-                "name": "Product 1 production, Route 1",
-                "location": "somewhere",
-                "type": bd.labels.process_node_default,
-                "operation_time_limits": (1, 2),
-                "exchanges": [
-                    {
-                        "amount": 1,
-                        "type": bd.labels.production_edge_default,
-                        "input": ("foreground", "Product 1"),
-                        "temporal_distribution": TemporalDistribution(
-                            date=np.array(range(4), dtype="timedelta64[Y]"),
-                            amount=np.array([0, 0.5, 0.5, 0]),
-                        ),
-                        "operation": True,
-                    },
-                    {
-                        "amount": 27.5,
-                        "type": bd.labels.consumption_edge_default,
-                        "input": ("db_2020", "I1"),
-                        "temporal_distribution": TemporalDistribution(
-                            date=np.array(range(4), dtype="timedelta64[Y]"),
-                            amount=np.array([1, 0, 0, 0]),
-                        ),
-                    },
-                    {
-                        "amount": 20,
-                        "type": bd.labels.biosphere_edge_default,
-                        "input": ("biosphere3", "CO2"),
-                        "temporal_distribution": TemporalDistribution(
-                            date=np.array(range(4), dtype="timedelta64[Y]"),
-                            amount=np.array([0, 0.5, 0.5, 0]),
-                        ),
-                        "operation": True,
-                    },
-                ],
-            },
-            # Product 2 (final product, consumes Product 1)
-            ("foreground", "Product 2"): {
-                "name": "Product 2",
-                "unit": "kg",
-                "type": bd.labels.product_node_default,
-            },
-            ("foreground", "P2R1"): {
-                "name": "Product 2 production, Route 1",
-                "location": "somewhere",
-                "type": bd.labels.process_node_default,
-                "operation_time_limits": (1, 2),
-                "exchanges": [
-                    {
-                        "amount": 1,
-                        "type": bd.labels.production_edge_default,
-                        "input": ("foreground", "Product 2"),
-                        "temporal_distribution": TemporalDistribution(
-                            date=np.array(range(4), dtype="timedelta64[Y]"),
-                            amount=np.array([0, 0.5, 0.5, 0]),
-                        ),
-                        "operation": True,
-                    },
-                    {
-                        "amount": 1,
-                        "type": bd.labels.consumption_edge_default,
-                        "input": ("foreground", "Product 1"),
-                        "temporal_distribution": TemporalDistribution(
-                            date=np.array(range(4), dtype="timedelta64[Y]"),
-                            amount=np.array([0, 0.5, 0.5, 0]),
-                        ),
-                        "operation": True,
-                    },
-                    {
-                        "amount": 15.5,
-                        "type": bd.labels.consumption_edge_default,
-                        "input": ("db_2020", "I1"),
-                        "temporal_distribution": TemporalDistribution(
-                            date=np.array(range(4), dtype="timedelta64[Y]"),
-                            amount=np.array([1, 0, 0, 0]),
-                        ),
-                    },
-                    {
-                        "amount": 20,
-                        "type": bd.labels.biosphere_edge_default,
-                        "input": ("biosphere3", "CO2"),
-                        "temporal_distribution": TemporalDistribution(
-                            date=np.array(range(4), dtype="timedelta64[Y]"),
-                            amount=np.array([0, 0.5, 0.5, 0]),
-                        ),
-                        "operation": True,
-                    },
-                ],
-            },
-        }
-    )
+    fg.write({
+        # Product 1 (intermediate product)
+        ("foreground", "Product 1"): {
+            "name": "Product 1",
+            "unit": "kg",
+            "type": bd.labels.product_node_default,
+        },
+        ("foreground", "P1R1"): {
+            "name": "Product 1 production, Route 1",
+            "location": "somewhere",
+            "type": bd.labels.process_node_default,
+            "operation_time_limits": (1, 2),
+            "exchanges": [
+                {
+                    "amount": 1,
+                    "type": bd.labels.production_edge_default,
+                    "input": ("foreground", "Product 1"),
+                    "temporal_distribution": TemporalDistribution(
+                        date=np.array(range(4), dtype="timedelta64[Y]"),
+                        amount=np.array([0, 0.5, 0.5, 0]),
+                    ),
+                    "operation": True,
+                },
+                {
+                    "amount": 27.5,
+                    "type": bd.labels.consumption_edge_default,
+                    "input": ("db_2020", "I1"),
+                    "temporal_distribution": TemporalDistribution(
+                        date=np.array(range(4), dtype="timedelta64[Y]"),
+                        amount=np.array([1, 0, 0, 0]),
+                    ),
+                },
+                {
+                    "amount": 20,
+                    "type": bd.labels.biosphere_edge_default,
+                    "input": ("biosphere3", "CO2"),
+                    "temporal_distribution": TemporalDistribution(
+                        date=np.array(range(4), dtype="timedelta64[Y]"),
+                        amount=np.array([0, 0.5, 0.5, 0]),
+                    ),
+                    "operation": True,
+                },
+            ],
+        },
+
+        # Product 2 (final product, consumes Product 1)
+        ("foreground", "Product 2"): {
+            "name": "Product 2",
+            "unit": "kg",
+            "type": bd.labels.product_node_default,
+        },
+        ("foreground", "P2R1"): {
+            "name": "Product 2 production, Route 1",
+            "location": "somewhere",
+            "type": bd.labels.process_node_default,
+            "operation_time_limits": (1, 2),
+            "exchanges": [
+                {
+                    "amount": 1,
+                    "type": bd.labels.production_edge_default,
+                    "input": ("foreground", "Product 2"),
+                    "temporal_distribution": TemporalDistribution(
+                        date=np.array(range(4), dtype="timedelta64[Y]"),
+                        amount=np.array([0, 0.5, 0.5, 0]),
+                    ),
+                    "operation": True,
+                },
+                {
+                    "amount": 1,
+                    "type": bd.labels.consumption_edge_default,
+                    "input": ("foreground", "Product 1"),
+                    "temporal_distribution": TemporalDistribution(
+                        date=np.array(range(4), dtype="timedelta64[Y]"),
+                        amount=np.array([0, 0.5, 0.5, 0]),
+                    ),
+                    "operation": True,
+                },
+                {
+                    "amount": 15.5,
+                    "type": bd.labels.consumption_edge_default,
+                    "input": ("db_2020", "I1"),
+                    "temporal_distribution": TemporalDistribution(
+                        date=np.array(range(4), dtype="timedelta64[Y]"),
+                        amount=np.array([1, 0, 0, 0]),
+                    ),
+                },
+                {
+                    "amount": 20,
+                    "type": bd.labels.biosphere_edge_default,
+                    "input": ("biosphere3", "CO2"),
+                    "temporal_distribution": TemporalDistribution(
+                        date=np.array(range(4), dtype="timedelta64[Y]"),
+                        amount=np.array([0, 0.5, 0.5, 0]),
+                    ),
+                    "operation": True,
+                },
+            ],
+        },
+    })
     fg.register()
 
     # Impact method
-    bd.Method(("GWP", "example")).write(
-        [
-            (("biosphere3", "CO2"), 1),
-        ]
-    )
+    bd.Method(("GWP", "example")).write([
+        (("biosphere3", "CO2"), 1),
+    ])
 
 
 def test_two_level_supply_chain_matches_lca(setup_two_level_system):
@@ -181,9 +173,7 @@ def test_two_level_supply_chain_matches_lca(setup_two_level_system):
     # optimex calculation
     years = range(2020, 2030)
     td_demand = TemporalDistribution(
-        date=np.array(
-            [datetime(year, 1, 1).isoformat() for year in years], dtype="datetime64[s]"
-        ),
+        date=np.array([datetime(year, 1, 1).isoformat() for year in years], dtype='datetime64[s]'),
         amount=np.asarray([0, 0, 10, 0, 0, 0, 0, 0, 0, 0]),
     )
 
@@ -218,28 +208,26 @@ def test_two_level_supply_chain_matches_lca(setup_two_level_system):
     print(f"Difference: {abs(obj_real - expected_gwp)}")
 
     # They should match (within numerical tolerance)
-    assert (
-        pytest.approx(obj_real, rel=1e-3) == expected_gwp
-    ), f"optimex result ({obj_real}) should match standard LCA ({expected_gwp})"
+    assert pytest.approx(obj_real, rel=1e-3) == expected_gwp, (
+        f"optimex result ({obj_real}) should match standard LCA ({expected_gwp})"
+    )
 
     # Additional check: verify postprocessing extracts correct unscaled values
     pp = postprocessing.PostProcessor(model)
     df_impacts = pp.get_impacts()
 
     # Sum all climate_change impacts across all processes and times
-    if "climate_change" in df_impacts.columns.get_level_values(0):
-        climate_change_cols = [
-            col for col in df_impacts.columns if col[0] == "climate_change"
-        ]
+    if 'climate_change' in df_impacts.columns.get_level_values(0):
+        climate_change_cols = [col for col in df_impacts.columns if col[0] == 'climate_change']
         total_cc_from_pp = df_impacts[climate_change_cols].sum().sum()
 
         print(f"\nPostprocessing climate_change total: {total_cc_from_pp}")
         print(f"Expected (from LCA): {expected_gwp}")
 
         # Postprocessing should also match standard LCA
-        assert (
-            pytest.approx(total_cc_from_pp, rel=1e-3) == expected_gwp
-        ), f"Postprocessing climate_change sum ({total_cc_from_pp}) should match standard LCA ({expected_gwp})"
+        assert pytest.approx(total_cc_from_pp, rel=1e-3) == expected_gwp, (
+            f"Postprocessing climate_change sum ({total_cc_from_pp}) should match standard LCA ({expected_gwp})"
+        )
 
 
 def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
@@ -263,9 +251,9 @@ def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
     }
 
     # Calculate expected total impact from standard LCA
-    print("\n" + "=" * 80)
+    print("\n" + "="*80)
     print("STANDARD LCA CALCULATIONS")
-    print("=" * 80)
+    print("="*80)
     expected_gwp_total = 0
     for year, amount in demand_schedule.items():
         lca = bc.LCA({product_2: amount}, method=("GWP", "example"))
@@ -281,9 +269,7 @@ def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
     demand_amounts = [demand_schedule.get(year, 0) for year in years]
 
     td_demand = TemporalDistribution(
-        date=np.array(
-            [datetime(year, 1, 1).isoformat() for year in years], dtype="datetime64[s]"
-        ),
+        date=np.array([datetime(year, 1, 1).isoformat() for year in years], dtype='datetime64[s]'),
         amount=np.asarray(demand_amounts),
     )
 
@@ -314,17 +300,17 @@ def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
 
     _, obj_real, results = optimizer.solve_model(model, solver_name="glpk")
 
-    print("\n" + "=" * 80)
+    print("\n" + "="*80)
     print("OPTIMEX RESULTS")
-    print("=" * 80)
+    print("="*80)
     print(f"optimex GWP: {obj_real:.2f} kg CO2")
     print(f"Expected GWP: {expected_gwp_total:.2f} kg CO2")
     print(f"Difference: {abs(obj_real - expected_gwp_total):.4f}")
 
     # Verify total impact matches
-    assert (
-        pytest.approx(obj_real, rel=1e-3) == expected_gwp_total
-    ), f"optimex result ({obj_real}) should match sum of standard LCA ({expected_gwp_total})"
+    assert pytest.approx(obj_real, rel=1e-3) == expected_gwp_total, (
+        f"optimex result ({obj_real}) should match sum of standard LCA ({expected_gwp_total})"
+    )
 
     # Extract and verify temporal distribution of results
     pp = postprocessing.PostProcessor(model)
@@ -332,14 +318,10 @@ def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
     df_operation = pp.get_operation()
     df_impacts = pp.get_impacts()
 
-    print("\n" + "=" * 80)
+    print("\n" + "="*80)
     print("INSTALLATION (Product 2 production)")
-    print("=" * 80)
-    p2_process_id = [
-        p
-        for p in model.PROCESS
-        if model.process_names[p] == "Product 2 production, Route 1"
-    ][0]
+    print("="*80)
+    p2_process_id = [p for p in model.PROCESS if model.process_names[p] == "Product 2 production, Route 1"][0]
     if p2_process_id in df_installation.columns:
         print(df_installation[[p2_process_id]])
 
@@ -349,16 +331,12 @@ def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
             # Check that there's installation in years before demand
             years_before = [y for y in df_installation.index if y < year]
             if years_before:
-                total_installation_before = df_installation.loc[
-                    years_before, p2_process_id
-                ].sum()
-                print(
-                    f"\nInstallation before {year} (demand={amount}): {total_installation_before:.2f}"
-                )
+                total_installation_before = df_installation.loc[years_before, p2_process_id].sum()
+                print(f"\nInstallation before {year} (demand={amount}): {total_installation_before:.2f}")
 
-    print("\n" + "=" * 80)
+    print("\n" + "="*80)
     print("OPERATION (Product 2 production)")
-    print("=" * 80)
+    print("="*80)
     if p2_process_id in df_operation.columns:
         print(df_operation[[p2_process_id]])
 
@@ -368,18 +346,14 @@ def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
                 operation = df_operation.loc[year, p2_process_id]
                 print(f"\nYear {year}: Operation={operation:.2f}, Demand={amount}")
                 # Operation should equal demand for single-route system
-                assert (
-                    pytest.approx(operation, rel=1e-2) == amount
-                ), f"Operation at {year} ({operation}) should match demand ({amount})"
+                assert pytest.approx(operation, rel=1e-2) == amount, (
+                    f"Operation at {year} ({operation}) should match demand ({amount})"
+                )
 
-    print("\n" + "=" * 80)
+    print("\n" + "="*80)
     print("INTERNAL DEMAND VERIFICATION (Product 1)")
-    print("=" * 80)
-    p1_process_id = [
-        p
-        for p in model.PROCESS
-        if model.process_names[p] == "Product 1 production, Route 1"
-    ][0]
+    print("="*80)
+    p1_process_id = [p for p in model.PROCESS if model.process_names[p] == "Product 1 production, Route 1"][0]
 
     # Product 2 consumes 1 unit of Product 1 per unit produced
     # So Product 1 operation should match Product 2 operation
@@ -393,29 +367,25 @@ def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
         # They should match (Product 2 needs 1 unit of Product 1 per unit)
         for year in demand_schedule.keys():
             if year in df_operation.index:
-                assert (
-                    pytest.approx(p1_operation[year], rel=1e-2) == p2_operation[year]
-                ), (
+                assert pytest.approx(p1_operation[year], rel=1e-2) == p2_operation[year], (
                     f"Product 1 operation ({p1_operation[year]}) should match "
                     f"Product 2 operation ({p2_operation[year]}) at year {year}"
                 )
 
     # Verify postprocessing impact totals
-    if "climate_change" in df_impacts.columns.get_level_values(0):
-        climate_change_cols = [
-            col for col in df_impacts.columns if col[0] == "climate_change"
-        ]
+    if 'climate_change' in df_impacts.columns.get_level_values(0):
+        climate_change_cols = [col for col in df_impacts.columns if col[0] == 'climate_change']
         total_cc_from_pp = df_impacts[climate_change_cols].sum().sum()
 
-        print("\n" + "=" * 80)
+        print("\n" + "="*80)
         print("POSTPROCESSING VERIFICATION")
-        print("=" * 80)
+        print("="*80)
         print(f"Total impact from PostProcessor: {total_cc_from_pp:.2f}")
         print(f"Expected (from LCA): {expected_gwp_total:.2f}")
 
-        assert (
-            pytest.approx(total_cc_from_pp, rel=1e-3) == expected_gwp_total
-        ), f"Postprocessing total ({total_cc_from_pp}) should match expected ({expected_gwp_total})"
+        assert pytest.approx(total_cc_from_pp, rel=1e-3) == expected_gwp_total, (
+            f"Postprocessing total ({total_cc_from_pp}) should match expected ({expected_gwp_total})"
+        )
 
         # Verify impacts are distributed across correct years
         print("\nImpact distribution by year:")
@@ -424,6 +394,6 @@ def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
             if yearly_impacts[year] > 0.1:  # Only show non-negligible impacts
                 print(f"  {year}: {yearly_impacts[year]:.2f} kg CO2")
 
-    print("\n" + "=" * 80)
+    print("\n" + "="*80)
     print("TEST PASSED: Multi-temporal two-level supply chain works correctly!")
-    print("=" * 80)
+    print("="*80)

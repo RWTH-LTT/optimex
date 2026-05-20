@@ -4,7 +4,6 @@ Tests for operation capacity constraints and flexible operation mode.
 These tests verify that the OperationLimit constraint correctly bounds
 operation levels by available installed capacity across multiple time periods.
 """
-
 import pyomo.environ as pyo
 import pytest
 
@@ -39,12 +38,7 @@ def test_operation_capacity_single_installation():
         "INTERMEDIATE_FLOW": [],
         "ELEMENTARY_FLOW": ["CO2"],
         "BACKGROUND_ID": ["db_2020"],
-        "PROCESS_TIME": [
-            0,
-            1,
-            2,
-            3,
-        ],  # Construction at 0, operation at 1-2, decommission at 3
+        "PROCESS_TIME": [0, 1, 2, 3],  # Construction at 0, operation at 1-2, decommission at 3
         "SYSTEM_TIME": [2020, 2021, 2022, 2023, 2024],
         "CATEGORY": ["climate_change"],
         "operation_time_limits": {"P1": (1, 2)},
@@ -72,7 +66,8 @@ def test_operation_capacity_single_installation():
             ("db_2020", 2024): 1.0,
         },
         "characterization": {
-            ("climate_change", "CO2", t): 1.0 for t in [2020, 2021, 2022, 2023, 2024]
+            ("climate_change", "CO2", t): 1.0
+            for t in [2020, 2021, 2022, 2023, 2024]
         },
     }
 
@@ -218,8 +213,8 @@ def test_operation_capacity_with_varying_demand():
         "CATEGORY": ["climate_change"],
         "operation_time_limits": {"P1": (1, 2)},
         "demand": {
-            ("product", 2021): 3,  # Low demand
-            ("product", 2022): 8,  # High demand
+            ("product", 2021): 3,   # Low demand
+            ("product", 2022): 8,   # High demand
         },
         "foreground_technosphere": {},
         "internal_demand_technosphere": {},

@@ -8,8 +8,8 @@ that were installed before the optimization horizon. These existing capacities:
 - Only contribute operational impacts during their remaining lifetime
 """
 
-import pyomo.environ as pyo
 import pytest
+import pyomo.environ as pyo
 
 from optimex import converter, optimizer
 
@@ -38,11 +38,7 @@ class TestBrownfieldValidation:
             "SYSTEM_TIME": [2020, 2021, 2022],
             "CATEGORY": ["climate_change"],
             "operation_time_limits": {"P1": (0, 0)},
-            "demand": {
-                ("product", 2020): 10,
-                ("product", 2021): 10,
-                ("product", 2022): 10,
-            },
+            "demand": {("product", 2020): 10, ("product", 2021): 10, ("product", 2022): 10},
             "foreground_technosphere": {},
             "internal_demand_technosphere": {},
             "foreground_biosphere": {("P1", "CO2", 0): 10},
@@ -187,23 +183,16 @@ class TestBrownfieldOptimization:
             "internal_demand_technosphere": {},
             # Separate flows for installation vs operation emissions
             "foreground_biosphere": {
-                (
-                    "P1",
-                    "CO2_install",
-                    0,
-                ): 1000,  # HIGH installation emissions (NOT operational)
-                ("P1", "CO2_operate", 1): 1,  # LOW operation emissions
+                ("P1", "CO2_install", 0): 1000,  # HIGH installation emissions (NOT operational)
+                ("P1", "CO2_operate", 1): 1,    # LOW operation emissions
             },
             "foreground_production": {
                 ("P1", "product", 1): 1.0,
             },
             "operation_flow": {
                 ("P1", "product"): True,
-                (
-                    "P1",
-                    "CO2_install",
-                ): False,  # NOT operational (scaled by installation)
-                ("P1", "CO2_operate"): True,  # Operational (scaled by operation)
+                ("P1", "CO2_install"): False,  # NOT operational (scaled by installation)
+                ("P1", "CO2_operate"): True,   # Operational (scaled by operation)
             },
             "background_inventory": {},
             "mapping": {
@@ -223,6 +212,7 @@ class TestBrownfieldOptimization:
             inputs=model_inputs,
             objective_category="climate_change",
             name="test_brownfield_meets_demand",
+
         )
 
         solved_model, objective, results = optimizer.solve_model(
@@ -236,9 +226,9 @@ class TestBrownfieldOptimization:
         # Existing capacity of 10 units at tau=1 provides capacity
         # Should be enough to meet demand of 5 with no new installations
         inst_2025 = pyo.value(solved_model.var_installation["P1", 2025])
-        assert (
-            pytest.approx(0, abs=1e-4) == inst_2025
-        ), f"No new installation expected at 2025 (existing capacity should suffice), got {inst_2025}"
+        assert pytest.approx(0, abs=1e-4) == inst_2025, (
+            f"No new installation expected at 2025 (existing capacity should suffice), got {inst_2025}"
+        )
 
     def test_existing_capacity_reduces_emissions(self):
         """
@@ -269,16 +259,8 @@ class TestBrownfieldOptimization:
             "internal_demand_technosphere": {},
             # Separate flows for installation vs operation emissions
             "foreground_biosphere": {
-                (
-                    "P1",
-                    "CO2_install",
-                    0,
-                ): 100,  # Installation emissions (NOT operational)
-                (
-                    "P1",
-                    "CO2_operate",
-                    1,
-                ): 1,  # Operation emissions (same at tau=1 and 2)
+                ("P1", "CO2_install", 0): 100,  # Installation emissions (NOT operational)
+                ("P1", "CO2_operate", 1): 1,    # Operation emissions (same at tau=1 and 2)
                 ("P1", "CO2_operate", 2): 1,
             },
             "foreground_production": {
@@ -287,11 +269,8 @@ class TestBrownfieldOptimization:
             },
             "operation_flow": {
                 ("P1", "product"): True,
-                (
-                    "P1",
-                    "CO2_install",
-                ): False,  # NOT operational (scaled by installation)
-                ("P1", "CO2_operate"): True,  # Operational (scaled by operation)
+                ("P1", "CO2_install"): False,  # NOT operational (scaled by installation)
+                ("P1", "CO2_operate"): True,   # Operational (scaled by operation)
             },
             "background_inventory": {},
             "mapping": {("db_2020", 2022): 1.0, ("db_2020", 2023): 1.0},
@@ -312,6 +291,7 @@ class TestBrownfieldOptimization:
             inputs=greenfield_inputs,
             objective_category="climate_change",
             name="greenfield",
+
         )
         _, greenfield_obj, _ = optimizer.solve_model(
             greenfield_model, solver_name="glpk", tee=False
@@ -320,15 +300,14 @@ class TestBrownfieldOptimization:
         # Brownfield: all capacity already exists
         # Existing capacity at 2021: at 2023, tau = 2023-2021 = 2, in operation!
         brownfield_config = dict(base_config)
-        brownfield_config["existing_capacity"] = {
-            ("P1", 2021): 10.0
-        }  # Plenty of capacity
+        brownfield_config["existing_capacity"] = {("P1", 2021): 10.0}  # Plenty of capacity
 
         brownfield_inputs = converter.OptimizationModelInputs(**brownfield_config)
         brownfield_model = optimizer.create_model(
             inputs=brownfield_inputs,
             objective_category="climate_change",
             name="brownfield",
+
         )
         _, brownfield_obj, _ = optimizer.solve_model(
             brownfield_model, solver_name="glpk", tee=False
@@ -392,7 +371,9 @@ class TestBrownfieldOptimization:
                 ("P1", "CO2"): True,
             },
             "background_inventory": {},
-            "mapping": {("db_2020", t): 1.0 for t in [2020, 2021, 2022, 2023]},
+            "mapping": {
+                ("db_2020", t): 1.0 for t in [2020, 2021, 2022, 2023]
+            },
             "characterization": {
                 ("climate_change", "CO2", t): 1.0 for t in [2020, 2021, 2022, 2023]
             },
@@ -405,6 +386,7 @@ class TestBrownfieldOptimization:
             inputs=model_inputs,
             objective_category="climate_change",
             name="test_retirement",
+
         )
 
         solved_model, objective, results = optimizer.solve_model(
@@ -420,9 +402,9 @@ class TestBrownfieldOptimization:
         )
 
         # Some new installations should be needed to replace retired capacity
-        assert (
-            total_new_installations > 0
-        ), "New installations should be needed after existing capacity retires"
+        assert total_new_installations > 0, (
+            "New installations should be needed after existing capacity retires"
+        )
 
 
 class TestBrownfieldPostprocessing:
@@ -484,9 +466,12 @@ class TestBrownfieldPostprocessing:
             inputs=model_inputs,
             objective_category="climate_change",
             name="test_postprocessing",
+
         )
 
-        solved_model, _, _ = optimizer.solve_model(model, solver_name="glpk", tee=False)
+        solved_model, _, _ = optimizer.solve_model(
+            model, solver_name="glpk", tee=False
+        )
 
         pp = PostProcessor(solved_model)
         existing_df = pp.get_existing_capacity()
@@ -536,9 +521,7 @@ class TestBrownfieldPostprocessing:
             # Existing capacity of 10 units installed in 2019
             # At 2020: tau = 1, NOT in operation (0 <= 0 <= 0 means only tau=0)
             # So we need installation year = 2020 to have tau = 0
-            "existing_capacity": {
-                ("P1", 2020 - 0): 10.0
-            },  # This won't work due to validation
+            "existing_capacity": {("P1", 2020 - 0): 10.0},  # This won't work due to validation
         }
 
         # Actually, the validation requires inst_year < min(SYSTEM_TIME)
@@ -563,9 +546,12 @@ class TestBrownfieldPostprocessing:
             inputs=model_inputs,
             objective_category="climate_change",
             name="test_capacity",
+
         )
 
-        solved_model, _, _ = optimizer.solve_model(model, solver_name="glpk", tee=False)
+        solved_model, _, _ = optimizer.solve_model(
+            model, solver_name="glpk", tee=False
+        )
 
         pp = PostProcessor(solved_model)
         capacity_df = pp.get_production_capacity()
@@ -613,7 +599,9 @@ class TestBrownfieldWithVintageParameters:
                 ("Plant", "electricity", 2030): 0.8,  # 20% efficiency improvement
             },
             "internal_demand_technosphere": {},
-            "foreground_biosphere": {("Plant", "CO2", tau): 5 for tau in range(21)},
+            "foreground_biosphere": {
+                ("Plant", "CO2", tau): 5 for tau in range(21)
+            },
             "foreground_production": {
                 ("Plant", "output", tau): 50 if 1 <= tau <= 20 else 0
                 for tau in range(21)
@@ -647,9 +635,7 @@ class TestBrownfieldWithVintageParameters:
         # Existing capacity should contribute to meeting demand
         # At 2025, existing capacity from 2015 is at tau = 2025-2015 = 10 (in operation)
         operation_2025 = get_total_operation(solved_model, "Plant", 2025)
-        assert (
-            operation_2025 > 0
-        ), "Operation should be positive when existing capacity exists"
+        assert operation_2025 > 0, "Operation should be positive when existing capacity exists"
 
     def test_brownfield_with_vintage_production_overrides(self):
         """
@@ -676,7 +662,7 @@ class TestBrownfieldWithVintageParameters:
             # Separate flows for installation vs operation (operational must be constant)
             "foreground_biosphere": {
                 ("Plant", "CO2_install", 0): 100,  # Installation emissions
-                ("Plant", "CO2_operate", 1): 10,  # Operation emissions (constant)
+                ("Plant", "CO2_operate", 1): 10,   # Operation emissions (constant)
                 ("Plant", "CO2_operate", 2): 10,
             },
             # Base production (will be overridden by vintages)
@@ -695,14 +681,15 @@ class TestBrownfieldWithVintageParameters:
             "operation_flow": {
                 ("Plant", "output"): True,
                 ("Plant", "CO2_install"): False,  # NOT operational
-                ("Plant", "CO2_operate"): True,  # Operational
+                ("Plant", "CO2_operate"): True,   # Operational
             },
             "background_inventory": {},
             "mapping": {("db", t): 1.0 for t in [2025, 2026, 2027]},
             "characterization": {
                 ("GWP", "CO2_install", t): 1.0 for t in [2025, 2026, 2027]
-            }
-            | {("GWP", "CO2_operate", t): 1.0 for t in [2025, 2026, 2027]},
+            } | {
+                ("GWP", "CO2_operate", t): 1.0 for t in [2025, 2026, 2027]
+            },
             # Existing capacity from 2023 (before min SYSTEM_TIME 2025)
             # At 2025: tau = 2025-2023 = 2, in operation (1 <= 2 <= 2)
             # At 2026: tau = 2026-2023 = 3, NOT in operation (3 > 2)
@@ -752,21 +739,24 @@ class TestBrownfieldWithVintageParameters:
             "demand": {("output", t): 200 for t in [2025, 2026, 2027]},
             "foreground_technosphere": {
                 ("OldPlant", "electricity", tau): 20 for tau in range(11)
-            }
-            | {("NewPlant", "electricity", tau): 15 for tau in range(11)},
+            } | {
+                ("NewPlant", "electricity", tau): 15 for tau in range(11)
+            },
             # vintage_improvements only for NewPlant
             "vintage_improvements": {
                 ("NewPlant", "electricity", 2025): 1.0,
                 ("NewPlant", "electricity", 2027): 0.8,
             },
             "internal_demand_technosphere": {},
-            "foreground_biosphere": {("OldPlant", "CO2", tau): 10 for tau in range(11)}
-            | {("NewPlant", "CO2", tau): 5 for tau in range(11)},
+            "foreground_biosphere": {
+                ("OldPlant", "CO2", tau): 10 for tau in range(11)
+            } | {
+                ("NewPlant", "CO2", tau): 5 for tau in range(11)
+            },
             "foreground_production": {
                 ("OldPlant", "output", tau): 100 if 1 <= tau <= 10 else 0
                 for tau in range(11)
-            }
-            | {
+            } | {
                 ("NewPlant", "output", tau): 100 if 1 <= tau <= 10 else 0
                 for tau in range(11)
             },
@@ -843,11 +833,7 @@ class TestBrownfieldWithVintageParameters:
             # Separate flows for installation vs operation (operational must be constant)
             # Installation emissions are NOT operational (scaled by installation)
             "foreground_biosphere": {
-                (
-                    "Plant",
-                    "CO2_install",
-                    0,
-                ): 500,  # High installation emissions at construction
+                ("Plant", "CO2_install", 0): 500,  # High installation emissions at construction
             },
             "foreground_production": {
                 ("Plant", "output", 0): 100,
@@ -857,10 +843,7 @@ class TestBrownfieldWithVintageParameters:
             "operation_flow": {
                 ("Plant", "output"): True,
                 ("Plant", "electricity"): True,
-                (
-                    "Plant",
-                    "CO2_install",
-                ): False,  # NOT operational - scales with installation
+                ("Plant", "CO2_install"): False,  # NOT operational - scales with installation
             },
             "background_inventory": {("grid", "electricity", "CO2_operate"): 1.0},
             "mapping": {("grid", 2025): 1.0, ("grid", 2026): 1.0},
@@ -882,10 +865,7 @@ class TestBrownfieldWithVintageParameters:
         _, greenfield_obj, greenfield_results = optimizer.solve_model(
             greenfield_model, solver_name="glpk", tee=False
         )
-        assert (
-            greenfield_results.solver.termination_condition
-            == pyo.TerminationCondition.optimal
-        )
+        assert greenfield_results.solver.termination_condition == pyo.TerminationCondition.optimal
 
         # Brownfield scenario (existing capacity covers demand)
         brownfield_config = dict(base_config)
@@ -900,10 +880,7 @@ class TestBrownfieldWithVintageParameters:
         _, brownfield_obj, brownfield_results = optimizer.solve_model(
             brownfield_model, solver_name="glpk", tee=False
         )
-        assert (
-            brownfield_results.solver.termination_condition
-            == pyo.TerminationCondition.optimal
-        )
+        assert brownfield_results.solver.termination_condition == pyo.TerminationCondition.optimal
 
         # Brownfield should have lower impact (no installation emissions)
         assert brownfield_obj < greenfield_obj, (

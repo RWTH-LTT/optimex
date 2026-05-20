@@ -13,8 +13,8 @@ Key features tested:
 5. Per-vintage capacity: Each vintage bounded by its own installation/existing capacity
 """
 
-import pyomo.environ as pyo
 import pytest
+import pyomo.environ as pyo
 
 from optimex import converter, optimizer
 from optimex.postprocessing import PostProcessor
@@ -103,7 +103,7 @@ class TestPerVintageVariables:
         # Check that var_operation is indexed by ACTIVE_VINTAGE_TIME (3D)
         assert hasattr(model, "var_operation")
         # The variable should be accessible with 3-tuple indices
-        for p, v, t in model.ACTIVE_VINTAGE_TIME:
+        for (p, v, t) in model.ACTIVE_VINTAGE_TIME:
             assert model.var_operation[p, v, t] is not None
 
     def test_brownfield_has_operation_variables(self):
@@ -143,14 +143,15 @@ class TestPerVintageVariables:
 
         # Check that brownfield vintage (2019) appears in ACTIVE_VINTAGE_TIME
         brownfield_entries = [
-            (p, v, t) for (p, v, t) in model.ACTIVE_VINTAGE_TIME if v == 2019
+            (p, v, t) for (p, v, t) in model.ACTIVE_VINTAGE_TIME
+            if v == 2019
         ]
-        assert (
-            len(brownfield_entries) > 0
-        ), "Brownfield vintage 2019 should have entries in ACTIVE_VINTAGE_TIME"
+        assert len(brownfield_entries) > 0, (
+            "Brownfield vintage 2019 should have entries in ACTIVE_VINTAGE_TIME"
+        )
 
         # Check that operation variable exists for brownfield
-        for p, v, t in brownfield_entries:
+        for (p, v, t) in brownfield_entries:
             assert model.var_operation[p, v, t] is not None
 
 
@@ -183,16 +184,15 @@ class TestMeritOrderDispatch:
                 ("output", 2020): 0,
                 ("output", 2021): 0,
                 ("output", 2022): 0,
-                (
-                    "output",
-                    2023,
-                ): 50,  # Only demand at 2023 when both vintages available
+                ("output", 2023): 50,  # Only demand at 2023 when both vintages available
             },
             # Fuel consumption varies by vintage (technology evolution)
-            "foreground_technosphere": {("Plant", "fuel", tau): 10 for tau in range(4)},
+            "foreground_technosphere": {
+                ("Plant", "fuel", tau): 10 for tau in range(4)
+            },
             "vintage_improvements": {
-                ("Plant", "fuel", 2020): 1.0,  # 2020 vintage: baseline
-                ("Plant", "fuel", 2022): 0.5,  # 2022 vintage: 50% more efficient
+                ("Plant", "fuel", 2020): 1.0,   # 2020 vintage: baseline
+                ("Plant", "fuel", 2022): 0.5,   # 2022 vintage: 50% more efficient
             },
             "internal_demand_technosphere": {},
             "foreground_biosphere": {},  # Emissions come from fuel via background
@@ -206,9 +206,7 @@ class TestMeritOrderDispatch:
             },
             "background_inventory": {("grid", "fuel", "CO2"): 1.0},
             "mapping": {("grid", t): 1.0 for t in [2020, 2021, 2022, 2023]},
-            "characterization": {
-                ("GWP", "CO2", t): 1.0 for t in [2020, 2021, 2022, 2023]
-            },
+            "characterization": {("GWP", "CO2", t): 1.0 for t in [2020, 2021, 2022, 2023]},
             # Force some installation at both 2020 and 2022
             "process_deployment_limits_min": {
                 ("Plant", 2020): 1.0,  # Force installation in 2020
@@ -263,7 +261,9 @@ class TestMeritOrderDispatch:
             "CATEGORY": ["GWP"],
             "operation_time_limits": {"Plant": (1, 5)},
             "demand": {("output", t): 100 for t in [2020, 2021, 2022]},
-            "foreground_technosphere": {("Plant", "fuel", tau): 10 for tau in range(6)},
+            "foreground_technosphere": {
+                ("Plant", "fuel", tau): 10 for tau in range(6)
+            },
             # Technology evolution makes newer vintages more efficient
             "vintage_improvements": {
                 ("Plant", "fuel", 2020): 1.0,
@@ -310,9 +310,7 @@ class TestMeritOrderDispatch:
         # Verify brownfield is independently dispatchable (can be < full capacity)
         for v, t, op_val in brownfield_ops:
             # Just verify it's a valid (non-negative) operation value
-            assert (
-                op_val >= -1e-6
-            ), f"Brownfield operation at {t} should be non-negative"
+            assert op_val >= -1e-6, f"Brownfield operation at {t} should be non-negative"
 
 
 class TestOperationLimits:
@@ -375,9 +373,9 @@ class TestOperationLimits:
         )
 
         # Total operation should respect the limit
-        assert (
-            total_op_2022 <= 30 + 1e-6
-        ), f"Total operation at 2022 ({total_op_2022:.4f}) should not exceed limit of 30"
+        assert total_op_2022 <= 30 + 1e-6, (
+            f"Total operation at 2022 ({total_op_2022:.4f}) should not exceed limit of 30"
+        )
 
 
 class TestPerVintageCapacity:
@@ -414,9 +412,7 @@ class TestPerVintageCapacity:
             "operation_flow": {("P1", "product"): True, ("P1", "CO2"): True},
             "background_inventory": {},
             "mapping": {("db", t): 1.0 for t in [2020, 2021, 2022, 2023]},
-            "characterization": {
-                ("GWP", "CO2", t): 1.0 for t in [2020, 2021, 2022, 2023]
-            },
+            "characterization": {("GWP", "CO2", t): 1.0 for t in [2020, 2021, 2022, 2023]},
         }
 
         model_inputs = converter.OptimizationModelInputs(**model_inputs_dict)
@@ -436,7 +432,7 @@ class TestPerVintageCapacity:
         fg_scale = solved_model.scales["foreground"]
         production_per_unit = 50.0 + 50.0 + 50.0  # Sum over tau 0, 1, and 2
 
-        for p, v, t in solved_model.ACTIVE_VINTAGE_TIME:
+        for (p, v, t) in solved_model.ACTIVE_VINTAGE_TIME:
             if v in solved_model.SYSTEM_TIME:
                 # Greenfield: capacity from var_installation
                 installation = pyo.value(solved_model.var_installation[p, v])
@@ -491,9 +487,7 @@ class TestPostprocessingWithVintages:
 
         # Should have Process columns (not Process, Vintage)
         assert "P1" in op_df.columns
-        assert not isinstance(
-            op_df.columns, type(op_df.columns).__class__
-        )  # Not MultiIndex
+        assert not isinstance(op_df.columns, type(op_df.columns).__class__)  # Not MultiIndex
 
     def test_get_operation_by_vintage(self):
         """Test get_operation with aggregate_vintages=False."""
@@ -537,7 +531,6 @@ class TestPostprocessingWithVintages:
 
         # Should have MultiIndex columns with (Process, Vintage)
         import pandas as pd
-
         assert isinstance(op_df.columns, pd.MultiIndex), "Columns should be MultiIndex"
         # Columns should be tuples with (Process, Vintage)
         for col in op_df.columns:
@@ -546,7 +539,6 @@ class TestPostprocessingWithVintages:
     def test_get_operation_by_vintage_column_names(self):
         """Test get_operation(aggregate_vintages=False) returns correct column structure."""
         import pandas as pd
-
         model_inputs_dict = {
             "PROCESS": ["P1"],
             "PRODUCT": ["product"],

@@ -68,10 +68,10 @@ bd.Database("biosphere3").write(biosphere_data)
 
     100%|██████████| 3/3 [00:00<00:00, 12545.28it/s]
 
-    11:15:06+0100 [info     ] Vacuuming database
+    11:15:06+0100 [info     ] Vacuuming database            
 
 
-
+    
 
 
 ### Characterization Methods
@@ -312,24 +312,24 @@ bg_2050.register()
 
     100%|██████████| 3/3 [00:00<00:00, 30393.51it/s]
 
-    11:15:06+0100 [info     ] Vacuuming database
+    11:15:06+0100 [info     ] Vacuuming database            
     11:15:06+0100 [warning  ] Not able to determine geocollections for all datasets. This database is not ready for regionalization.
 
 
-
+    
     100%|██████████| 3/3 [00:00<00:00, 58798.65it/s]
 
-    11:15:06+0100 [info     ] Vacuuming database
+    11:15:06+0100 [info     ] Vacuuming database            
     11:15:06+0100 [warning  ] Not able to determine geocollections for all datasets. This database is not ready for regionalization.
 
 
-
+    
     100%|██████████| 3/3 [00:00<00:00, 69518.85it/s]
 
-    11:15:06+0100 [info     ] Vacuuming database
+    11:15:06+0100 [info     ] Vacuuming database            
 
 
-
+    
 
 
 ### Foreground Database
@@ -553,10 +553,10 @@ fg.register()
 
     100%|██████████| 6/6 [00:00<00:00, 21041.66it/s]
 
-    11:15:06+0100 [info     ] Vacuuming database
+    11:15:06+0100 [info     ] Vacuuming database            
 
 
-
+    
 
 
 ### Demand
@@ -695,9 +695,9 @@ pp.plot_capacity_balance(detailed=True)
 ```
 
 
-
+    
 ![png](basic_example_files/output_23_0.png)
-
+    
 
 
 
@@ -706,9 +706,9 @@ pp.plot_impacts()
 ```
 
 
-
+    
 ![png](basic_example_files/output_24_0.png)
-
+    
 
 
 
@@ -722,5 +722,7 @@ pp.plot_characterized_dynamic_inventory(
 
 
 
-
+    
 ![png](basic_example_files/output_25_1.png)
+    
+

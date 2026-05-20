@@ -1101,9 +1101,9 @@ pp_baseline.plot_capacity_balance(detailed=True)
 ```
 
 
-
+    
 ![png](methanol_and_iron_files/output_48_0.png)
-
+    
 
 
 
@@ -1112,9 +1112,9 @@ pp_baseline.plot_impacts()
 ```
 
 
-
+    
 ![png](methanol_and_iron_files/output_49_0.png)
-
+    
 
 
 
@@ -1216,9 +1216,9 @@ pp_evolution.plot_capacity_balance(detailed=True)
 ```
 
 
-
+    
 ![png](methanol_and_iron_files/output_56_0.png)
-
+    
 
 
 
@@ -1227,9 +1227,9 @@ pp_evolution.plot_impacts()
 ```
 
 
-
+    
 ![png](methanol_and_iron_files/output_57_0.png)
-
+    
 
 
 
@@ -1326,9 +1326,9 @@ pp_constrained.plot_capacity_balance(detailed=True)
 ```
 
 
-
+    
 ![png](methanol_and_iron_files/output_65_0.png)
-
+    
 
 
 
@@ -1337,9 +1337,9 @@ pp_constrained.plot_impacts()
 ```
 
 
-
+    
 ![png](methanol_and_iron_files/output_66_0.png)
-
+    
 
 
 
@@ -1363,3 +1363,4 @@ pp_constrained.df_impacts.to_excel("data/paper/impacts_constrained.xlsx")
 ```
 
     2026-02-10 15:58:56.630 | INFO     | dynamic_characterization.dynamic_characterization:characterize:108 - No custom dynamic characterization functions provided. Using default dynamic             characterization functions. The flows that are characterized are based on the selection                of the initially chosen impact category.
+

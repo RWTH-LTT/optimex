@@ -9,7 +9,6 @@ for impacts, installation schedules, production, and operation profiles.
 Key classes:
     - PostProcessor: Extract and visualize optimization results
 """
-
 import math
 
 import bw2data as bd
@@ -219,15 +218,11 @@ class PostProcessor:
             for col in df.columns:
                 # Use the first element of the tuple for color lookup
                 key = col[0] if isinstance(col, tuple) else col
-                colors.append(
-                    self._color_map.get(key, self._plot_config["colormap"][0])
-                )
+                colors.append(self._color_map.get(key, self._plot_config["colormap"][0]))
         else:
             # Single-level columns
             for col in df.columns:
-                colors.append(
-                    self._color_map.get(col, self._plot_config["colormap"][0])
-                )
+                colors.append(self._color_map.get(col, self._plot_config["colormap"][0]))
 
         return colors
 
@@ -273,7 +268,9 @@ class PostProcessor:
         Returns fig, flattened list of axes.
         """
         fig_size = figsize or self._plot_config["figsize"]
-        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=fig_size)
+        fig, axes = plt.subplots(
+            nrows=nrows, ncols=ncols, figsize=fig_size
+        )
         axes = axes.flatten() if isinstance(axes, (np.ndarray, list)) else [axes]
 
         for ax in axes:
@@ -416,7 +413,7 @@ class PostProcessor:
         """
         if hasattr(self, "df_impacts"):
             return self.df_impacts
-
+        
         impacts = {}
         cat_scales = getattr(self.m, "scales", {}).get("characterization", 1.0)
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
@@ -439,9 +436,7 @@ class PostProcessor:
         self.df_impacts = df_pivot
         return self.df_impacts
 
-    def get_dynamic_inventory(
-        self, biosphere_database: str = "ecoinvent-3.12-biosphere"
-    ) -> pd.DataFrame:
+    def get_dynamic_inventory(self, biosphere_database: str = "ecoinvent-3.12-biosphere") -> pd.DataFrame:
         """
         Extract the dynamic inventory from the solved model.
 
@@ -472,15 +467,21 @@ class PostProcessor:
 
         df = pd.DataFrame.from_records(
             [(p, e, t, v) for (p, e, t), v in inventory.items()],
-            columns=["activity", "flow", "date", "amount"],
-        ).astype({"activity": "str", "flow": "str", "amount": "float64"})
+            columns=["activity", "flow", "date", "amount"]
+        ).astype({
+            "activity": "str",
+            "flow": "str",
+            "amount": "float64"
+        })
 
         # Convert year integers to datetime
         df["date"] = pd.to_datetime(df["date"].astype(int), format="%Y")
 
         # Convert flow codes to database IDs
         biosphere_db = bd.Database(biosphere_database)
-        df["flow"] = df["flow"].apply(lambda x: biosphere_db.get(code=x).id)
+        df["flow"] = df["flow"].apply(
+            lambda x: biosphere_db.get(code=x).id
+        )
 
         self.df_dynamic_inventory = df
         return self.df_dynamic_inventory
@@ -520,9 +521,7 @@ class PostProcessor:
         from dynamic_characterization import characterize
 
         if df_inventory is None:
-            df_inventory = self.get_dynamic_inventory(
-                biosphere_database=biosphere_database
-            )
+            df_inventory = self.get_dynamic_inventory(biosphere_database=biosphere_database)
 
         df_characterized = characterize(
             df_inventory,
@@ -566,9 +565,7 @@ class PostProcessor:
         """
         if df_characterized is None:
             if base_lcia_method is None:
-                raise ValueError(
-                    "base_lcia_method is required when df_characterized is not provided"
-                )
+                raise ValueError("base_lcia_method is required when df_characterized is not provided")
             df_characterized = self.get_characterized_dynamic_inventory(
                 base_lcia_method=base_lcia_method,
                 metric=metric,
@@ -583,11 +580,8 @@ class PostProcessor:
 
         # Round to nearest year and aggregate
         df_grouped = (
-            df_plot.assign(
-                date_rounded=(df_plot["date"] + pd.offsets.MonthBegin(6))
-                .dt.to_period("Y")
-                .dt.to_timestamp()
-            )
+            df_plot
+            .assign(date_rounded=(df_plot["date"] + pd.offsets.MonthBegin(6)).dt.to_period("Y").dt.to_timestamp())
             .groupby("date_rounded")["amount"]
             .sum()
             .reset_index()
@@ -606,14 +600,8 @@ class PostProcessor:
             label=metric.replace("_", " ").title(),
         )
 
-        ax.set_ylabel(
-            f"{metric.replace('_', ' ').title()}",
-            fontsize=self._plot_config["label_fontsize"],
-        )
-        ax.set_title(
-            f"Dynamic {metric.replace('_', ' ').title()}",
-            fontsize=self._plot_config["title_fontsize"],
-        )
+        ax.set_ylabel(f"{metric.replace('_', ' ').title()}", fontsize=self._plot_config["label_fontsize"])
+        ax.set_title(f"Dynamic {metric.replace('_', ' ').title()}", fontsize=self._plot_config["title_fontsize"])
         ax.set_axisbelow(True)
         ax.grid(
             axis="both",
@@ -683,9 +671,7 @@ class PostProcessor:
                         if proc == p and time == t
                     )
                     operation_matrix[(t, p)] = total_op
-            df = pd.DataFrame.from_dict(
-                operation_matrix, orient="index", columns=["Value"]
-            )
+            df = pd.DataFrame.from_dict(operation_matrix, orient="index", columns=["Value"])
             df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process"])
             df = df.reset_index()
             df_pivot = df.pivot(index="Time", columns="Process", values="Value")
@@ -697,16 +683,10 @@ class PostProcessor:
                 (t, p, v): pyo.value(self.m.var_operation[p, v, t])
                 for (p, v, t) in self.m.ACTIVE_VINTAGE_TIME
             }
-            df = pd.DataFrame.from_dict(
-                operation_matrix, orient="index", columns=["Value"]
-            )
-            df.index = pd.MultiIndex.from_tuples(
-                df.index, names=["Time", "Process", "Vintage"]
-            )
+            df = pd.DataFrame.from_dict(operation_matrix, orient="index", columns=["Value"])
+            df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process", "Vintage"])
             df = df.reset_index()
-            df_pivot = df.pivot(
-                index="Time", columns=["Process", "Vintage"], values="Value"
-            )
+            df_pivot = df.pivot(index="Time", columns=["Process", "Vintage"], values="Value")
             return df_pivot
 
     def get_production(self) -> pd.DataFrame:
@@ -724,9 +704,7 @@ class PostProcessor:
 
         # Get production overrides data from model (if exists)
         production_overrides = getattr(self.m, "_production_vintage_overrides", {})
-        production_overrides_index = getattr(
-            self.m, "_production_overrides_index", frozenset()
-        )
+        production_overrides_index = getattr(self.m, "_production_overrides_index", frozenset())
 
         def get_production_value(p, r, tau, vintage):
             """Get production value, checking sparse overrides first."""
@@ -747,7 +725,7 @@ class PostProcessor:
                 for t in self.m.SYSTEM_TIME:
                     # Sum production across all active vintages at time t
                     total_production = 0
-                    for proc, v, time in self.m.ACTIVE_VINTAGE_TIME:
+                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
                         if proc != p or time != t:
                             continue
 
@@ -766,9 +744,7 @@ class PostProcessor:
                             )
 
                         # Production from this vintage
-                        total_production += production_rate * pyo.value(
-                            self.m.var_operation[p, v, t]
-                        )
+                        total_production += production_rate * pyo.value(self.m.var_operation[p, v, t])
 
                     production_tensor[(p, f, t)] = total_production * fg_scale
 
@@ -798,7 +774,9 @@ class PostProcessor:
             for t in self.m.SYSTEM_TIME
         }
         df = pd.DataFrame.from_dict(demand_matrix, orient="index", columns=["Value"])
-        df.index = pd.MultiIndex.from_tuples(df.index, names=["Product", "Time"])
+        df.index = pd.MultiIndex.from_tuples(
+            df.index, names=["Product", "Time"]
+        )
         df = df.reset_index()
         df_pivot = df.pivot(index="Time", columns="Product", values="Value")
         self.df_demand = df_pivot
@@ -837,9 +815,7 @@ class PostProcessor:
         fig_w = base_w * ncols
         fig_h = base_h * nrows
 
-        fig, axes = self._create_clean_axes(
-            nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h)
-        )
+        fig, axes = self._create_clean_axes(nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h))
 
         all_handles = []
         all_labels = []
@@ -869,9 +845,7 @@ class PostProcessor:
 
         # Shared legend to the right of figure
         if all_handles:
-            all_handles, all_labels = self._reorder_legend_row_first(
-                all_handles, all_labels, 2
-            )
+            all_handles, all_labels = self._reorder_legend_row_first(all_handles, all_labels, 2)
             fig.legend(
                 handles=all_handles,
                 labels=all_labels,
@@ -910,10 +884,11 @@ class PostProcessor:
 
         fig, axes = self._create_clean_axes()
         ax = axes[0]
-        self._apply_bar_styles(df_installation, ax, colors, title="Installed Capacity")
-        ax.set_ylabel(
-            "Installed Capacity", fontsize=self._plot_config["label_fontsize"]
+        self._apply_bar_styles(
+            df_installation, ax, colors, title="Installed Capacity"
         )
+        ax.set_ylabel("Installed Capacity", fontsize=self._plot_config["label_fontsize"])
+
 
         # Legend at bottom
         h, l = ax.get_legend_handles_labels()
@@ -957,8 +932,11 @@ class PostProcessor:
 
         fig, axes = self._create_clean_axes()
         ax = axes[0]
-        self._apply_bar_styles(df_operation, ax, colors, title="Operational Level")
+        self._apply_bar_styles(
+            df_operation, ax, colors, title="Operational Level"
+        )
         ax.set_ylabel("Operation Level", fontsize=self._plot_config["label_fontsize"])
+
 
         # Legend at bottom
         h, l = ax.get_legend_handles_labels()
@@ -1022,9 +1000,7 @@ class PostProcessor:
             return pd.DataFrame()
 
         df = pd.DataFrame.from_dict(data, orient="index", columns=["Value"])
-        df.index = pd.MultiIndex.from_tuples(
-            df.index, names=["Time", "Process", "Type"]
-        )
+        df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process", "Type"])
         df = df.reset_index()
         df_pivot = df.pivot(index="Time", columns=["Process", "Type"], values="Value")
 
@@ -1053,9 +1029,7 @@ class PostProcessor:
 
         # Get production overrides data from model (if exists)
         production_overrides = getattr(self.m, "_production_vintage_overrides", {})
-        production_overrides_index = getattr(
-            self.m, "_production_overrides_index", frozenset()
-        )
+        production_overrides_index = getattr(self.m, "_production_overrides_index", frozenset())
 
         def get_production_value(p, r, tau, vintage):
             """Get production value, checking sparse overrides first."""
@@ -1085,19 +1059,14 @@ class PostProcessor:
                         # New installations: sum capacity by vintage
                         for tau in self.m.PROCESS_TIME:
                             vintage = t - tau
-                            if (
-                                vintage in self.m.SYSTEM_TIME
-                                and op_start <= tau <= op_end
-                            ):
+                            if vintage in self.m.SYSTEM_TIME and op_start <= tau <= op_end:
                                 # Production rate for this vintage (sum over all operating taus)
                                 production_per_unit = sum(
                                     get_production_value(p, f, tau_op, vintage)
                                     for tau_op in self.m.PROCESS_TIME
                                     if op_start <= tau_op <= op_end
                                 )
-                                installation = pyo.value(
-                                    self.m.var_installation[p, vintage]
-                                )
+                                installation = pyo.value(self.m.var_installation[p, vintage])
                                 process_capacity += production_per_unit * installation
 
                         # Existing (brownfield) capacity
@@ -1107,9 +1076,7 @@ class PostProcessor:
                                 if op_start <= tau_existing <= op_end:
                                     nearest_vintage = min(self.m.SYSTEM_TIME)
                                     production_per_unit = sum(
-                                        get_production_value(
-                                            p, f, tau_op, nearest_vintage
-                                        )
+                                        get_production_value(p, f, tau_op, nearest_vintage)
                                         for tau_op in self.m.PROCESS_TIME
                                         if op_start <= tau_op <= op_end
                                     )
@@ -1141,9 +1108,7 @@ class PostProcessor:
                         )
 
                         # Total capacity for this process
-                        total_capacity += (
-                            installations_operating * production_per_installation
-                        )
+                        total_capacity += installations_operating * production_per_installation
 
                 # Store denormalized capacity
                 capacity_tensor[(f, t)] = total_capacity * fg_scale
@@ -1179,18 +1144,10 @@ class PostProcessor:
             production_cols = [col for col in prod_df.columns if col[1] == product]
             actual_production = prod_df[production_cols].sum(axis=1)
         else:
-            actual_production = (
-                prod_df[product]
-                if product in prod_df.columns
-                else pd.Series(0, index=prod_df.index)
-            )
+            actual_production = prod_df[product] if product in prod_df.columns else pd.Series(0, index=prod_df.index)
 
         # Capacity for this product
-        max_capacity = (
-            capacity_df[product]
-            if product in capacity_df.columns
-            else pd.Series(0, index=capacity_df.index)
-        )
+        max_capacity = capacity_df[product] if product in capacity_df.columns else pd.Series(0, index=capacity_df.index)
 
         # Convert indices to strings for consistent plotting
         actual_production = actual_production.copy()
@@ -1234,9 +1191,7 @@ class PostProcessor:
         show_title : bool, default=True
             If True, show title with product name.
         """
-        actual_production, max_capacity = self._extract_product_data(
-            product, prod_df, capacity_df
-        )
+        actual_production, max_capacity = self._extract_product_data(product, prod_df, capacity_df)
         product_name = self._get_name(product) if annotated else product
 
         x_positions = np.arange(len(actual_production.index))
@@ -1245,24 +1200,24 @@ class PostProcessor:
         ax.plot(
             x_positions,
             actual_production.values,
-            marker="o",
+            marker='o',
             linewidth=self._plot_config["line_width"],
-            label="Production / Demand",
-            color="#00549F",
-            linestyle="-",
-            zorder=3,
+            label='Production / Demand',
+            color='#00549F',
+            linestyle='-',
+            zorder=3
         )
 
         # Plot capacity line
         ax.plot(
             x_positions,
             max_capacity.values,
-            marker="s",
+            marker='s',
             linewidth=self._plot_config["line_width"],
-            label="Max Capacity",
-            color="#000000",
-            linestyle="--",
-            zorder=3,
+            label='Max Capacity',
+            color='#000000',
+            linestyle='--',
+            zorder=3
         )
 
         # Fill area between production and capacity
@@ -1272,9 +1227,9 @@ class PostProcessor:
                 actual_production.values,
                 max_capacity.values,
                 alpha=0.15,
-                color="#00549F",
-                label="Unused Capacity",
-                zorder=2,
+                color='#00549F',
+                label='Unused Capacity',
+                zorder=2
             )
 
         # Set labels and title
@@ -1289,7 +1244,9 @@ class PostProcessor:
 
         if show_title:
             ax.set_title(
-                f"{product_name}", fontsize=self._plot_config["title_fontsize"], pad=10
+                f"{product_name}",
+                fontsize=self._plot_config["title_fontsize"],
+                pad=10
             )
 
         if show_legend:
@@ -1318,9 +1275,7 @@ class PostProcessor:
 
         # Get production overrides data from model (if exists)
         production_overrides = getattr(self.m, "_production_vintage_overrides", {})
-        production_overrides_index = getattr(
-            self.m, "_production_overrides_index", frozenset()
-        )
+        production_overrides_index = getattr(self.m, "_production_overrides_index", frozenset())
 
         def get_production_value(p, r, tau, vintage):
             """Get production value, checking sparse overrides first."""
@@ -1365,34 +1320,26 @@ class PostProcessor:
                     # New capacity entering operation (vintage = t - op_start)
                     t_entering = t - op_start
                     if t_entering in self.m.SYSTEM_TIME:
-                        installation_entering = pyo.value(
-                            self.m.var_installation[p, t_entering]
-                        )
+                        installation_entering = pyo.value(self.m.var_installation[p, t_entering])
                         prod_per_inst_vintage = sum(
                             get_production_value(p, product, tau_op, t_entering)
                             for tau_op in self.m.PROCESS_TIME
                             if op_start <= tau_op <= op_end
                         )
-                        capacity_additions[p][t] = (
-                            installation_entering * prod_per_inst_vintage * fg_scale
-                        )
+                        capacity_additions[p][t] = installation_entering * prod_per_inst_vintage * fg_scale
                     else:
                         capacity_additions[p][t] = 0
 
                     # Capacity exiting operation (vintage = t - op_end - 1)
                     t_exiting = t - op_end - 1
                     if t_exiting in self.m.SYSTEM_TIME:
-                        installation_exiting = pyo.value(
-                            self.m.var_installation[p, t_exiting]
-                        )
+                        installation_exiting = pyo.value(self.m.var_installation[p, t_exiting])
                         prod_per_inst_vintage = sum(
                             get_production_value(p, product, tau_op, t_exiting)
                             for tau_op in self.m.PROCESS_TIME
                             if op_start <= tau_op <= op_end
                         )
-                        capacity_removals[p][t] = (
-                            installation_exiting * prod_per_inst_vintage * fg_scale
-                        )
+                        capacity_removals[p][t] = installation_exiting * prod_per_inst_vintage * fg_scale
                     else:
                         capacity_removals[p][t] = 0
 
@@ -1411,20 +1358,16 @@ class PostProcessor:
                             tau_existing_prev = (t - 1) - inst_year
                             if op_start <= tau_existing <= op_end:
                                 if tau_existing_prev < op_start:
-                                    existing_add += (
-                                        capacity * prod_per_inst_existing * fg_scale
-                                    )
+                                    existing_add += capacity * prod_per_inst_existing * fg_scale
                             if tau_existing > op_end:
                                 if op_start <= tau_existing_prev <= op_end:
-                                    existing_rem += (
-                                        capacity * prod_per_inst_existing * fg_scale
-                                    )
+                                    existing_rem += capacity * prod_per_inst_existing * fg_scale
                     existing_additions[p][t] = existing_add
                     existing_removals[p][t] = existing_rem
 
                     # Operation level - sum production across all active vintages
                     total_operation = 0
-                    for proc, v, time in self.m.ACTIVE_VINTAGE_TIME:
+                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
                         if proc != p or time != t:
                             continue
                         # Get production rate for this vintage
@@ -1433,9 +1376,7 @@ class PostProcessor:
                             for tau_op in self.m.PROCESS_TIME
                             if op_start <= tau_op <= op_end
                         )
-                        total_operation += production_rate * pyo.value(
-                            self.m.var_operation[p, v, t]
-                        )
+                        total_operation += production_rate * pyo.value(self.m.var_operation[p, v, t])
 
                     operation[p][t] = total_operation * fg_scale
                 else:
@@ -1445,24 +1386,16 @@ class PostProcessor:
                     # New capacity entering operation
                     t_entering = t - op_start
                     if t_entering in self.m.SYSTEM_TIME:
-                        installation_entering = pyo.value(
-                            self.m.var_installation[p, t_entering]
-                        )
-                        capacity_additions[p][t] = (
-                            installation_entering * prod_per_inst * fg_scale
-                        )
+                        installation_entering = pyo.value(self.m.var_installation[p, t_entering])
+                        capacity_additions[p][t] = installation_entering * prod_per_inst * fg_scale
                     else:
                         capacity_additions[p][t] = 0
 
                     # Capacity exiting operation
                     t_exiting = t - op_end - 1
                     if t_exiting in self.m.SYSTEM_TIME:
-                        installation_exiting = pyo.value(
-                            self.m.var_installation[p, t_exiting]
-                        )
-                        capacity_removals[p][t] = (
-                            installation_exiting * prod_per_inst * fg_scale
-                        )
+                        installation_exiting = pyo.value(self.m.var_installation[p, t_exiting])
+                        capacity_removals[p][t] = installation_exiting * prod_per_inst * fg_scale
                     else:
                         capacity_removals[p][t] = 0
 
@@ -1484,12 +1417,10 @@ class PostProcessor:
 
                     # Operation level - sum production across all active vintages
                     total_operation = 0
-                    for proc, v, time in self.m.ACTIVE_VINTAGE_TIME:
+                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
                         if proc != p or time != t:
                             continue
-                        total_operation += prod_per_inst * pyo.value(
-                            self.m.var_operation[p, v, t]
-                        )
+                        total_operation += prod_per_inst * pyo.value(self.m.var_operation[p, v, t])
 
                     operation[p][t] = total_operation * fg_scale
 
@@ -1510,13 +1441,11 @@ class PostProcessor:
         operation_df.index = operation_df.index.astype(str)
 
         # Filter to only processes with non-zero values
-        has_values = (
-            (capacity_additions_df != 0).any(axis=0)
-            | (capacity_removals_df != 0).any(axis=0)
-            | (existing_additions_df != 0).any(axis=0)
-            | (existing_removals_df != 0).any(axis=0)
-            | (operation_df != 0).any(axis=0)
-        )
+        has_values = ((capacity_additions_df != 0).any(axis=0) |
+                     (capacity_removals_df != 0).any(axis=0) |
+                     (existing_additions_df != 0).any(axis=0) |
+                     (existing_removals_df != 0).any(axis=0) |
+                     (operation_df != 0).any(axis=0))
         capacity_additions_df = capacity_additions_df.loc[:, has_values]
         capacity_removals_df = capacity_removals_df.loc[:, has_values]
         existing_additions_df = existing_additions_df.loc[:, has_values]
@@ -1570,9 +1499,7 @@ class PostProcessor:
         from matplotlib.lines import Line2D
         from matplotlib.patches import Patch
 
-        actual_production, max_capacity = self._extract_product_data(
-            product, prod_df, capacity_df
-        )
+        actual_production, max_capacity = self._extract_product_data(product, prod_df, capacity_df)
         product_name = self._get_name(product) if annotated else product
 
         # Compute breakdown data
@@ -1587,18 +1514,10 @@ class PostProcessor:
         process_codes = list(capacity_additions_df.columns)
 
         # Annotate DataFrames
-        capacity_additions_df = self._annotate_dataframe(
-            capacity_additions_df.copy(), annotated
-        )
-        capacity_removals_df = self._annotate_dataframe(
-            capacity_removals_df.copy(), annotated
-        )
-        existing_additions_df = self._annotate_dataframe(
-            existing_additions_df.copy(), annotated
-        )
-        existing_removals_df = self._annotate_dataframe(
-            existing_removals_df.copy(), annotated
-        )
+        capacity_additions_df = self._annotate_dataframe(capacity_additions_df.copy(), annotated)
+        capacity_removals_df = self._annotate_dataframe(capacity_removals_df.copy(), annotated)
+        existing_additions_df = self._annotate_dataframe(existing_additions_df.copy(), annotated)
+        existing_removals_df = self._annotate_dataframe(existing_removals_df.copy(), annotated)
         operation_df = self._annotate_dataframe(operation_df.copy(), annotated)
 
         x_positions = np.arange(len(actual_production.index))
@@ -1616,119 +1535,54 @@ class PostProcessor:
             bottom_additions = np.zeros(len(x_positions))
             for i, col in enumerate(capacity_additions_df.columns):
                 add_values = capacity_additions_df[col].values
-                clr = self._color_map.get(process_codes[i], "black")
-                ax.bar(
-                    cap_positions,
-                    add_values,
-                    width=bar_width,
-                    bottom=bottom_additions,
-                    color=clr,
-                    hatch="///",
-                    edgecolor="#30A834FF",
-                    linewidth=1.5,
-                    zorder=1,
-                )
+                clr = self._color_map.get(process_codes[i], 'black')
+                ax.bar(cap_positions, add_values, width=bar_width, bottom=bottom_additions,
+                       color=clr, hatch="///", edgecolor="#30A834FF", linewidth=1.5, zorder=1)
                 bottom_additions += add_values
 
             # Plot capacity removals (negative, red border)
             bottom_removals = np.zeros(len(x_positions))
             for i, col in enumerate(capacity_removals_df.columns):
                 rem_values = capacity_removals_df[col].values
-                clr = self._color_map.get(process_codes[i], "black")
-                ax.bar(
-                    cap_positions,
-                    -rem_values,
-                    width=bar_width,
-                    bottom=bottom_removals,
-                    color=clr,
-                    hatch="///",
-                    edgecolor="#CD221FFF",
-                    linewidth=1.5,
-                    zorder=1,
-                )
+                clr = self._color_map.get(process_codes[i], 'black')
+                ax.bar(cap_positions, -rem_values, width=bar_width, bottom=bottom_removals,
+                       color=clr, hatch="///", edgecolor="#CD221FFF", linewidth=1.5, zorder=1)
                 bottom_removals -= rem_values
 
             # Plot operation (solid bars)
             bottom_operation = np.zeros(len(x_positions))
             for i, col in enumerate(operation_df.columns):
                 operation_values = operation_df[col].values
-                clr = self._color_map.get(process_codes[i], "black")
-                ax.bar(
-                    op_positions,
-                    operation_values,
-                    width=bar_width,
-                    bottom=bottom_operation,
-                    alpha=0.9,
-                    color=clr,
-                    edgecolor=self._plot_config["bar_edgecolor"],
-                    linewidth=self._plot_config["bar_linewidth"],
-                    zorder=2,
-                )
+                clr = self._color_map.get(process_codes[i], 'black')
+                ax.bar(op_positions, operation_values, width=bar_width, bottom=bottom_operation,
+                       alpha=0.9, color=clr, edgecolor=self._plot_config["bar_edgecolor"],
+                       linewidth=self._plot_config["bar_linewidth"], zorder=2)
                 bottom_operation += operation_values
 
-            ax.axhline(0, color="gray", linewidth=0.5, zorder=0)
+            ax.axhline(0, color='gray', linewidth=0.5, zorder=0)
 
             # Build legend handles
-            process_legend = [
-                Patch(
-                    facecolor=self._color_map.get(process_codes[i], "black"),
-                    edgecolor="black",
-                    linewidth=0.5,
-                    label=col,
-                )
-                for i, col in enumerate(capacity_additions_df.columns)
-            ]
+            process_legend = [Patch(facecolor=self._color_map.get(process_codes[i], 'black'), edgecolor='black', linewidth=0.5, label=col)
+                            for i, col in enumerate(capacity_additions_df.columns)]
             type_legend = [
-                Patch(
-                    facecolor="white", edgecolor="#30A834", linewidth=2, label="+ Cap"
-                ),
-                Patch(
-                    facecolor="white", edgecolor="#CD221F", linewidth=2, label="− Cap"
-                ),
+                Patch(facecolor="white", edgecolor='#30A834', linewidth=2, label='+ Cap'),
+                Patch(facecolor="white", edgecolor='#CD221F', linewidth=2, label='− Cap'),
             ]
 
         # Plot production and capacity lines
-        ax.plot(
-            x_positions,
-            actual_production.values,
-            marker="o",
-            linewidth=self._plot_config["line_width"],
-            label="Production / Demand",
-            color="#00549F",
-            linestyle="-",
-            zorder=3,
-        )
-        ax.plot(
-            x_positions,
-            max_capacity.values,
-            marker="s",
-            linewidth=self._plot_config["line_width"],
-            label="Max Capacity",
-            color="#000000",
-            linestyle="--",
-            zorder=3,
-        )
+        ax.plot(x_positions, actual_production.values, marker='o',
+                linewidth=self._plot_config["line_width"], label='Production / Demand',
+                color='#00549F', linestyle='-', zorder=3)
+        ax.plot(x_positions, max_capacity.values, marker='s',
+                linewidth=self._plot_config["line_width"], label='Max Capacity',
+                color='#000000', linestyle='--', zorder=3)
 
         # Line legend entries
         line_legend = [
-            Line2D(
-                [0],
-                [0],
-                color="#00549F",
-                marker="o",
-                linestyle="-",
-                linewidth=self._plot_config["line_width"],
-                label="Production / Demand",
-            ),
-            Line2D(
-                [0],
-                [0],
-                color="#000000",
-                marker="s",
-                linestyle="--",
-                linewidth=self._plot_config["line_width"],
-                label="Max Capacity",
-            ),
+            Line2D([0], [0], color='#00549F', marker='o', linestyle='-',
+                   linewidth=self._plot_config["line_width"], label='Production / Demand'),
+            Line2D([0], [0], color='#000000', marker='s', linestyle='--',
+                   linewidth=self._plot_config["line_width"], label='Max Capacity'),
         ]
 
         self._set_smart_xticks(ax, actual_production.index)
@@ -1741,9 +1595,7 @@ class PostProcessor:
         )
 
         if show_title:
-            ax.set_title(
-                f"{product_name}", fontsize=self._plot_config["title_fontsize"], pad=10
-            )
+            ax.set_title(f"{product_name}", fontsize=self._plot_config["title_fontsize"], pad=10)
 
         if show_legend and process_legend:
             all_handles = process_legend + type_legend + line_legend
@@ -1759,15 +1611,7 @@ class PostProcessor:
 
         return process_legend, type_legend, line_legend
 
-    def plot_capacity_balance(
-        self,
-        product=None,
-        prod_df=None,
-        capacity_df=None,
-        demand_df=None,
-        annotated=True,
-        detailed=False,
-    ):
+    def plot_capacity_balance(self, product=None, prod_df=None, capacity_df=None, demand_df=None, annotated=True, detailed=False):
         """
         Plot actual production vs maximum available capacity.
 
@@ -1814,28 +1658,18 @@ class PostProcessor:
 
             if detailed:
                 self._plot_capacity_balance_detailed_on_ax(
-                    ax,
-                    product,
-                    prod_df,
-                    capacity_df,
-                    annotated=annotated,
-                    show_legend=True,
-                    show_title=True,
+                    ax, product, prod_df, capacity_df,
+                    annotated=annotated, show_legend=True, show_title=True,
                     legend_position="bottom",
                 )
             else:
                 self._plot_capacity_balance_on_ax(
-                    ax,
-                    product,
-                    prod_df,
-                    capacity_df,
-                    annotated=annotated,
-                    show_legend=True,
-                    show_fill=True,
-                    show_title=True,
+                    ax, product, prod_df, capacity_df,
+                    annotated=annotated, show_legend=True, show_fill=True, show_title=True,
                     legend_position="bottom",
                 )
 
+    
             fig.tight_layout()
             plt.show()
             return
@@ -1870,7 +1704,9 @@ class PostProcessor:
         fig_w = base_w * ncols
         fig_h = base_h * nrows
 
-        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h))
+        fig, axes = plt.subplots(
+            nrows=nrows, ncols=ncols, figsize=(fig_w, fig_h)
+        )
 
         if n_products == 1:
             axes = np.array([axes])
@@ -1894,16 +1730,9 @@ class PostProcessor:
         for i, p in enumerate(products):
             ax = axes[i]
             if detailed:
-                proc_legend, type_legend, line_legend = (
-                    self._plot_capacity_balance_detailed_on_ax(
-                        ax,
-                        p,
-                        prod_df,
-                        capacity_df,
-                        annotated=annotated,
-                        show_legend=False,
-                        show_title=True,
-                    )
+                proc_legend, type_legend, line_legend = self._plot_capacity_balance_detailed_on_ax(
+                    ax, p, prod_df, capacity_df,
+                    annotated=annotated, show_legend=False, show_title=True
                 )
                 # Collect process handles from all subplots (deduplicate by label)
                 for handle in proc_legend:
@@ -1916,14 +1745,8 @@ class PostProcessor:
                     line_handles = line_legend
             else:
                 self._plot_capacity_balance_on_ax(
-                    ax,
-                    p,
-                    prod_df,
-                    capacity_df,
-                    annotated=annotated,
-                    show_legend=False,
-                    show_fill=True,
-                    show_title=True,
+                    ax, p, prod_df, capacity_df,
+                    annotated=annotated, show_legend=False, show_fill=True, show_title=True
                 )
                 # Collect handles from all subplots (deduplicate by label)
                 h, l = ax.get_legend_handles_labels()
@@ -1942,9 +1765,7 @@ class PostProcessor:
 
         # Shared legend at bottom of figure
         if all_handles:
-            all_handles, all_labels = self._reorder_legend_row_first(
-                all_handles, all_labels, 2
-            )
+            all_handles, all_labels = self._reorder_legend_row_first(all_handles, all_labels, 2)
             fig.legend(
                 handles=all_handles,
                 labels=all_labels,
@@ -1990,9 +1811,7 @@ class PostProcessor:
 
         # Get production overrides data from model (if exists)
         production_overrides = getattr(self.m, "_production_vintage_overrides", {})
-        production_overrides_index = getattr(
-            self.m, "_production_overrides_index", frozenset()
-        )
+        production_overrides_index = getattr(self.m, "_production_overrides_index", frozenset())
 
         def get_production_value(p, r, tau, vintage):
             """Get production value, checking sparse overrides first."""
@@ -2041,9 +1860,7 @@ class PostProcessor:
                                 for tau_op in self.m.PROCESS_TIME
                                 if op_start <= tau_op <= op_end
                             )
-                            installation = pyo.value(
-                                self.m.var_installation[p, vintage]
-                            )
+                            installation = pyo.value(self.m.var_installation[p, vintage])
                             capacity += production_per_unit * installation
 
                     # Add existing (brownfield) capacity
@@ -2063,7 +1880,7 @@ class PostProcessor:
 
                     # Operation - sum production across all active vintages
                     operation = 0
-                    for proc, v, time in self.m.ACTIVE_VINTAGE_TIME:
+                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
                         if proc != p or time != t:
                             continue
                         # Get production rate for this vintage
@@ -2072,9 +1889,7 @@ class PostProcessor:
                             for tau_op in self.m.PROCESS_TIME
                             if op_start <= tau_op <= op_end
                         )
-                        operation += production_rate * pyo.value(
-                            self.m.var_operation[p, v, t]
-                        )
+                        operation += production_rate * pyo.value(self.m.var_operation[p, v, t])
                     operation *= fg_scale
                 else:
                     # 3D calculation: no overrides
@@ -2084,7 +1899,8 @@ class PostProcessor:
                     installations_operating = sum(
                         pyo.value(self.m.var_installation[p, t - tau])
                         for tau in self.m.PROCESS_TIME
-                        if (t - tau in self.m.SYSTEM_TIME) and op_start <= tau <= op_end
+                        if (t - tau in self.m.SYSTEM_TIME)
+                        and op_start <= tau <= op_end
                     )
 
                     # Add existing (brownfield) capacity in operation phase
@@ -2098,12 +1914,10 @@ class PostProcessor:
 
                     # Calculate operation - sum across all active vintages
                     operation = 0
-                    for proc, v, time in self.m.ACTIVE_VINTAGE_TIME:
+                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
                         if proc != p or time != t:
                             continue
-                        operation += prod_per_inst * pyo.value(
-                            self.m.var_operation[p, v, t]
-                        )
+                        operation += prod_per_inst * pyo.value(self.m.var_operation[p, v, t])
                     operation *= fg_scale
 
                 capacity_data[p][t] = capacity
@@ -2113,9 +1927,7 @@ class PostProcessor:
                 if capacity > 0.001:
                     utilization_data[p][t] = (operation / capacity) * 100
                 else:
-                    utilization_data[p][
-                        t
-                    ] = np.nan  # No capacity = no utilization possible
+                    utilization_data[p][t] = np.nan  # No capacity = no utilization possible
 
         if not utilization_data:
             raise ValueError(f"No processes produce {product}")
@@ -2126,7 +1938,7 @@ class PostProcessor:
         op_df = pd.DataFrame(operation_data).T
 
         # Filter to only times with some capacity
-        has_capacity = cap_df.sum(axis=0) > 0.001
+        has_capacity = (cap_df.sum(axis=0) > 0.001)
         util_df = util_df.loc[:, has_capacity]
         cap_df = cap_df.loc[:, has_capacity]
         op_df = op_df.loc[:, has_capacity]
@@ -2143,14 +1955,12 @@ class PostProcessor:
         product_name = self._get_name(product) if annotated else product
 
         # Create figure
-        fig, ax = plt.subplots(
-            figsize=(max(10, len(util_df.columns) * 0.4), max(4, len(util_df) * 0.8))
-        )
+        fig, ax = plt.subplots(figsize=(max(10, len(util_df.columns) * 0.4), max(4, len(util_df) * 0.8)))
 
         # Create heatmap
         # Use a diverging colormap: red (0%) -> yellow (50%) -> green (100%)
         cmap = plt.cm.RdYlGn
-        im = ax.imshow(util_df.values, aspect="auto", cmap=cmap, vmin=0, vmax=100)
+        im = ax.imshow(util_df.values, aspect='auto', cmap=cmap, vmin=0, vmax=100)
 
         # Set ticks
         ax.set_xticks(np.arange(len(util_df.columns)))
@@ -2160,9 +1970,7 @@ class PostProcessor:
 
         # Rotate x labels if many years
         if len(util_df.columns) > 15:
-            plt.setp(
-                ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor"
-            )
+            plt.setp(ax.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
 
         # Add value annotations
         if show_values:
@@ -2171,39 +1979,22 @@ class PostProcessor:
                     val = util_df.iloc[i, j]
                     if not np.isnan(val):
                         # Choose text color based on background
-                        text_color = "white" if val < 30 or val > 70 else "black"
-                        ax.text(
-                            j,
-                            i,
-                            f"{val:.0f}%",
-                            ha="center",
-                            va="center",
-                            fontsize=self._plot_config["fontsize"] - 3,
-                            color=text_color,
-                        )
+                        text_color = 'white' if val < 30 or val > 70 else 'black'
+                        ax.text(j, i, f'{val:.0f}%', ha='center', va='center',
+                               fontsize=self._plot_config["fontsize"] - 3, color=text_color)
                     else:
-                        ax.text(
-                            j,
-                            i,
-                            "-",
-                            ha="center",
-                            va="center",
-                            fontsize=self._plot_config["fontsize"] - 3,
-                            color="gray",
-                        )
+                        ax.text(j, i, '-', ha='center', va='center',
+                               fontsize=self._plot_config["fontsize"] - 3, color='gray')
 
         # Add colorbar
         cbar = fig.colorbar(im, ax=ax, shrink=0.8)
-        cbar.set_label("Utilization %", fontsize=self._plot_config["fontsize"])
+        cbar.set_label('Utilization %', fontsize=self._plot_config["fontsize"])
         cbar.ax.tick_params(labelsize=self._plot_config["fontsize"] - 1)
 
         # Labels and title
-        ax.set_xlabel("Year", fontsize=self._plot_config["label_fontsize"])
-        ax.set_ylabel("Process", fontsize=self._plot_config["label_fontsize"])
-        ax.set_title(
-            f"Capacity Utilization: {product_name}",
-            fontsize=self._plot_config["title_fontsize"],
-        )
+        ax.set_xlabel('Year', fontsize=self._plot_config["label_fontsize"])
+        ax.set_ylabel('Process', fontsize=self._plot_config["label_fontsize"])
+        ax.set_title(f'Capacity Utilization: {product_name}', fontsize=self._plot_config["title_fontsize"])
 
         fig.tight_layout()
         plt.show()

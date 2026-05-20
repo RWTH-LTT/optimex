@@ -208,7 +208,7 @@ Brightway and `optimex` run natively on Apple Silicon. However, the standard `py
         optimex \
         "scikit-umfpack>=0.4.2" \
         "numpy>=2"
-
+    
     conda activate optimex
     ```
 ---
