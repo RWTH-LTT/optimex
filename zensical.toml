@@ -24,6 +24,7 @@ nav = [
     { "Brightway Setup" = "content/brightway_setup.md" },
     { "Foreground Modeling" = "content/foreground_modeling.md" },
     { "Optimization Setup" = "content/optimization_setup.md" },
+    { "Economic Optimization" = "content/economic_optimization.md" },
     { Constraints = "content/constraints.md" },
     { Postprocessing = "content/postprocessing_guide.md" },
   ]},
