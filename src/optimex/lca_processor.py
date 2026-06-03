@@ -238,6 +238,8 @@ class LCADataProcessor:
         self._background_costs = {}
         self._intermediate_costs_cap = {}
         self._intermediate_costs_op = {}
+        self._cost_relevant_cap_flows = set()
+        self._cost_relevant_op_flows = set()
         self._mapping = {}
         self._characterization = {}
         self._operation_flow = {}
@@ -325,6 +327,16 @@ class LCADataProcessor:
     def intermediate_costs_op(self) -> dict:
         """Read-only access to operation-related intermediate flow prices."""
         return self._intermediate_costs_op
+
+    @property
+    def cost_relevant_cap_flows(self) -> set:
+        """Read-only access to intermediate flows used by installation edges."""
+        return self._cost_relevant_cap_flows
+
+    @property
+    def cost_relevant_op_flows(self) -> set:
+        """Read-only access to intermediate flows used by operation edges."""
+        return self._cost_relevant_op_flows
 
     @property
     def mapping(self) -> dict:
@@ -626,6 +638,9 @@ class LCADataProcessor:
                         })
                         if exc.get("operation"):
                             self._operation_flow.update({(act["code"], input_code): True})
+                            self._cost_relevant_op_flows.add(input_code)
+                        else:
+                            self._cost_relevant_cap_flows.add(input_code)
                         self._intermediate_flows.setdefault(input_code, input_name)
 
                 # Handle biosphere edges
