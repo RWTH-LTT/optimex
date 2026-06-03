@@ -235,6 +235,9 @@ class LCADataProcessor:
         self._foreground_biosphere = {}
         self._foreground_production = {}
         self._background_inventory = {}
+        self._background_costs = {}
+        self._intermediate_costs_cap = {}
+        self._intermediate_costs_op = {}
         self._mapping = {}
         self._characterization = {}
         self._operation_flow = {}
@@ -307,6 +310,21 @@ class LCADataProcessor:
     def background_inventory(self) -> dict:
         """Read-only access to the inventory tensor."""
         return self._background_inventory
+
+    @property
+    def background_costs(self) -> dict:
+        """Read-only access to background market prices by database and flow."""
+        return self._background_costs
+
+    @property
+    def intermediate_costs_cap(self) -> dict:
+        """Read-only access to installation-related intermediate flow prices."""
+        return self._intermediate_costs_cap
+
+    @property
+    def intermediate_costs_op(self) -> dict:
+        """Read-only access to operation-related intermediate flow prices."""
+        return self._intermediate_costs_op
 
     @property
     def mapping(self) -> dict:
