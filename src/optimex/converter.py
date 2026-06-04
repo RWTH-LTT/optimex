@@ -1156,6 +1156,18 @@ class ModelInputManager:
             "mapping": lca_processor.mapping,
             "characterization": lca_processor.characterization,
             "operation_time_limits": lca_processor.operation_time_limits,
+            "intermediate_costs_cap": (
+                lca_processor.intermediate_costs_cap
+                if lca_processor.intermediate_costs_cap
+                else None
+            ),
+            "intermediate_costs_op": (
+                lca_processor.intermediate_costs_op
+                if lca_processor.intermediate_costs_op
+                else None
+            ),
+            "discount_rate": None,
+            "discount_reference_year": None,
             # Vintage parameters from database (if any)
             "foreground_technosphere_vintages": lca_processor.foreground_technosphere_vintages,
             "foreground_biosphere_vintages": lca_processor.foreground_biosphere_vintages,
