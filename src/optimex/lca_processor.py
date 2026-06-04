@@ -258,6 +258,7 @@ class LCADataProcessor:
         self._prepare_background_inventory()
         self._construct_characterization_tensor()
         self._construct_mapping_matrix()
+        self._construct_intermediate_costs()
 
     @property
     def processes(self) -> dict:
@@ -996,6 +997,40 @@ class LCADataProcessor:
             "Constructed mapping matrix for background databases "
             "based on linear interpolation."
         )
+
+    def _construct_intermediate_costs(self) -> None:
+        """
+        Interpolate background market prices to system time points.
+
+        Background prices are read per time-specific background database as
+        ``background_costs[(db_name, flow_code)]``. This method uses the same
+        mapping matrix as background inventories to calculate system-time prices
+        and writes them to the cap/op cost dictionaries according to the foreground
+        edge roles identified during foreground tensor construction.
+        """
+        cost_relevant_flows = (
+            self._cost_relevant_cap_flows | self._cost_relevant_op_flows
+        )
+        if not cost_relevant_flows:
+            return
+
+        for flow_code in cost_relevant_flows:
+            for year in self._system_time:
+                interpolated_price = sum(
+                    self._background_costs.get((db_name, flow_code), 0)
+                    * self._mapping.get((db_name, year), 0)
+                    for db_name in self.background_dbs
+                )
+
+                if flow_code in self._cost_relevant_cap_flows:
+                    self._intermediate_costs_cap[(flow_code, year)] = (
+                        interpolated_price
+                    )
+
+                if flow_code in self._cost_relevant_op_flows:
+                    self._intermediate_costs_op[(flow_code, year)] = (
+                        interpolated_price
+                    )
 
     def _construct_characterization_tensor(self) -> None:
         """
