@@ -254,6 +254,7 @@ class LCADataProcessor:
 
         self._parse_demand()
         self._construct_foreground_tensors()
+        self._construct_background_costs()
         self._prepare_background_inventory()
         self._construct_characterization_tensor()
         self._construct_mapping_matrix()
@@ -766,6 +767,72 @@ class LCADataProcessor:
                 )
         logger.info(f"Finished calculating inventory for database: {db_name}")
         return inventory_tensor, elementary_flows
+
+    def _cost_relevance_label(self, flow_code: str) -> str:
+        """Return a human-readable cap/op relevance label for a background flow."""
+        is_cap = flow_code in self._cost_relevant_cap_flows
+        is_op = flow_code in self._cost_relevant_op_flows
+        if is_cap and is_op:
+            return "cap and op"
+        if is_cap:
+            return "cap"
+        if is_op:
+            return "op"
+        return "not cost-relevant"
+
+    def _construct_background_costs(self) -> None:
+        """
+        Read market prices for cost-relevant intermediate flows from background databases.
+
+        Market prices are stored as attributes of time-specific background nodes.
+        For each direct background product used by the foreground system, this method
+        resolves the corresponding node by code in every configured background
+        database and reads its ``market_price`` attribute.
+
+        Missing prices are logged as warnings because an omitted price would otherwise
+        make a cost-relevant input appear cost-free in the optimization.
+        """
+        cost_relevant_flows = (
+            self._cost_relevant_cap_flows | self._cost_relevant_op_flows
+        )
+        if not cost_relevant_flows:
+            return
+
+        for db_name in self.background_dbs:
+            db = bd.Database(name=db_name)
+            for flow_code in cost_relevant_flows:
+                flow_name = self._intermediate_flows.get(flow_code, "<unknown>")
+                relevance = self._cost_relevance_label(flow_code)
+
+                try:
+                    activity = db.get(code=flow_code)
+                except Exception as e:
+                    logger.warning(
+                        "Missing background node for market price lookup: "
+                        "database='{}', flow_code='{}', flow_name='{}', "
+                        "relevance='{}'. Error: {}",
+                        db_name,
+                        flow_code,
+                        flow_name,
+                        relevance,
+                        e,
+                    )
+                    continue
+
+                price = activity.get("market_price")
+                if price is None:
+                    logger.warning(
+                        "Missing market_price for cost-relevant background flow: "
+                        "database='{}', flow_code='{}', flow_name='{}', "
+                        "relevance='{}'.",
+                        db_name,
+                        flow_code,
+                        flow_name,
+                        relevance,
+                    )
+                    continue
+
+                self._background_costs[(db_name, flow_code)] = price
 
     def parallel_inventory_tensor_calculation(self, cutoff=1e4, n_jobs=None) -> dict:
         """
