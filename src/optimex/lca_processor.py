@@ -619,7 +619,18 @@ class LCADataProcessor:
                         })
                         if exc.get("operation"):
                             self._operation_flow.update({(act["code"], input_code): True})
-                        self._intermediate_flows.setdefault(input_code, input_name)
+                        # Store identity attributes, not just the code: premise assigns a
+                        # different code to the same activity in each scenario database, so
+                        # background activities are resolved across databases by
+                        # (name, reference product, location), not by code.
+                        self._intermediate_flows.setdefault(
+                            input_code,
+                            {
+                                "name": input_name,
+                                "reference product": exc.input.get("reference product"),
+                                "location": exc.input.get("location"),
+                            },
+                        )
 
                 # Handle biosphere edges
                 elif edge_type == bd.labels.biosphere_edge_default:
@@ -669,7 +680,9 @@ class LCADataProcessor:
         db_name : str
             Name of the background database to analyze.
         intermediate_flows : dict
-            Dictionary mapping intermediate flow codes to flow names.
+            Dictionary mapping intermediate flow codes (foreground reference codes)
+            to identity metadata dicts with keys "name", "reference product", and
+            "location", used to resolve the activity in each background database.
         methods : List[tuple]
             A List of LCIA methods represented by a tuple (e.g.,
             `("EF v3.1", "climate change", "global warming potential (GWP100)")`).
@@ -692,12 +705,29 @@ class LCADataProcessor:
         elementary_flows = {}
         activity_cache = {}
 
-        # Cache activity objects by looking up intermediate flows in the database
-        for key in intermediate_flows.keys():
+        # Resolve each intermediate flow in this database by identity
+        # (name, reference product, location) rather than code. premise assigns a
+        # different code to the same activity in each scenario database, so a
+        # code-based lookup silently drops activities from prospective databases.
+        # The tensor stays keyed by the foreground reference code (`key`) for
+        # consistency across databases.
+        for key, meta in intermediate_flows.items():
             try:
-                activity_cache[key] = db.get(code=key)
-            except Exception as e:  # Catch exceptions (e.g., if key is not valid)
-                logger.warning(f"Failed to get activity for key '{key}': {e}")
+                if isinstance(meta, dict):
+                    kwargs = {"database": db_name, "name": meta["name"]}
+                    if meta.get("reference product") is not None:
+                        kwargs["product"] = meta["reference product"]
+                    if meta.get("location") is not None:
+                        kwargs["location"] = meta["location"]
+                    activity_cache[key] = bd.get_node(**kwargs)
+                else:
+                    # Backward compatibility (e.g. legacy pickled inputs): code lookup.
+                    activity_cache[key] = db.get(code=key)
+            except Exception as e:  # Catch exceptions (e.g., if activity not found)
+                logger.warning(
+                    f"Failed to resolve intermediate flow {meta!r} (code '{key}') "
+                    f"in '{db_name}': {e}"
+                )
         function_unit_dict = {activity: 1 for activity in activity_cache.values()}
 
         lca = bc.LCA(function_unit_dict, next(iter(methods)))
