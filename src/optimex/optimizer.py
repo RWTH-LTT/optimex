@@ -268,6 +268,46 @@ def create_model(
         default=0,
         initialize=scaled_inputs.characterization,
     )
+    model.intermediate_costs_cap = pyo.Param(
+        model.INTERMEDIATE_FLOW,
+        model.SYSTEM_TIME,
+        within=pyo.Reals,
+        doc="time-specific prices for installation-related first-level background purchases",
+        default=0,
+        initialize=(
+            scaled_inputs.intermediate_costs_cap
+            if scaled_inputs.intermediate_costs_cap is not None
+            else {}
+        ),
+    )
+    model.intermediate_costs_op = pyo.Param(
+        model.INTERMEDIATE_FLOW,
+        model.SYSTEM_TIME,
+        within=pyo.Reals,
+        doc="time-specific prices for operation-related first-level background purchases",
+        default=0,
+        initialize=(
+            scaled_inputs.intermediate_costs_op
+            if scaled_inputs.intermediate_costs_op is not None
+            else {}
+        ),
+    )
+    discount_reference_year = (
+        scaled_inputs.discount_reference_year
+        if scaled_inputs.discount_reference_year is not None
+        else min(scaled_inputs.SYSTEM_TIME)
+    )
+    model.discount_rate = pyo.Param(
+        within=pyo.NonNegativeReals,
+        doc="discount rate for economic cost objective",
+        default=0,
+        initialize=scaled_inputs.discount_rate or 0,
+    )
+    model.discount_reference_year = pyo.Param(
+        within=pyo.Reals,
+        doc="reference year for discounting economic costs",
+        initialize=discount_reference_year,
+    )
     model.operation_flow = pyo.Param(
         model.PROCESS,
         model.FLOW,
