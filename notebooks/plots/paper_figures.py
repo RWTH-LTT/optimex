@@ -1457,6 +1457,63 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
     return fig
 
 
+def create_baselineunderevo_annual_rf_figure(baselineunderevo="baseline_under_evolution",
+                                           optimized="fg_bg_evolution",
+                                           reference="no_evolution"):
+    """
+    Annual radiative forcing (cumulative RF until 2125, attributed per emission year):
+      - reference:      baseline design under the baseline (frozen 2020) background
+      - baselineunderevo: baseline design under the evolution background
+      - optimized:      evolution-optimized design under the evolution background
+
+    The excess of the baselineunderevo over the optimized design (both under evolution)
+    is shaded. Reuses the standard per-scenario `impacts_<scenario>.xlsx` outputs via
+    `load_impacts_properly`.
+    """
+    start_year, end_year = 2025, 2050
+    years = np.arange(start_year, end_year + 1)
+
+    def agg_rf(scenario):
+        impacts = load_impacts_properly(scenario)
+        if "climate_change" not in impacts:
+            return pd.Series(0.0, index=years)
+        return impacts["climate_change"].reindex(years).fillna(0).sum(axis=1)
+
+    cf = agg_rf(baselineunderevo)
+    opt = agg_rf(optimized)
+    ref = agg_rf(reference)
+
+    m = max(float(np.nanmax(np.abs(s.values))) for s in (cf, opt, ref))
+    exponent = int(np.floor(np.log10(m))) if m > 0 else 0
+    sf = 10 ** exponent
+
+    c_base, c_opt, c_ref = "#CC071E", "#57AB27", "#646567"  # RWTH red / green / gray
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.fill_between(years, opt.values / sf, cf.values / sf,
+                    where=(cf.values >= opt.values), color=c_base, alpha=0.15,
+                    linewidth=0, label="Excess impact")
+    ax.plot(years, ref.values / sf, color=c_ref, linewidth=1.5, linestyle="--",
+            label="Baseline design, baseline background")
+    ax.plot(years, cf.values / sf, color=c_base, linewidth=1.5,
+            label="Baseline design, evolution background")
+    ax.plot(years, opt.values / sf, color=c_opt, linewidth=1.5,
+            label="Evolution-optimized design")
+
+    ax.axhline(0, color="gray", linewidth=0.5, zorder=0)
+    ax.set_xlim(start_year - 1, end_year + 1)
+    ax.set_xticks([y for y in years if y % 5 == 0])
+    ax.set_xlabel("Year")
+    ax.set_ylabel(f"Cumulative Radiative Forcing\nuntil 2125 [$10^{{{exponent}}}$ W m$^{{-2}}$ yr]")
+    ax.grid(True, alpha=0.3, which="both", axis="both", zorder=0)
+    ax.set_axisbelow(True)
+    ax.legend(frameon=False, fontsize=9, loc="upper left",
+              bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
+
+    fig.tight_layout()
+    return fig
+
+
 def main():
     """Generate all paper figures."""
     print("Loading scenario data...")
@@ -1490,6 +1547,11 @@ def main():
     fig_forcing = create_radiative_forcing_figure()
     fig_forcing.savefig(OUTPUT_DIR / "radiative_forcing.pdf")
     plt.close(fig_forcing)
+
+    print("Creating baselineunderevo annual RF figure...")
+    fig_cf = create_baselineunderevo_annual_rf_figure()
+    fig_cf.savefig(OUTPUT_DIR / "baselineunderevo_annual_rf.svg")
+    plt.close(fig_cf)
 
     # print("Creating capacity balance figure...")
     # fig_capacity = create_capacity_balance_figure(scenarios_data)
