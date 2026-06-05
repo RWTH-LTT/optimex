@@ -1,74 +1,84 @@
 ---
-title: "bw_timex: A Python Package for Time-Explicit Life Cycle Assessment"
+title: "optimex: A Python Package for Time-Explicit Life Cycle Optimization"
 tags:
-  - LCA
+  - life cycle optimization
+  - life cycle assessment
   - temporal distribution
   - temporal evolution
   - prospective LCA
   - dynamic LCA
-  - time-differentiated
-  - time-resolved
-  - dynamic modelling
+  - transition pathways
+  - mathematical optimization
 
 authors:
   - name: Timo Diepers
     orcid: 0009-0002-8566-8618
     affiliation: 1
-  - name: Amelie Müller
-    orcid: 0000-0001-5609-5609
-    affiliation: "2,3"
-  - name: Arthur Jakobs
-    orcid: 0000-0003-0825-2184
-    affiliation: 4
+  - name: Jan Tautorus
+    orcid: 0009-0002-9216-870X
+    affiliation: "2"
 
 affiliations:
   - name: Institute of Technical Thermodynamics (LTT), RWTH Aachen University, Germany
     index: 1
-  - name: Institute of Environmental Sciences (CML), Leiden University, The Netherlands
+  - name: Interdisciplinary Transformation University Austria (IT:U), Austria
     index: 2
-  - name: Flemish Institute for Technology Research (VITO), EnergyVille, Belgium
-    index: 3
-  - name: Technology Assessment Group, Laboratory for Energy Analysis, Center for Nuclear Engineering and Sciences & Center for Energy and Environmental Sciences, Paul Scherrer Institut (PSI), Villigen PSI, Switzerland
-    index: 4
 
-date: 26 March 2026
+date: 05 June 2026
 bibliography: paper.bib
 ---
 
 # Summary
 
-`bw_timex` is a Python package for time-explicit Life Cycle Assessment (LCA). Unlike conventional LCA, time-explicit LCA allows the quantification of environmental impacts of products and processes *over time*, considering their temporal distribution and evolution. As such, `bw_timex` enables simultaneously accounting for:
+`optimex` is an open-source Python package for time-explicit Life Cycle Optimization (LCO). LCO extends Life Cycle Assessment (LCA) by treating process selection, capacity installation, and operation as decision variables, determining process portfolios and deployment schedules that minimize an environmental objective subject to system constraints. `optimex` makes this optimization *time-explicit*: instead of collapsing each process's life cycle into a single instant, it tracks *when* every flow across its life cycle and supply chain occurs and lets each flow's magnitude reflect the state of technology and the surrounding economy *at that time*. Decisions made today are therefore evaluated against the conditions they will actually encounter in the future, which is what determines whether a transition pathway is genuinely feasible and environmentally sustainable once deployed.
 
-- the timing of processes throughout the supply chain (e.g., end-of-life treatment occurs 20 years after production),
-- variable and/or evolving supply chains and technologies (e.g., increasing shares of renewable electricity or higher process efficiencies in the future), and
-- the timing of emissions (enabling dynamic characterization).
+Concretely, `optimex` simultaneously accounts for:
 
-To achieve this, `bw_timex` uses graph traversal to convolve process-relative temporal distributions through the supply chain. From the resulting timeline of technosphere exchanges, Life Cycle Inventories (LCIs) are automatically linked across time-specific background databases. The resulting time-explicit LCI reflects the current technology status within the product system at the actual time of each process. Moreover, `bw_timex` preserves the timing of emissions, enabling both dynamic and static Life Cycle Impact Assessment.
+- the **temporal distribution** of flows across a process life cycle (construction, multi-year operation, maintenance, and end-of-life occur at different times);
+- the **temporal evolution** of foreground technologies through vintage-dependent parameters (a process installed in 2035 is more efficient that one installed in 2025);
+- **time-specific background supply chains**, so that upstream electricity, hydrogen, or steel inputs are assessed against future rather than present conditions; and
+- **dynamic impact assessment**, where characterization factors vary over time.
+
+The package embeds these temporal dimensions directly into the optimization problem, then determines installation timing, capacities, and operational levels under time-resolved environmental objectives and constraints. `optimex` builds on the `Brightway` LCA ecosystem [@Mutel:2017], sources dynamic characterization factors from `dynamic_characterization` [@DynamicCharacterization:2025], and uses `Pyomo` [@Bynum:2021] as its mathematical programming backend.
 
 # Statement of need
 
-LCA traditionally assumes a static system, where all processes occur simultaneously and do not change over time [@Heijungs:2002]. To add a temporal dimension to LCA, the fields of dynamic LCA (dLCA) and prospective LCA (pLCA) have emerged. While dLCA focuses on when processes and emissions occur and how impacts are distributed over time (*temporal distribution*), it typically assumes that the underlying product system remains the same [@Beloin:2020]. Conversely, while pLCA tracks how processes evolve (*temporal evolution*) using future scenarios, it generally only assesses a single (future) point in time, ignoring that processes occur at different times across a product’s life cycle [@Arvidsson:2024].
+Designing sustainable transitions requires decisions about *which* processes to deploy, *when* to deploy them, and *how* to operate them over time while accounting for impacts across their entire life cycle. LCO is well suited to this task because it links process and supply-chain decisions to environmental objectives and constraints [@Heijungs:2002]. However, existing LCO approaches treat life cycles as static, instantaneous events, collapsing the flows from construction, operation, maintenance, and end-of-life into a single point in time. This simplification neglects two temporal dimensions that are essential for transition pathways: flows are *distributed* over time, and product systems *evolve* over time. Crucially, the two dimensions are interlinked — when a flow occurs dictates the system conditions it encounters — so both must be considered jointly. Resolving when each flow actually occurs is decisive for whether a designed pathway is genuinely feasible and environmentally sustainable once deployed: the relevant limits are themselves time-dependent, spanning cumulative stock limits such as carbon budgets and finite mineral reserves as well as flow-related limits on the rate at which resources can be extracted or emissions absorbed. A pathway that appears compliant under static, time-aggregated accounting can breach these limits in practice, for example by concentrating demand for a scarce resource into a transient bottleneck that static models never reveal.
 
-`bw_timex` provides a framework for time-explicit LCA calculations within the `Brightway` ecosystem [@Mutel:2017]. It combines considerations of temporal distribution and evolution by accounting for both the timing of processes and emissions as well as the state of the product system at the respective points in time. This makes `bw_timex` particularly useful for studies involving variable or strongly evolving product systems, long-lived products, biogenic carbon, and scenario analyses.
+`optimex` addresses this gap by providing a general, open-source implementation of time-explicit LCO. Its target audience comprises LCA practitioners, energy- and industrial-systems modelers, and sustainability researchers who design technology transition pathways and need to optimize them against time-resolved environmental objectives and constraints. Because `optimex` is built on `Brightway`, practitioners can temporalize foreground models they have already built for standard LCA and turn them into optimization problems without rebuilding anything from scratch; temporalized product systems prepared with the time-explicit *assessment* framework `bw_timex` [@MuellerDiepers:2025] can be reused directly.
 
 # State of the field
 
-Existing dLCA tools such as `Temporalis` [@Cardellini:2018] handle temporal distribution but not temporal evolution. Conversely, pLCA tools like `premise` [@Sacchi:2022], `Futura` [@Joyce:2022], and `pathways` [@Sacchi:2024] model evolving systems but not temporal distributions within the supply chain. Two recent tools combine both temporal distribution and evolution: `ProsperDyn` [@LangQuantzendorff:2025] and `TRAILS` [@Sacchi:2026]. `ProsperDyn` is presently provided as a collection of research notebooks with limited documentation and without a consolidated, performance-oriented software architecture suitable for broader reuse. `TRAILS`, although methodologically advanced, currently relies on annual discretization and sequential year-specific calculations rather than a unified matrix-based integration of both dimensions.
+Holistically evaluating the environmental sustainability of a system requires accounting for entire life cycles across a broad range of environmental impact categories, which is the purpose of LCA [@Heijungs:2002]. LCA is traditionally static, but several methods have been proposed to add temporal considerations. Dynamic LCA tools such as `Temporalis` [@Cardellini:2018] capture *temporal distribution*, the timing of flows as they cascade through the many tiers of the supply chain, while assuming a fixed product system [@Beloin:2020]. Prospective LCA tools such as `premise` [@Sacchi:2022], `Futura` [@Joyce:2022], and `pathways` [@Sacchi:2024] instead capture *temporal evolution* but assess product systems at individual points in time [@Arvidsson:2024]. Recent tools combine both dimensions, including `bw_timex` [@MuellerDiepers:2025], `ProsperDyn` [@LangQuantzendorff:2025], and `TRAILS` [@Sacchi:2026], but all *assess* a predefined product system rather than determining an optimal one from a set of alternatives.
 
-`bw_timex` uniquely embeds the time dimension directly into the technosphere and biosphere matrices, enabling flexible temporal resolution within a single matrix-based framework. This allows efficient computation and seamless integration with the broader `Brightway` ecosystem.
+Resolving time, however, multiplies the number of viable alternatives: which technology to deploy, when, and how to operate it all interact through distributed flows and evolving conditions. This combinatorial complexity is precisely what optimization is meant to handle, yet conventional optimization tools cannot. Integrated Assessment Models and energy system models operate at too coarse a technological resolution to capture environmental impacts across full supply chains and multiple impact categories [@Weyant:2017; @Reinert:2022]. Life Cycle Optimization fills this role by embedding full LCA inventories into mathematical programs [@Azapagic:1998; @Katelhon:2016], but resolves time only partially. Multi-period LCO distributes installation decisions across a transition horizon, introducing temporal distribution at the level of installation, though it typically still relies on static inventory data. Such formulations can additionally draw on prospective inventory data to reflect technology evolution. The recent open-source tool `PULPO` [@Lechtenberg:2024], built on the same `Brightway` and `Pyomo` libraries as `optimex`, supports exactly this combination of multi-period optimization and prospective data. Even then, however, each technology's flows are placed at the moment of its installation, resolving only the first tier of the supply chain (*single-tier* distribution). Resolving the timing of flows throughout all tiers of the product system (*multi-tier* distribution) remains an open gap [@LangQuantzendorff:2025review; @Turner:2025].
 
-# Workflow
+In contrast, `optimex` explicitly resolves the timing of all flows throughout the product system, combining this multi-tier temporal distribution with temporal evolution. We achieve this by extending the traditional matrix-based LCA formulation with explicit time dimensions, exposing capacity installation and operation as time-indexed decision variables; we refer to @Diepers:2026 for the full formulation. Because every flow is placed at the time it actually occurs, the resulting pathways can be checked against time-dependent stock- and flow-related limits, surfacing transient bottlenecks and cumulative-budget violations that static accounting hides. To our knowledge, `optimex` is the first tool to deliver time-explicit LCO in a consolidated, documented, and tested package.
 
-A time-explicit LCA with `bw_timex` follows four main steps, as illustrated in \autoref{fig:workflow}. First, a conventional product system model is temporalized by adding process-relative temporal distributions (rTDs) to the exchanges (cf. @Cardellini:2018). These rTDs describe how the amount of a technosphere or biosphere exchange is distributed over time, relative to the consuming or emitting process. In addition, temporal evolution of foreground processes can be defined through time-specific parameters. In step 2, a timeline of technosphere exchanges is constructed by convolving rTDs along the supply chain, starting from the absolute reference time for the demand, which is defined by the user. In step 3, the exchanges in the timeline are re-linked to time-specific background databases that reflect the technology landscape at specific points in time. Based on the temporally re-linked product system, a time-explicit LCI is calculated, preserving the timing of processes and emissions. The inventory is calculated following the conventional matrix-based LCA formulation [@Heijungs:2002], with the time dimension embedded in the matrices through additional row/column pairs. In step 4, these emissions are characterized, either using standard characterization factors or by applying dynamic characterization functions that take the emissions’ timing into account.
+# Software design
 
-![Workflow for a time-explicit LCA with `bw_timex`.\label{fig:workflow}](workflow.pdf){width=9cm}
+A time-explicit LCO with `optimex` follows a four-stage pipeline.
 
-# Further reading
+First, **LCA processing** temporalizes the foreground system and gathers all data for the optimization. As in conventional LCA, the user models products, processes, and their intermediate and elementary flows using the traditional `Brightway` workflows. Three additional steps make this representation time-explicit: process-relative temporal distributions (rTDs) are attached to exchanges to describe how each flow is distributed over time relative to the consuming or emitting process [@Cardellini:2018]; operation-dependent flows are marked so they can be scaled separately from capacity installation; and vintage-dependent scaling factors are specified to capture technology evolution. In addition, a set of time-specific background databases (e.g., generated with `premise` [@Sacchi:2022]) can be specified. For dynamic impact assessment, users can draw from the `Brightway` library `dynamic_characterization`[@DynamicCharacterization:2025]. From these inputs, `optimex` constructs time-explicit tensors that describe the temporalized product system.
 
-The documentation of the `bw_timex` package, including installation instructions, extensive example notebooks and detailed API reference, can be found at [https://docs.brightway.dev/projects/bw-timex](https://docs.brightway.dev/projects/bw-timex). For a detailed explanation of the methodological basis of time-explicit LCA, please refer to our accompanying publication [@MuellerDiepers:2025].
+Second, **model conversion** validates the temporalized product system and converts it to `Pyomo`-compatible sets. A `Pydantic` model checks that processes, flows, and time indices are consistent across all tensors. Further, additional constraints can be added, e.g., deployment and operation limits, category impact limits, process coupling, and existing (brownfield) capacities.
 
-# Acknowledgements
+Third, **optimization** builds a `Pyomo` model with time-indexed decision variables for installed capacity and operational level. Constraints enforce demand fulfilment, deployment and operation limits, the coupling of operation to installed capacity, and process linkages; the objective minimizes the total impact in a chosen category and metric. The backend is solver-agnostic, defaulting to Gurobi but compatible with open-source solvers.
 
-We thank Chris Mutel for his help in adapting the graph traversal algorithm. Amelie Müller received funding from ForestPaths, which is funded by European Union’s Horizon Europe Research and Innovation Programme (101056755) and United Kingdom Research and Innovation Council (UKRI) (10040816). Arthur Jakobs received funding from the ETH Board in the framework of the Joint Initiative SCENE, Swiss Center of Excellence on Net Zero Emissions.
+Finally, **post-processing** extracts results as DataFrames and provides visualizations of impacts, installations, operation, and product balances.
+
+Several design choices were central to the research application. Embedding the time dimension directly into the traditional LCA matrices keeps the formulation within the familiar matrix-based LCA structure [@Heijungs:2002] while allowing flexible temporal resolution. Separating capacity-dependent from operation-dependent flows is what enables vintage-specific, flexible dispatch. Inputs are scaled for numerical stability before being handed to the solver and denormalized during post-processing, improving computational stability. Moreover, the deep `Brightway` integration lets `optimex` work with any `Brightway`-compatible inventory and reuse product systems already built for standard LCA, avoiding data lock-in and facilitating adoption. Finally, `optimex` can export both the processed LCA data and the initialized or solved `Pyomo` model, supporting reproducibility, model sharing, and fast re-optimization without recomputing the LCA inputs.
+
+# Research impact statement
+
+`optimex` is the reference implementation of the time-explicit LCO framework introduced in the accompanying methodological work [@Diepers:2026], where it is applied to an integrated methanol and pig iron production system. There, time-explicit LCO uncovers transition strategies that remain invisible to conventional, static LCO: prioritizing early installation of high-efficiency technologies so that older processes can be idled once operational savings outweigh the embodied impacts of stranded assets, and diversifying technology portfolios to avoid transient resource bottlenecks.
+
+Beyond this methodological work, `optimex` has been presented to the scientific community at two scientific conferences [@Diepers:2025presentation; @Diepers:2026poster], and has been applied in two student theses [@Tautorus:2025; @Lange:2026].
+
+The package is built for reuse, community uptake and collaboration. It is distributed via PyPI and conda, developed openly on GitHub with a continuous-integration test suite and code-coverage reporting, and supported by comprehensive documentation, runnable example notebooks, and a Binder environment for zero-install exploration [@Diepers:2025optimex; @Diepers:2025docs]. By integrating with the widely used `Brightway` ecosystem and accepting temporalized models from `bw_timex`, `optimex` connects to an existing community of LCA practitioners rather than requiring them to adopt a wholly new workflow.
+
+# AI usage disclosure
+
+During development, the authors used AI coding assistants, namely Claude Code and GitHub Copilot, to aid implementation. The core test suite was written by the authors, and all AI-assisted output was reviewed and verified by the authors, who take full responsibility for the correctness of the code. Generative AI tools were also used to assist with editing portions of the documentation and this manuscript, with all text checked and approved by the authors.
 
 # References
