@@ -960,6 +960,33 @@ def create_model(
         model.INTERMEDIATE_FLOW, model.SYSTEM_TIME, rule=total_intermediate_flow_rule
     )
 
+    # Expressions for first-level background purchases in real units.
+    def background_purchase_cap_rule(model, i, t):
+        fg_scale = model.scales["foreground"]
+        return fg_scale * sum(
+            model.scaled_technosphere_dependent_on_installation[p, i, t]
+            for p in model.PROCESS
+        )
+
+    model.background_purchase_cap = pyo.Expression(
+        model.INTERMEDIATE_FLOW,
+        model.SYSTEM_TIME,
+        rule=background_purchase_cap_rule,
+    )
+
+    def background_purchase_op_rule(model, i, t):
+        fg_scale = model.scales["foreground"]
+        return fg_scale * sum(
+            model.scaled_technosphere_dependent_on_operation[p, i, t]
+            for p in model.PROCESS
+        )
+
+    model.background_purchase_op = pyo.Expression(
+        model.INTERMEDIATE_FLOW,
+        model.SYSTEM_TIME,
+        rule=background_purchase_op_rule,
+    )
+
     # Expression for total elementary flow at time t (in SCALED units)
     # This includes both foreground biosphere flows AND background inventory flows
     # (flows from intermediate flows going through background databases)
