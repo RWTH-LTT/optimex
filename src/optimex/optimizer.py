@@ -1122,7 +1122,11 @@ def create_model(
     )
 
     def objective_function(model):
-        return model.total_impact[model._objective_category]
+        if model._objective == "environmental":
+            return model.total_impact[model._objective_category]
+        if model._objective == "cost":
+            return model.total_cost
+        raise ValueError(f"Unknown objective: {model._objective}")
 
     model.OBJ = pyo.Objective(sense=pyo.minimize, rule=objective_function)
 
