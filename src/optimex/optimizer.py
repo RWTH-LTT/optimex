@@ -1235,19 +1235,25 @@ def solve_model(
 
     # 4) Denormalize objective
     scaled_obj = pyo.value(model.OBJ)
-    fg_scale = getattr(model, "scales", {}).get("foreground", 1.0)
-    catscales = getattr(model, "scales", {}).get("characterization", {})
-    if model._objective_category and model._objective_category in catscales:
-        cat_scale = catscales[model._objective_category]
+    if getattr(model, "_objective", "environmental") == "cost":
+        true_obj = scaled_obj
+        logger.info(f"Objective (cost): {true_obj:.6g}")
     else:
-        cat_scale = 1.0
+        fg_scale = getattr(model, "scales", {}).get("foreground", 1.0)
+        catscales = getattr(model, "scales", {}).get("characterization", {})
+        if model._objective_category and model._objective_category in catscales:
+            cat_scale = catscales[model._objective_category]
+        else:
+            cat_scale = 1.0
 
-    true_obj = scaled_obj * fg_scale * cat_scale
-    logger.info(f"Objective (scaled): {scaled_obj:.6g}")
-    logger.info(f"Objective (real):   {true_obj:.6g}")
+        true_obj = scaled_obj * fg_scale * cat_scale
+        logger.info(f"Objective (scaled): {scaled_obj:.6g}")
+        logger.info(f"Objective (real):   {true_obj:.6g}")
 
     # 5) (Optional) Denormalize duals
     if hasattr(model, "dual"):
+        fg_scale = getattr(model, "scales", {}).get("foreground", 1.0)
+        catscales = getattr(model, "scales", {}).get("characterization", {})
         denorm_duals: Dict[Any, float] = {}
         # Example: demand constraint duals
         for idx, con in getattr(model, "demand_constraint", {}).items():
