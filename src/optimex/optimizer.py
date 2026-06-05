@@ -987,6 +987,44 @@ def create_model(
         rule=background_purchase_op_rule,
     )
 
+    def discount_factor_rule(model, t):
+        return 1 / ((1 + model.discount_rate) ** (t - model.discount_reference_year))
+
+    model.discount_factor = pyo.Expression(
+        model.SYSTEM_TIME,
+        rule=discount_factor_rule,
+    )
+
+    def cost_cap_rule(model, t):
+        return sum(
+            model.intermediate_costs_cap[i, t] * model.background_purchase_cap[i, t]
+            for i in model.INTERMEDIATE_FLOW
+        )
+
+    model.cost_cap = pyo.Expression(
+        model.SYSTEM_TIME,
+        rule=cost_cap_rule,
+    )
+
+    def cost_op_rule(model, t):
+        return sum(
+            model.intermediate_costs_op[i, t] * model.background_purchase_op[i, t]
+            for i in model.INTERMEDIATE_FLOW
+        )
+
+    model.cost_op = pyo.Expression(
+        model.SYSTEM_TIME,
+        rule=cost_op_rule,
+    )
+
+    def total_cost_rule(model):
+        return sum(
+            model.discount_factor[t] * (model.cost_cap[t] + model.cost_op[t])
+            for t in model.SYSTEM_TIME
+        )
+
+    model.total_cost = pyo.Expression(rule=total_cost_rule)
+
     # Expression for total elementary flow at time t (in SCALED units)
     # This includes both foreground biosphere flows AND background inventory flows
     # (flows from intermediate flows going through background databases)
