@@ -459,3 +459,182 @@ def test_cost_expressions_with_discounting():
     assert pyo.value(model.discount_factor[2020]) == pytest.approx(1.0)
     assert pyo.value(model.discount_factor[2021]) == pytest.approx(1 / 1.1)
     assert pyo.value(model.total_cost) == pytest.approx(124.0)
+
+
+def _require_highs():
+    """Skip solver-based economics tests when HiGHS is not available."""
+    try:
+        available = pyo.SolverFactory("highs").available(exception_flag=False)
+    except Exception as exc:
+        pytest.skip(f"HiGHS solver not available: {exc}")
+    if not available:
+        pytest.skip("HiGHS solver not available")
+    return "highs"
+
+
+def _build_two_route_cost_inputs(cumulative_impact_limit=None):
+    data = {
+        "PROCESS": ["cheap_dirty", "expensive_clean"],
+        "PRODUCT": ["product"],
+        "INTERMEDIATE_FLOW": ["dirty_input", "clean_input"],
+        "ELEMENTARY_FLOW": ["CO2"],
+        "BACKGROUND_ID": ["db_2020"],
+        "PROCESS_TIME": [0],
+        "SYSTEM_TIME": [2020],
+        "CATEGORY": ["climate_change"],
+        "operation_time_limits": {
+            "cheap_dirty": (0, 0),
+            "expensive_clean": (0, 0),
+        },
+        "demand": {("product", 2020): 1.0},
+        "foreground_technosphere": {
+            ("cheap_dirty", "dirty_input", 0): 1.0,
+            ("expensive_clean", "clean_input", 0): 1.0,
+        },
+        "internal_demand_technosphere": {},
+        "foreground_biosphere": {},
+        "foreground_production": {
+            ("cheap_dirty", "product", 0): 1.0,
+            ("expensive_clean", "product", 0): 1.0,
+        },
+        "operation_flow": {
+            ("cheap_dirty", "product"): True,
+            ("cheap_dirty", "dirty_input"): True,
+            ("expensive_clean", "product"): True,
+            ("expensive_clean", "clean_input"): True,
+        },
+        "background_inventory": {
+            ("db_2020", "dirty_input", "CO2"): 10.0,
+            ("db_2020", "clean_input", "CO2"): 1.0,
+        },
+        "mapping": {("db_2020", 2020): 1.0},
+        "characterization": {("climate_change", "CO2", 2020): 1.0},
+        "intermediate_costs_op": {
+            ("dirty_input", 2020): 1.0,
+            ("clean_input", 2020): 10.0,
+        },
+    }
+    if cumulative_impact_limit is not None:
+        data["cumulative_category_impact_limits"] = {
+            "climate_change": cumulative_impact_limit
+        }
+    return converter.OptimizationModelInputs(**data)
+
+
+def _total_operation(model, process):
+    return sum(
+        pyo.value(model.var_operation[p, v, t])
+        for (p, v, t) in model.ACTIVE_VINTAGE_TIME
+        if p == process
+    )
+
+
+def test_cost_objective_switch_and_invalid_objective():
+    """Objective selection stays backward-compatible and validates bad input."""
+    inputs = _build_cost_expression_inputs()
+    environmental_model = optimizer.create_model(
+        inputs,
+        name="default_environmental_objective_test",
+        objective_category="climate_change",
+    )
+    cost_model = optimizer.create_model(
+        inputs,
+        name="cost_objective_switch_test",
+        objective_category="climate_change",
+        objective="cost",
+    )
+    _set_cost_expression_variables(cost_model)
+
+    assert environmental_model._objective == "environmental"
+    assert cost_model._objective == "cost"
+    assert pyo.value(cost_model.OBJ) == pytest.approx(
+        pyo.value(cost_model.total_cost)
+    )
+
+    with pytest.raises(ValueError, match="Unknown objective"):
+        optimizer.create_model(
+            inputs,
+            name="invalid_objective_test",
+            objective_category="climate_change",
+            objective="not_a_real_objective",
+        )
+
+
+def test_cost_objective_chooses_cheaper_route():
+    """Cost optimization selects the lower-price direct background purchase."""
+    solver_name = _require_highs()
+    model = optimizer.create_model(
+        _build_two_route_cost_inputs(),
+        name="least_cost_two_route_test",
+        objective_category="climate_change",
+        objective="cost",
+    )
+
+    solved_model, objective, results = optimizer.solve_model(
+        model,
+        solver_name=solver_name,
+        tee=False,
+    )
+
+    assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+    assert _total_operation(solved_model, "cheap_dirty") == pytest.approx(1.0)
+    assert _total_operation(solved_model, "expensive_clean") == pytest.approx(0.0)
+    assert objective == pytest.approx(1.0)
+    assert pyo.value(solved_model.total_cost) == pytest.approx(1.0)
+
+
+def test_cost_objective_respects_cumulative_environmental_budget():
+    """Environmental constraints remain active when minimizing total cost."""
+    solver_name = _require_highs()
+    model = optimizer.create_model(
+        _build_two_route_cost_inputs(cumulative_impact_limit=1.0),
+        name="least_cost_with_environmental_budget_test",
+        objective_category="climate_change",
+        objective="cost",
+    )
+
+    solved_model, objective, results = optimizer.solve_model(
+        model,
+        solver_name=solver_name,
+        tee=False,
+    )
+
+    assert results.solver.termination_condition == pyo.TerminationCondition.optimal
+    assert _total_operation(solved_model, "cheap_dirty") == pytest.approx(0.0)
+    assert _total_operation(solved_model, "expensive_clean") == pytest.approx(1.0)
+    assert objective == pytest.approx(10.0)
+    assert pyo.value(solved_model.total_impact["climate_change"]) == pytest.approx(1.0)
+
+
+def test_solve_model_denormalizes_environmental_but_not_cost_objective():
+    """Cost objectives stay real while environmental objectives are denormalized."""
+    solver_name = _require_highs()
+    cost_model = optimizer.create_model(
+        _build_two_route_cost_inputs(),
+        name="cost_denormalization_test",
+        objective_category="climate_change",
+        objective="cost",
+    )
+    solved_cost_model, cost_objective, _ = optimizer.solve_model(
+        cost_model,
+        solver_name=solver_name,
+        tee=False,
+    )
+
+    environmental_model = optimizer.create_model(
+        _build_two_route_cost_inputs(),
+        name="environmental_denormalization_test",
+        objective_category="climate_change",
+    )
+    solved_environmental_model, environmental_objective, _ = optimizer.solve_model(
+        environmental_model,
+        solver_name=solver_name,
+        tee=False,
+    )
+
+    assert cost_objective == pytest.approx(pyo.value(solved_cost_model.total_cost))
+    assert cost_objective == pytest.approx(1.0)
+    assert environmental_objective == pytest.approx(1.0)
+    assert pyo.value(
+        solved_environmental_model.total_impact["climate_change"]
+    ) == pytest.approx(1.0)
