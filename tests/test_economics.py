@@ -7,11 +7,12 @@ from datetime import datetime
 import bw2data as bd
 import numpy as np
 import pandas as pd
+import pyomo.environ as pyo
 import pytest
 from bw2data.tests import bw2test
 from bw_temporalis import TemporalDistribution
 
-from optimex import converter, lca_processor
+from optimex import converter, lca_processor, optimizer
 from optimex.economics import set_market_prices
 
 
@@ -161,6 +162,49 @@ def _build_economic_pipeline_processor():
         },
     )
     return lca_processor.LCADataProcessor(config)
+
+
+def _build_cost_expression_inputs(discount_rate=None, discount_reference_year=None):
+    return converter.OptimizationModelInputs(
+        PROCESS=["P"],
+        PRODUCT=["R"],
+        INTERMEDIATE_FLOW=["Icap", "Iop"],
+        ELEMENTARY_FLOW=["CO2"],
+        BACKGROUND_ID=["db_2020"],
+        PROCESS_TIME=[0],
+        SYSTEM_TIME=[2020, 2021],
+        CATEGORY=["climate_change"],
+        demand={("R", 2020): 0.0, ("R", 2021): 0.0},
+        operation_flow={("P", "R"): True, ("P", "Iop"): True},
+        foreground_technosphere={
+            ("P", "Icap", 0): 2.0,
+            ("P", "Iop", 0): 3.0,
+        },
+        internal_demand_technosphere={},
+        foreground_biosphere={},
+        foreground_production={("P", "R", 0): 1.0},
+        background_inventory={},
+        mapping={("db_2020", 2020): 1.0, ("db_2020", 2021): 1.0},
+        characterization={("climate_change", "CO2", 2020): 1.0},
+        operation_time_limits={"P": (0, 0)},
+        intermediate_costs_cap={
+            ("Icap", 2020): 10.0,
+            ("Icap", 2021): 10.0,
+        },
+        intermediate_costs_op={
+            ("Iop", 2020): 2.0,
+            ("Iop", 2021): 2.0,
+        },
+        discount_rate=discount_rate,
+        discount_reference_year=discount_reference_year,
+    )
+
+
+def _set_cost_expression_variables(model):
+    model.var_installation["P", 2020].set_value(5.0)
+    model.var_installation["P", 2021].set_value(0.0)
+    model.var_operation["P", 2020, 2020].set_value(4.0)
+    model.var_operation["P", 2021, 2021].set_value(0.0)
 
 
 def test_set_market_prices_from_list_of_dicts(setup_brightway_databases):
@@ -381,3 +425,37 @@ def test_missing_market_price_logs_warning(
         for message in messages
     )
     assert processor.intermediate_costs_cap[("I1", 2025)] == 50.0
+
+
+def test_cost_expressions_without_discounting():
+    """Cost expressions combine real background purchases with market prices."""
+    model = optimizer.create_model(
+        _build_cost_expression_inputs(),
+        name="cost_expression_test",
+        objective_category="climate_change",
+    )
+    _set_cost_expression_variables(model)
+
+    assert pyo.value(model.background_purchase_cap["Icap", 2020]) == 10.0
+    assert pyo.value(model.background_purchase_op["Iop", 2020]) == 12.0
+    assert pyo.value(model.cost_cap[2020]) == 100.0
+    assert pyo.value(model.cost_op[2020]) == 24.0
+    assert pyo.value(model.discount_factor[2020]) == 1.0
+    assert pyo.value(model.total_cost) == 124.0
+
+
+def test_cost_expressions_with_discounting():
+    """Discount factors are applied to total costs by system year."""
+    model = optimizer.create_model(
+        _build_cost_expression_inputs(
+            discount_rate=0.1,
+            discount_reference_year=2020,
+        ),
+        name="discounted_cost_expression_test",
+        objective_category="climate_change",
+    )
+    _set_cost_expression_variables(model)
+
+    assert pyo.value(model.discount_factor[2020]) == pytest.approx(1.0)
+    assert pyo.value(model.discount_factor[2021]) == pytest.approx(1 / 1.1)
+    assert pyo.value(model.total_cost) == pytest.approx(124.0)
