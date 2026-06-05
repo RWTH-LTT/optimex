@@ -80,6 +80,7 @@ def create_model(
     name: str,
     objective_category: str,
     debug_path: str = None,
+    objective: str = "environmental",
 ) -> pyo.ConcreteModel:
     """
     Build a Pyomo ConcreteModel for the optimization problem based on the provided
@@ -101,6 +102,9 @@ def create_model(
     debug_path : str, optional
         If provided, specifies the directory path where intermediate model data (such as
         the LP formulation) or diagnostics may be stored.
+    objective : str, optional
+        Objective type to minimize. Use "environmental" to minimize the selected
+        impact category, or "cost" to minimize total economic cost.
 
     Returns
     -------
@@ -108,7 +112,13 @@ def create_model(
         A fully constructed Pyomo model ready for optimization.
     """
 
+    if objective not in {"environmental", "cost"}:
+        raise ValueError(
+            f"Unknown objective '{objective}'. Expected 'environmental' or 'cost'."
+        )
+
     model = pyo.ConcreteModel(name=name)
+    model._objective = objective
     model._objective_category = objective_category
     scaled_inputs, scales = inputs.get_scaled_copy()
     model.scales = scales  # Store scales for denormalization later
