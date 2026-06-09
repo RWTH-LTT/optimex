@@ -147,3 +147,4 @@ notebooks/results
 
 # Generated plot files
 notebooks/plots/figs/*.png
+notebooks/data/premise_database_setup.ipynb

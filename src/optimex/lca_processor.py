@@ -223,6 +223,7 @@ class LCADataProcessor:
         self._processes = {}
         self._products = {}  # Maps product codes to product names
         self._intermediate_flows = {}
+        self._intermediate_flow_metadata = {}
         self._elementary_flows = {}
 
         self._reference_products = set()
@@ -644,6 +645,16 @@ class LCADataProcessor:
                         else:
                             self._cost_relevant_cap_flows.add(input_code)
                         self._intermediate_flows.setdefault(input_code, input_name)
+                        self._intermediate_flow_metadata.setdefault(
+                            input_code,
+                            {
+                                "name": input_name,
+                                "location": exc.input.get("location"),
+                                "product": exc.input.get("product")
+                                or exc.input.get("reference product"),
+                                "unit": exc.input.get("unit"),
+                            },
+                        )
 
                 # Handle biosphere edges
                 elif edge_type == bd.labels.biosphere_edge_default:
@@ -769,6 +780,39 @@ class LCADataProcessor:
         logger.info(f"Finished calculating inventory for database: {db_name}")
         return inventory_tensor, elementary_flows
 
+    def _get_background_activity_for_cost(self, db: bd.Database, flow_code: str):
+        """
+        Resolve a cost-relevant background activity without changing inventory logic.
+
+        Existing optimex behavior is preserved by trying the direct code lookup
+        first. If premise assigned a different code to the equivalent activity in
+        a later background database, fall back to the metadata captured from the
+        original foreground edge.
+        """
+        try:
+            return db.get(code=flow_code)
+        except Exception as code_error:
+            metadata = self._intermediate_flow_metadata.get(flow_code, {})
+            lookup = {"database": db.name}
+
+            for key in ("name", "location", "product", "unit"):
+                value = metadata.get(key)
+                if value is not None:
+                    lookup[key] = value
+
+            if len(lookup) == 1:
+                raise code_error
+
+            try:
+                return bd.get_node(**lookup)
+            except Exception as metadata_error:
+                raise ValueError(
+                    "Could not resolve background activity for market price lookup: "
+                    f"database='{db.name}', flow_code='{flow_code}', "
+                    f"metadata_lookup={lookup}. Code error: {code_error}; "
+                    f"metadata error: {metadata_error}"
+                ) from metadata_error
+
     def _cost_relevance_label(self, flow_code: str) -> str:
         """Return a human-readable cap/op relevance label for a background flow."""
         is_cap = flow_code in self._cost_relevant_cap_flows
@@ -787,8 +831,11 @@ class LCADataProcessor:
 
         Market prices are stored as attributes of time-specific background nodes.
         For each direct background product used by the foreground system, this method
-        resolves the corresponding node by code in every configured background
-        database and reads its ``market_price`` attribute.
+        resolves the corresponding node in every configured background database and
+        reads its ``market_price`` attribute. Direct code lookup is tried first to
+        preserve the existing optimex behavior; metadata lookup is only used as a
+        fallback for premise databases where equivalent activities have different
+        codes across years.
 
         Missing prices are logged as warnings because an omitted price would otherwise
         make a cost-relevant input appear cost-free in the optimization.
@@ -806,7 +853,7 @@ class LCADataProcessor:
                 relevance = self._cost_relevance_label(flow_code)
 
                 try:
-                    activity = db.get(code=flow_code)
+                    activity = self._get_background_activity_for_cost(db, flow_code)
                 except Exception as e:
                     logger.warning(
                         "Missing background node for market price lookup: "

@@ -48,7 +48,8 @@ environmental inventories to interpolate prices between representative years.
 ## Setting Market Prices
 
 Use `set_market_prices()` to write market prices from tabular input data to the
-correct Brightway background nodes.
+correct Brightway background nodes. Nodes are identified by Brightway `name` and
+`location`. If this is ambiguous, additional product and unit columns can be used.
 
 ```python
 from optimex.economics import set_market_prices
@@ -57,12 +58,16 @@ price_data = [
     {
         "name": "market group for electricity, medium voltage",
         "location": "RER",
+        "product": "electricity, medium voltage",
+        "unit": "kilowatt hour",
         "year": 2020,
         "price": 90.0,
     },
     {
         "name": "market group for electricity, medium voltage",
         "location": "RER",
+        "product": "electricity, medium voltage",
+        "unit": "kilowatt hour",
         "year": 2030,
         "price": 70.0,
     },
@@ -74,6 +79,8 @@ set_market_prices(
         2020: "ei312_REMIND-EU_SSP2_NDC_2020",
         2030: "ei312_REMIND-EU_SSP2_NDC_2030",
     },
+    product_col="product",
+    unit_col="unit",
 )
 ```
 
@@ -86,6 +93,34 @@ node.save()
 
 to each matching background node.
 
+Brightway `code` is intentionally not used for this helper. In premise-generated
+time-specific databases, equivalent activities can have different `code` and
+`id` values across years. For example, the same electricity market group in 2020
+and 2030 can share `name`, `reference product`, `unit`, and `location`, while
+having different Brightway codes. Therefore, code is not a suitable identifier
+for assigning one price time series across multiple premise databases.
+
+This does not change the existing optimex background inventory pipeline: it still
+uses the original foreground edge input code as the stable `INTERMEDIATE_FLOW`
+identifier. For economic costs, optimex first tries the same code lookup and then
+falls back to the activity metadata captured from the foreground edge, so
+`market_price` can still be read when a premise database assigns a different code
+to an equivalent background activity.
+
+Some Brightway databases contain multiple activities with the same name and
+location but different products or units. In that case, include product and/or
+unit columns and pass `product_col` and `unit_col`, matching the usual Brightway
+lookup:
+
+```python
+set_market_prices(
+    price_data=price_data,
+    background_databases=background_databases,
+    product_col="product",
+    unit_col="unit",
+)
+```
+
 ## Custom Column Names
 
 `price_data` can also be a pandas DataFrame. If your columns use different
@@ -97,6 +132,8 @@ set_market_prices(
     background_databases=background_databases,
     name_col="process",
     location_col="region",
+    product_col="reference_product",
+    unit_col="unit",
     year_col="scenario_year",
     price_col="eur_per_unit",
 )
@@ -129,4 +166,3 @@ operation=False -> installation-related purchases
 
 The same market price can therefore contribute to either cost account depending
 on how the background product is used by the foreground system.
-

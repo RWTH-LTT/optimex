@@ -43,6 +43,8 @@ def set_market_prices(
     year_col: str = "year",
     price_col: str = "price",
     location_col: str | None = "location",
+    product_col: str | None = None,
+    unit_col: str | None = None,
     price_attribute: str = "market_price",
     overwrite: bool = True,
     strict: bool = True,
@@ -68,6 +70,14 @@ def set_market_prices(
     location_col : str or None
         Optional column/key containing the Brightway node location. Set to
         ``None`` to look up nodes without a location filter.
+    product_col : str or None
+        Optional column/key containing the Brightway product or reference
+        product. Use this to disambiguate activities with the same name and
+        location but different products or units.
+    unit_col : str or None
+        Optional column/key containing the Brightway unit. Use this to
+        disambiguate activities with the same name, location, and product but
+        different units.
     price_attribute : str
         Brightway node attribute used to store the price.
     overwrite : bool
@@ -80,6 +90,10 @@ def set_market_prices(
     required_cols = [name_col, year_col, price_col]
     if location_col is not None:
         required_cols.append(location_col)
+    if product_col is not None:
+        required_cols.append(product_col)
+    if unit_col is not None:
+        required_cols.append(unit_col)
 
     for index, record in enumerate(records):
         missing = [col for col in required_cols if col not in record]
@@ -105,6 +119,10 @@ def set_market_prices(
         }
         if location_col is not None:
             lookup["location"] = record[location_col]
+        if product_col is not None:
+            lookup["product"] = record[product_col]
+        if unit_col is not None:
+            lookup["unit"] = record[unit_col]
 
         try:
             node = bd.get_node(**lookup)

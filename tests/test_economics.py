@@ -269,6 +269,65 @@ def test_set_market_prices_supports_custom_column_names(setup_brightway_database
     assert node["market_price"] == 21.0
 
 
+def test_set_market_prices_supports_product_and_unit_disambiguation(
+    setup_brightway_databases,
+):
+    """Product and unit can disambiguate nodes with same name and location."""
+    db = bd.Database("db_2020")
+    db.new_node(
+        code="gas_kg",
+        name="gas production",
+        location="DE",
+        **{"reference product": "natural gas, high pressure"},
+        unit="kilogram",
+    ).save()
+    db.new_node(
+        code="gas_m3",
+        name="gas production",
+        location="DE",
+        **{"reference product": "natural gas, high pressure"},
+        unit="cubic meter",
+    ).save()
+
+    with pytest.raises(ValueError, match="Found 2 results"):
+        set_market_prices(
+            price_data=[
+                {
+                    "name": "gas production",
+                    "location": "DE",
+                    "year": 2020,
+                    "price": 0.3,
+                }
+            ],
+            background_databases={2020: "db_2020"},
+        )
+
+    set_market_prices(
+        price_data=[
+            {
+                "name": "gas production",
+                "location": "DE",
+                "product": "natural gas, high pressure",
+                "unit": "cubic meter",
+                "year": 2020,
+                "price": 0.3,
+            }
+        ],
+        background_databases={2020: "db_2020"},
+        product_col="product",
+        unit_col="unit",
+    )
+
+    node = bd.get_node(
+        database="db_2020",
+        name="gas production",
+        location="DE",
+        product="natural gas, high pressure",
+        unit="cubic meter",
+    )
+    assert node["market_price"] == 0.3
+
+
 def test_set_market_prices_respects_overwrite_false(setup_brightway_databases):
     """Existing prices are preserved when overwrite is disabled."""
     node = bd.get_node(database="db_2020", name="node I1", location="somewhere")
@@ -390,6 +449,72 @@ def test_operation_edge_prices_flow_to_operation_costs(
     manager = converter.ModelInputManager()
     model_inputs = manager.parse_from_lca_processor(processor)
     assert model_inputs.intermediate_costs_op[("I2", 2025)] == 15.0
+
+
+@bw2test
+def test_background_cost_lookup_falls_back_to_metadata_when_codes_differ():
+    """Cost lookup can find equivalent premise nodes with different codes."""
+    bd.projects.set_current("__test_economic_cost_metadata_lookup__")
+
+    db_2020 = bd.Database("db_2020")
+    db_2020.write(
+        {
+            ("db_2020", "I1"): {
+                "name": "node I1",
+                "location": "somewhere",
+                "reference product": "I1",
+                "unit": "kg",
+                "exchanges": [
+                    {
+                        "amount": 1,
+                        "type": "production",
+                        "input": ("db_2020", "I1"),
+                    },
+                ],
+            },
+        }
+    )
+    db_2020.register()
+
+    db_2030 = bd.Database("db_2030")
+    db_2030.write(
+        {
+            ("db_2030", "I1_2030"): {
+                "name": "node I1",
+                "location": "somewhere",
+                "reference product": "I1",
+                "unit": "kg",
+                "market_price": 50.0,
+                "exchanges": [
+                    {
+                        "amount": 1,
+                        "type": "production",
+                        "input": ("db_2030", "I1_2030"),
+                    },
+                ],
+            },
+        }
+    )
+    db_2030.register()
+
+    processor = object.__new__(lca_processor.LCADataProcessor)
+    processor.background_dbs = {"db_2030": datetime(2030, 1, 1)}
+    processor._intermediate_flows = {"I1": "node I1"}
+    processor._intermediate_flow_metadata = {
+        "I1": {
+            "name": "node I1",
+            "location": "somewhere",
+            "product": "I1",
+            "unit": "kg",
+        }
+    }
+    processor._cost_relevant_cap_flows = {"I1"}
+    processor._cost_relevant_op_flows = set()
+    processor._background_costs = {}
+
+    processor._construct_background_costs()
+
+    assert processor.background_costs[("db_2030", "I1")] == 50.0
 
 
 def test_missing_market_price_logs_warning(
