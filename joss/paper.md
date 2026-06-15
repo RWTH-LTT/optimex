@@ -24,7 +24,7 @@ affiliations:
   - name: Interdisciplinary Transformation University Austria (IT:U), Austria
     index: 2
 
-date: 05 June 2026
+date: 15 June 2026
 bibliography: paper.bib
 ---
 
