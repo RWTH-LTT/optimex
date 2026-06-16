@@ -11,6 +11,7 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/optimex?color=%2300549f)](https://pypi.org/project/optimex/)
 [![Conda Version](https://img.shields.io/conda/v/diepers/optimex?label=conda)](https://anaconda.org/diepers/optimex)
 [![Conda - License](https://img.shields.io/conda/l/diepers/optimex)](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
+[![preprint](https://img.shields.io/badge/preprint-10.21203%2Frs.3.rs--9630408%2Fv1-blue)](https://doi.org/10.21203/rs.3.rs-9630408/v1)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/TimoDiepers/optimex/main?urlpath=%2Fdoc%2Ftree%2Fnotebooks%2Fbasic_optimex_example.ipynb)
 
 ## What is optimex?
@@ -78,6 +79,12 @@ Full documentation, tutorials, and examples are available at **[optimex.readthed
 - [API Reference](https://optimex.readthedocs.io/en/latest/api/overview/)
 
 `optimex` builds on [Pyomo](https://github.com/Pyomo/pyomo) and [Brightway](https://docs.brightway.dev/en/latest). For time-explicit LCA without optimization, see [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
+
+## Citation
+
+If you use `optimex` in your research, please consider citing our preprint:
+
+> Diepers, T., Tautorus, J., Hartmann, J. M., & von der Assen, N. (2026). *A Framework for Time-Explicit Life Cycle Optimization*. Preprint. https://doi.org/10.21203/rs.3.rs-9630408/v1
 
 ## Support
 

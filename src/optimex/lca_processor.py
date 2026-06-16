@@ -166,6 +166,7 @@ class LCAConfig(BaseModel):
         temporal: Temporal configuration for model time behavior.
         characterization_methods: List of characterization method configurations.
         background_inventory: Configuration for background inventory data calculation.
+        foreground_db_name: Name of the foreground Brightway database.
     """
 
     demand: Dict[bd.backends.proxies.Activity, TemporalDistribution]
@@ -173,6 +174,10 @@ class LCAConfig(BaseModel):
     characterization_methods: List[CharacterizationMethodConfig]
     background_inventory: Optional[BackgroundInventoryConfig] = Field(
         default_factory=BackgroundInventoryConfig
+    )
+    foreground_db_name: str = Field(
+        "foreground",
+        description="Name of the foreground Brightway database.",
     )
 
     class Config:
@@ -190,7 +195,9 @@ class LCADataProcessor:
     calculations and retrieve LCA results.
     """
 
-    def __init__(self, config: LCAConfig) -> None:
+    def __init__(
+        self, config: LCAConfig, foreground_db_name: str = "foreground"
+    ) -> None:
         """
         Initialize the LCADataProcessor with the LCA configuration.
 
@@ -199,11 +206,15 @@ class LCADataProcessor:
         config : LCAConfig
             The configuration object containing all settings for demand,
             temporal parameters, characterization methods, and background inventory.
+        foreground_db_name : str, optional
+            The name of the foreground Brightway database, by default "foreground".
         """
         self.config = config
-        if "foreground" not in bd.databases:
-            raise ValueError("Foreground database 'foreground' is not defined.")
-        self.foreground_db = bd.Database("foreground")
+        if foreground_db_name not in bd.databases:
+            raise ValueError(
+                f"Foreground database '{foreground_db_name}' is not defined."
+            )
+        self.foreground_db = bd.Database(foreground_db_name)
         self.background_dbs = {}
         if config.temporal.database_dates is not None:
             self.background_dbs = {
@@ -223,7 +234,6 @@ class LCADataProcessor:
         self._processes = {}
         self._products = {}  # Maps product codes to product names
         self._intermediate_flows = {}
-        self._intermediate_flow_metadata = {}
         self._elementary_flows = {}
 
         self._reference_products = set()
@@ -482,7 +492,7 @@ class LCADataProcessor:
               to amount for product production.
             - self._products: dict mapping product codes to their names.
             - self._intermediate_flows: dict mapping background intermediate flow codes
-              to their names.
+              to identity metadata used for lookup in background databases.
             - self._elementary_flows: dict mapping elementary flow codes to their names.
             - self._processes: dict mapping process codes to their names.
             - self._operation_flow: dict mapping (process_code, flow_code) to boolean
@@ -644,14 +654,18 @@ class LCADataProcessor:
                             self._cost_relevant_op_flows.add(input_code)
                         else:
                             self._cost_relevant_cap_flows.add(input_code)
-                        self._intermediate_flows.setdefault(input_code, input_name)
-                        self._intermediate_flow_metadata.setdefault(
+                        # Store identity attributes, not just the code: premise assigns a
+                        # different code to the same activity in each scenario database, so
+                        # background activities are resolved across databases by
+                        # (name, reference product, location), not by code.
+                        self._intermediate_flows.setdefault(
                             input_code,
                             {
                                 "name": input_name,
-                                "location": exc.input.get("location"),
+                                "reference product": exc.input.get("reference product"),
                                 "product": exc.input.get("product")
                                 or exc.input.get("reference product"),
+                                "location": exc.input.get("location"),
                                 "unit": exc.input.get("unit"),
                             },
                         )
@@ -704,7 +718,9 @@ class LCADataProcessor:
         db_name : str
             Name of the background database to analyze.
         intermediate_flows : dict
-            Dictionary mapping intermediate flow codes to flow names.
+            Dictionary mapping intermediate flow codes (foreground reference codes)
+            to identity metadata dicts with keys "name", "reference product", and
+            "location", used to resolve the activity in each background database.
         methods : List[tuple]
             A List of LCIA methods represented by a tuple (e.g.,
             `("EF v3.1", "climate change", "global warming potential (GWP100)")`).
@@ -727,12 +743,17 @@ class LCADataProcessor:
         elementary_flows = {}
         activity_cache = {}
 
-        # Cache activity objects by looking up intermediate flows in the database
-        for key in intermediate_flows.keys():
+        # Resolve each intermediate flow in this database by identity. The tensor
+        # stays keyed by the foreground reference code (`key`) for consistency
+        # across databases.
+        for key, meta in intermediate_flows.items():
             try:
-                activity_cache[key] = db.get(code=key)
-            except Exception as e:  # Catch exceptions (e.g., if key is not valid)
-                logger.warning(f"Failed to get activity for key '{key}': {e}")
+                activity_cache[key] = self._resolve_background_activity(db_name, key)
+            except Exception as e:  # Catch exceptions (e.g., if activity not found)
+                logger.warning(
+                    f"Failed to resolve intermediate flow {meta!r} (code '{key}') "
+                    f"in '{db_name}': {e}"
+                )
         function_unit_dict = {activity: 1 for activity in activity_cache.values()}
 
         lca = bc.LCA(function_unit_dict, next(iter(methods)))
@@ -780,38 +801,52 @@ class LCADataProcessor:
         logger.info(f"Finished calculating inventory for database: {db_name}")
         return inventory_tensor, elementary_flows
 
-    def _get_background_activity_for_cost(self, db: bd.Database, flow_code: str):
+    def _resolve_background_activity(self, db_name: str, flow_code: str):
         """
-        Resolve a cost-relevant background activity without changing inventory logic.
+        Resolve an intermediate flow to the equivalent activity in a background DB.
 
-        Existing optimex behavior is preserved by trying the direct code lookup
-        first. If premise assigned a different code to the equivalent activity in
-        a later background database, fall back to the metadata captured from the
-        original foreground edge.
+        The model stays keyed by the foreground reference code. Activities in each
+        background database are resolved by their ecoinvent identity attributes
+        when available, with code lookup kept as a backward-compatible fallback.
         """
-        try:
-            return db.get(code=flow_code)
-        except Exception as code_error:
-            metadata = self._intermediate_flow_metadata.get(flow_code, {})
-            lookup = {"database": db.name}
+        db = bd.Database(name=db_name)
+        meta = self._intermediate_flows.get(flow_code)
 
-            for key in ("name", "location", "product", "unit"):
-                value = metadata.get(key)
-                if value is not None:
-                    lookup[key] = value
-
-            if len(lookup) == 1:
-                raise code_error
+        if isinstance(meta, dict):
+            lookup = {"database": db_name, "name": meta["name"]}
+            product = meta.get("reference product") or meta.get("product")
+            if product is not None:
+                lookup["product"] = product
+            if meta.get("location") is not None:
+                lookup["location"] = meta["location"]
+            if meta.get("unit") is not None:
+                lookup["unit"] = meta["unit"]
 
             try:
                 return bd.get_node(**lookup)
             except Exception as metadata_error:
-                raise ValueError(
-                    "Could not resolve background activity for market price lookup: "
-                    f"database='{db.name}', flow_code='{flow_code}', "
-                    f"metadata_lookup={lookup}. Code error: {code_error}; "
-                    f"metadata error: {metadata_error}"
-                ) from metadata_error
+                try:
+                    return db.get(code=flow_code)
+                except Exception as code_error:
+                    raise ValueError(
+                        "Could not resolve background activity: "
+                        f"database='{db_name}', flow_code='{flow_code}', "
+                        f"metadata_lookup={lookup}. Metadata error: "
+                        f"{metadata_error}; code error: {code_error}"
+                    ) from metadata_error
+
+        # Backward compatibility (e.g. legacy pickled inputs): code lookup.
+        return db.get(code=flow_code)
+
+    def _get_background_activity_for_cost(self, db: bd.Database, flow_code: str):
+        """Resolve the activity used to read a cost-relevant market price."""
+        try:
+            return self._resolve_background_activity(db.name, flow_code)
+        except Exception as error:
+            raise ValueError(
+                "Could not resolve background activity for market price lookup: "
+                f"database='{db.name}', flow_code='{flow_code}'. Error: {error}"
+            ) from error
 
     def _cost_relevance_label(self, flow_code: str) -> str:
         """Return a human-readable cap/op relevance label for a background flow."""
@@ -832,10 +867,9 @@ class LCADataProcessor:
         Market prices are stored as attributes of time-specific background nodes.
         For each direct background product used by the foreground system, this method
         resolves the corresponding node in every configured background database and
-        reads its ``market_price`` attribute. Direct code lookup is tried first to
-        preserve the existing optimex behavior; metadata lookup is only used as a
-        fallback for premise databases where equivalent activities have different
-        codes across years.
+        reads its ``market_price`` attribute. The same background activity resolver
+        is used as for inventory calculation, so equivalent premise activities can
+        be matched across databases by their identity metadata.
 
         Missing prices are logged as warnings because an omitted price would otherwise
         make a cost-relevant input appear cost-free in the optimization.
@@ -849,7 +883,12 @@ class LCADataProcessor:
         for db_name in self.background_dbs:
             db = bd.Database(name=db_name)
             for flow_code in cost_relevant_flows:
-                flow_name = self._intermediate_flows.get(flow_code, "<unknown>")
+                flow_meta = self._intermediate_flows.get(flow_code, "<unknown>")
+                flow_name = (
+                    flow_meta.get("name", "<unknown>")
+                    if isinstance(flow_meta, dict)
+                    else flow_meta
+                )
                 relevance = self._cost_relevance_label(flow_code)
 
                 try:

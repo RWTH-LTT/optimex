@@ -499,10 +499,10 @@ def test_background_cost_lookup_falls_back_to_metadata_when_codes_differ():
 
     processor = object.__new__(lca_processor.LCADataProcessor)
     processor.background_dbs = {"db_2030": datetime(2030, 1, 1)}
-    processor._intermediate_flows = {"I1": "node I1"}
-    processor._intermediate_flow_metadata = {
+    processor._intermediate_flows = {
         "I1": {
             "name": "node I1",
+            "reference product": "I1",
             "location": "somewhere",
             "product": "I1",
             "unit": "kg",
