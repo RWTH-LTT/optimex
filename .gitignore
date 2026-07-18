@@ -148,3 +148,6 @@ notebooks/results
 # Generated plot files
 notebooks/plots/figs/*.png
 notebooks/data/premise_database_setup.ipynb
+
+# Local ethylene case-study research exports (contains unfinished price research)
+notebooks/data/ethylene_case_study_local/
