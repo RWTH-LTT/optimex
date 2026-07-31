@@ -557,8 +557,9 @@ class TestBrownfieldPostprocessing:
         capacity_df = pp.get_production_capacity()
 
         # At 2020: existing capacity (tau=1) is in operation
-        # Capacity should include the existing 10 units * 2 (production per unit) = 20
-        assert capacity_df.loc[2020, "product"] >= 20.0, (
+        # get_production_capacity reports ANNUAL capacity, so the existing 10 units
+        # contribute 10 units * 1.0 production per unit and year = 10
+        assert capacity_df.loc[2020, "product"] >= 10.0, (
             f"Production capacity at 2020 should include existing capacity, "
             f"got {capacity_df.loc[2020, 'product']}"
         )
@@ -934,9 +935,10 @@ class TestBrownfieldWithVintageParameters:
             "characterization": {("GWP", "CO2", t): 1.0 for t in range(2025, 2036)},
             # MULTIPLE existing capacity entries for the same process
             # This should NOT double the production rate
+            # Together they cover the demand of 1000/year (10 units * 100 per year)
             "existing_capacity": {
-                ("Plant", 2005): 0.5,  # 0.5 units from 2005
-                ("Plant", 2015): 0.5,  # 0.5 units from 2015
+                ("Plant", 2005): 5.0,  # 5 units from 2005
+                ("Plant", 2015): 5.0,  # 5 units from 2015
             },
         }
 
@@ -953,15 +955,13 @@ class TestBrownfieldWithVintageParameters:
 
         assert results.solver.termination_condition == pyo.TerminationCondition.optimal
 
-        # Check that operation is reasonable (should be ~demand/production_rate = 1000/3000 ≈ 0.33)
-        # If the bug exists, operation would be ~0.16 (half of expected) due to doubled rate
+        # Each running unit produces 100 per year, so meeting a demand of 1000
+        # requires 10 units running - the two existing entries taken together.
+        # If the production rate were counted once per existing entry, half as many
+        # units would appear to be enough.
         operation_2025 = get_total_operation(solved_model, "Plant", 2025)
 
-        # Production per unit of operation = sum of production rates for operating taus
-        # With operation_time_limits (1, 30), there are 30 operating taus
-        # Each tau has production = 100, so total = 3000 per unit of operation
-        # To meet demand of 1000, we need operation = 1000/3000 ≈ 0.333
-        expected_operation = 1000 / 3000  # ≈ 0.333
+        expected_operation = 1000 / 100  # 10 units running
         assert operation_2025 == pytest.approx(expected_operation, rel=0.01), (
             f"Operation at 2025 should be ~{expected_operation:.4f}, got {operation_2025:.4f}. "
             "If operation is half of expected, the production rate is being doubled incorrectly."

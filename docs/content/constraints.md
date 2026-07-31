@@ -35,7 +35,10 @@ solved_model, objective, results = optimizer.solve_model(model)
 
 ## Process Deployment Limits
 
-Control how much capacity can be installed for each process.
+Control how many units of a process can be installed.
+
+!!! note "Limits are in process units"
+    Deployment limits bound `var_installation`, which counts process **units**. One unit delivers the production of its production exchange over its whole lifetime, so a limit of 50 allows a lifetime output of 50 reference-flow units, not an annual output of 50. See [Foreground Modeling](foreground_modeling.md#what-one-installed-unit-means).
 
 ### Time-Specific Deployment Limits
 
@@ -99,6 +102,8 @@ Control how much a process can operate in each time period.
 
 !!! note "Operation vs Installation"
     Operation limits constrain how much of the installed capacity is actually used in each period. A process can only operate up to its installed capacity, but operation limits can further restrict this.
+
+    Both variables are counted in process units: `var_operation[p, v, t]` is how many units of vintage `v` run in year `t`, bounded by `var_installation[p, v]`. An operation limit therefore caps the units running in that year, summed over all vintages — multiply by the process's output per unit and year to express it as a production limit (or use [flow limits](#flow-limits) to bound production directly).
 
 **Example: Limit coal plant operation during phase-out**
 ```python
@@ -266,7 +271,9 @@ Model systems with pre-existing infrastructure that was installed before the opt
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `existing_capacity` | `Dict[Tuple[str, int], float]` | Capacity at `(process, installation_year)` |
+| `existing_capacity` | `Dict[Tuple[str, int], float]` | Units at `(process, installation_year)` |
+
+Existing capacity is given in the same process units as `var_installation`, and the entries behave like vintages of that installation year: they can run while their lifecycle stage falls inside the operation window, and they carry no installation impacts.
 
 !!! info "Brownfield vs Greenfield"
     - **Greenfield**: Optimization starts from scratch with no existing capacity

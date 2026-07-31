@@ -109,7 +109,15 @@ def load_scenario_data(scenario: str) -> dict:
 
 
 def clean_capacity_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean capacity DataFrame and rename columns."""
+    """
+    Clean capacity DataFrame and rename columns.
+
+    The capacity files are exported from `PostProcessor.get_production_capacity()`,
+    which reports ANNUAL production capacity (installed units times the output per
+    unit and year). That is the quantity to plot against annual production - the raw
+    installation numbers from `get_installation()` are unit counts covering a unit's
+    whole lifetime and are not comparable with per-year production.
+    """
     df = df.copy()
     df.index = df.index.astype(int)
     df.columns = [PRODUCT_NAMES.get(c, c) for c in df.columns]
@@ -405,7 +413,7 @@ def create_combined_results_figure(scenarios_data: dict):
                 capacity_values = cap_df[product_col].values[cap_mask] / 1e6
                 if np.any(capacity_values > 0.001):
                     ax.plot(x_positions, capacity_values, color="#000000", linestyle="--",
-                            linewidth=1, marker="", label="Capacity", zorder=4)
+                            linewidth=1, marker="", label="Annual capacity", zorder=4)
 
             # if not is_intermediate:
             #     ax.axhline(y=1, color="red", linestyle="--", linewidth=1)
@@ -447,7 +455,7 @@ def create_combined_results_figure(scenarios_data: dict):
         all_handles.append(Patch(facecolor=color, edgecolor="white", linewidth=0.5))
         all_labels.append(process)
     all_handles.append(plt.Line2D([0], [0], color="#000000", linestyle="--", linewidth=1))
-    all_labels.append("Available capacity")
+    all_labels.append("Available annual capacity")
     # all_handles.append(plt.Line2D([0], [0], color="red", linestyle="--", linewidth=1))
     # all_labels.append("Demand")
     # all_handles.append(Patch(facecolor="#BDCD00", edgecolor="#41811C", linewidth=1, hatch="///"))
@@ -1213,7 +1221,7 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
                 capacity_values = cap_df[product_col].values[cap_mask] / 1e6
                 if np.any(capacity_values > 0.001):
                     ax.plot(x_positions, capacity_values, color="#000000", linestyle="--",
-                            linewidth=1, marker="", label="Capacity", zorder=4)
+                            linewidth=1, marker="", label="Annual capacity", zorder=4)
             
             ax.axhline(y=0, color="gray", linewidth=0.5, zorder=0)
             
@@ -1449,7 +1457,7 @@ def create_combined_results_and_impacts_figure(scenarios_data: dict):
     
     # Add capacity line
     all_handles.append(plt.Line2D([0], [0], color="#000000", linestyle="--", linewidth=1))
-    all_labels_legend.append("Available capacity")
+    all_labels_legend.append("Available annual capacity")
     
     fig.legend(all_handles, all_labels_legend, loc="lower center", bbox_to_anchor=(0.5, 0.07),
                ncol=4, frameon=False, fontsize=9)

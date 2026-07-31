@@ -617,8 +617,25 @@ class PostProcessor:
     def get_installation(self) -> pd.DataFrame:
         """
         Extracts the installation data from the model and returns it as a DataFrame.
-        The DataFrame will have a MultiIndex with 'Time' and 'Process'.
-        The values are the installed capacities for each process at each time step.
+
+        Values are the decision variable `var_installation[p, v]` itself, unchanged:
+        the number of process UNITS built in vintage year v. One unit delivers its full
+        lifetime production (the sum of its production temporal distribution) spread
+        over its operation window.
+
+        Two things follow, and both matter when reading plots:
+
+        1. The index is the year of INSTALLATION, not a year of production. A unit
+           installed in 2030 with an operation window of tau 1-20 produces in 2031-2050.
+        2. The values are a lifetime quantity, so they are not an annual capacity and
+           must not be compared with the per-year values from `get_production()` or
+           `get_demand()`. Use `get_production_capacity()` for the annual capacity that
+           installed units and existing stock make available in each year.
+
+        Returns
+        -------
+        pd.DataFrame
+            Time (vintage year) as index, Process as columns, units as values.
         """
         # var_installation is already in real units, no scaling needed
         installation_matrix = {
@@ -639,8 +656,15 @@ class PostProcessor:
         """
         Extracts the operation data from the model and returns it as a DataFrame.
 
-        With 3D var_operation[p, v, t], this method can either aggregate across
-        vintages (backward compatible) or return per-vintage data.
+        Values are the decision variable `var_operation[p, v, t]` itself: the number of
+        UNITS of vintage v that run in year t, summed over vintages by default. Unlike
+        `get_installation()`, the index is the year of OPERATION.
+
+        Units running are not a production volume: multiply by the output per unit and
+        year (the production entry at the vintage's lifecycle stage) to get production,
+        or simply use `get_production()`. Units running can be compared directly with
+        `get_installation()` only per vintage, since operation of a vintage is bounded
+        by the units installed in that vintage.
 
         Parameters
         ----------
@@ -655,6 +679,7 @@ class PostProcessor:
             If aggregate_vintages=True: DataFrame with Time as index, Process as columns.
             If aggregate_vintages=False: DataFrame with Time as index,
                 (Process, Vintage) MultiIndex columns.
+            Values are counts of running units in both cases.
 
         Note: var_operation is not scaled because when both demand and
         foreground_production are scaled by the same factor, the scaling
@@ -719,9 +744,6 @@ class PostProcessor:
 
         for p in self.m.PROCESS:
             for f in self.m.PRODUCT:
-                op_start = pyo.value(self.m.process_operation_start[p])
-                op_end = pyo.value(self.m.process_operation_end[p])
-
                 for t in self.m.SYSTEM_TIME:
                     # Sum production across all active vintages at time t
                     total_production = 0
@@ -729,18 +751,16 @@ class PostProcessor:
                         if proc != p or time != t:
                             continue
 
-                        # Get production rate for this vintage
+                        tau = t - v  # lifecycle stage of this vintage in year t
+                        if tau not in self.m.PROCESS_TIME:
+                            continue
+
+                        # Annual output per running unit at this lifecycle stage
                         if has_production_overrides(p, f):
-                            production_rate = sum(
-                                pyo.value(get_production_value(p, f, tau_op, v))
-                                for tau_op in self.m.PROCESS_TIME
-                                if op_start <= tau_op <= op_end
-                            )
+                            production_rate = pyo.value(get_production_value(p, f, tau, v))
                         else:
-                            production_rate = sum(
-                                pyo.value(self.m.foreground_production[p, f, tau_op])
-                                for tau_op in self.m.PROCESS_TIME
-                                if op_start <= tau_op <= op_end
+                            production_rate = pyo.value(
+                                self.m.foreground_production[p, f, tau]
                             )
 
                         # Production from this vintage
@@ -863,6 +883,12 @@ class PostProcessor:
         """
         Plot a stacked bar chart for installation data.
 
+        Bars show `var_installation`: the number of process units built in each vintage
+        year, a LIFETIME quantity plotted at the year of installation. This is not an
+        annual capacity and does not line up with production in the same year - use
+        `plot_capacity_balance()` to compare production against the annual capacity
+        those units make available.
+
         Parameters
         ----------
         df_installation : DataFrame, optional
@@ -885,9 +911,11 @@ class PostProcessor:
         fig, axes = self._create_clean_axes()
         ax = axes[0]
         self._apply_bar_styles(
-            df_installation, ax, colors, title="Installed Capacity"
+            df_installation, ax, colors, title="Installed Units by Vintage"
         )
-        ax.set_ylabel("Installed Capacity", fontsize=self._plot_config["label_fontsize"])
+        ax.set_ylabel(
+            "Installed units (lifetime)", fontsize=self._plot_config["label_fontsize"]
+        )
 
 
         # Legend at bottom
@@ -911,6 +939,10 @@ class PostProcessor:
         """
         Plot a stacked bar chart for operation data.
 
+        Bars show `var_operation` summed over vintages: how many units run in each year.
+        Note the different meaning of the x-axis compared to `plot_installation()`,
+        which is indexed by the year of installation.
+
         Parameters
         ----------
         df_operation : DataFrame, optional
@@ -933,9 +965,9 @@ class PostProcessor:
         fig, axes = self._create_clean_axes()
         ax = axes[0]
         self._apply_bar_styles(
-            df_operation, ax, colors, title="Operational Level"
+            df_operation, ax, colors, title="Units Running"
         )
-        ax.set_ylabel("Operation Level", fontsize=self._plot_config["label_fontsize"])
+        ax.set_ylabel("Units running", fontsize=self._plot_config["label_fontsize"])
 
 
         # Legend at bottom
@@ -1008,20 +1040,23 @@ class PostProcessor:
 
     def get_production_capacity(self) -> pd.DataFrame:
         """
-        Calculate maximum available production capacity for each product at each time step.
+        Calculate maximum available ANNUAL production capacity for each product at
+        each time step.
 
-        Capacity is determined by counting installations in their operation phase and
-        multiplying by their production coefficients. This includes both new installations
-        (from var_installation) and existing (brownfield) capacity.
-
-        Note: Uses vintage-aware 4D calculation when production overrides exist,
-        matching the optimizer's capacity constraint calculation.
+        Installed units (`get_installation()`) are counted in process units, and one
+        unit yields its full lifetime production over the whole operation window. This
+        method converts those units into the output they can deliver *in a given year*:
+        for every vintage active at time t, its unit count is multiplied by the
+        production coefficient at its current lifecycle stage tau = t - v. This is the
+        quantity to compare against actual production (`get_production()`), which is
+        also per year. Includes both new installations (from var_installation) and
+        existing (brownfield) capacity.
 
         Returns
         -------
         pd.DataFrame
             DataFrame with Time as index and Products as columns.
-            Values represent maximum production capacity (not actual production).
+            Values represent maximum annual production capacity (not actual production).
         """
         capacity_tensor = {}
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
@@ -1042,73 +1077,33 @@ class PostProcessor:
             """Check if any vintage overrides exist for this process/product."""
             return (p, r) in production_overrides_index
 
+        def units_available(p, v):
+            """Units of vintage v that can run: greenfield installs or brownfield stock."""
+            if v in self.m.SYSTEM_TIME:
+                return pyo.value(self.m.var_installation[p, v])
+            return existing_cap_dict.get((p, v), 0)
+
         for f in self.m.PRODUCT:
             for t in self.m.SYSTEM_TIME:
-                # Calculate total capacity across all processes
+                # Sum annual capacity over all vintages active at time t
                 total_capacity = 0
 
-                for p in self.m.PROCESS:
-                    op_start = pyo.value(self.m.process_operation_start[p])
-                    op_end = pyo.value(self.m.process_operation_end[p])
+                for (p, v, time) in self.m.ACTIVE_VINTAGE_TIME:
+                    if time != t:
+                        continue
+
+                    tau = t - v  # lifecycle stage of this vintage in year t
+                    if tau not in self.m.PROCESS_TIME:
+                        continue
 
                     if has_production_overrides(p, f):
-                        # 4D vintage-aware capacity calculation
-                        # Each vintage may have different production rates
-                        process_capacity = 0
-
-                        # New installations: sum capacity by vintage
-                        for tau in self.m.PROCESS_TIME:
-                            vintage = t - tau
-                            if vintage in self.m.SYSTEM_TIME and op_start <= tau <= op_end:
-                                # Production rate for this vintage (sum over all operating taus)
-                                production_per_unit = sum(
-                                    get_production_value(p, f, tau_op, vintage)
-                                    for tau_op in self.m.PROCESS_TIME
-                                    if op_start <= tau_op <= op_end
-                                )
-                                installation = pyo.value(self.m.var_installation[p, vintage])
-                                process_capacity += production_per_unit * installation
-
-                        # Existing (brownfield) capacity
-                        for (proc, inst_year), capacity in existing_cap_dict.items():
-                            if proc == p:
-                                tau_existing = t - inst_year
-                                if op_start <= tau_existing <= op_end:
-                                    nearest_vintage = min(self.m.SYSTEM_TIME)
-                                    production_per_unit = sum(
-                                        get_production_value(p, f, tau_op, nearest_vintage)
-                                        for tau_op in self.m.PROCESS_TIME
-                                        if op_start <= tau_op <= op_end
-                                    )
-                                    process_capacity += production_per_unit * capacity
-
-                        total_capacity += process_capacity
+                        annual_production_per_unit = get_production_value(p, f, tau, v)
                     else:
-                        # 3D calculation: no overrides, all vintages have same production rate
-                        # Count new installations in operation phase at time t
-                        installations_operating = sum(
-                            pyo.value(self.m.var_installation[p, t - tau])
-                            for tau in self.m.PROCESS_TIME
-                            if (t - tau in self.m.SYSTEM_TIME)
-                            and op_start <= tau <= op_end
+                        annual_production_per_unit = pyo.value(
+                            self.m.foreground_production[p, f, tau]
                         )
 
-                        # Add existing (brownfield) capacity in operation phase
-                        for (proc, inst_year), capacity in existing_cap_dict.items():
-                            if proc == p:
-                                tau_existing = t - inst_year
-                                if op_start <= tau_existing <= op_end:
-                                    installations_operating += capacity
-
-                        # Production capacity per installation (sum over operation phase)
-                        production_per_installation = sum(
-                            pyo.value(self.m.foreground_production[p, f, tau])
-                            for tau in self.m.PROCESS_TIME
-                            if op_start <= tau <= op_end
-                        )
-
-                        # Total capacity for this process
-                        total_capacity += installations_operating * production_per_installation
+                    total_capacity += annual_production_per_unit * units_available(p, v)
 
                 # Store denormalized capacity
                 capacity_tensor[(f, t)] = total_capacity * fg_scale
@@ -1172,6 +1167,9 @@ class PostProcessor:
         """
         Plot production vs capacity lines on a given axis.
 
+        Both series are per year and in product units; the capacity line is the annual
+        capacity from `get_production_capacity()`, not the installed unit counts.
+
         Parameters
         ----------
         ax : matplotlib.axes.Axes
@@ -1181,7 +1179,7 @@ class PostProcessor:
         prod_df : pd.DataFrame
             Production DataFrame from get_production().
         capacity_df : pd.DataFrame
-            Capacity DataFrame from get_production_capacity().
+            Annual capacity DataFrame from get_production_capacity().
         annotated : bool, default=True
             If True, show human-readable names instead of codes.
         show_legend : bool, default=True
@@ -1214,7 +1212,7 @@ class PostProcessor:
             max_capacity.values,
             marker='s',
             linewidth=self._plot_config["line_width"],
-            label='Max Capacity',
+            label='Max annual capacity',
             color='#000000',
             linestyle='--',
             zorder=3
@@ -1234,7 +1232,7 @@ class PostProcessor:
 
         # Set labels and title
         self._set_smart_xticks(ax, actual_production.index)
-        ax.set_ylabel("Quantity", fontsize=self._plot_config["label_fontsize"])
+        ax.set_ylabel("Quantity per year", fontsize=self._plot_config["label_fontsize"])
         ax.set_axisbelow(True)
         ax.grid(
             axis="both",
@@ -1268,7 +1266,10 @@ class PostProcessor:
             existing_additions_df, existing_removals_df, operation_df.
             All DataFrames have process columns and time index.
 
-        Note: Uses vintage-aware 4D calculation when production overrides exist.
+        All capacity figures are ANNUAL production capacity: unit counts multiplied by
+        the production coefficient at the relevant lifecycle stage, so they are
+        directly comparable with per-year production. Uses vintage-specific rates when
+        production overrides exist.
         """
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
         existing_cap_dict = getattr(self.m, "_existing_capacity_dict", {})
@@ -1288,6 +1289,14 @@ class PostProcessor:
             """Check if any vintage overrides exist for this process/product."""
             return (p, r) in production_overrides_index
 
+        def annual_rate(p, r, tau, vintage):
+            """Annual output per running unit of `vintage` at lifecycle stage `tau`."""
+            if tau not in self.m.PROCESS_TIME:
+                return 0.0
+            if has_production_overrides(p, r):
+                return pyo.value(get_production_value(p, r, tau, vintage))
+            return pyo.value(self.m.foreground_production[p, r, tau])
+
         capacity_additions = {p: {} for p in self.m.PROCESS}
         capacity_removals = {p: {} for p in self.m.PROCESS}
         existing_additions = {p: {} for p in self.m.PROCESS}
@@ -1299,14 +1308,12 @@ class PostProcessor:
                 op_start = pyo.value(self.m.process_operation_start[p])
                 op_end = pyo.value(self.m.process_operation_end[p])
 
-                # Base production per installation (3D, for processes without overrides)
-                prod_per_inst_3d = sum(
-                    pyo.value(self.m.foreground_production[p, product, tau])
+                # Skip processes that never produce this product
+                if all(
+                    annual_rate(p, product, tau, min(self.m.SYSTEM_TIME)) == 0
                     for tau in self.m.PROCESS_TIME
                     if op_start <= tau <= op_end
-                )
-
-                if prod_per_inst_3d == 0:
+                ):
                     capacity_additions[p][t] = 0
                     capacity_removals[p][t] = 0
                     existing_additions[p][t] = 0
@@ -1314,115 +1321,65 @@ class PostProcessor:
                     operation[p][t] = 0
                     continue
 
-                if has_production_overrides(p, product):
-                    # 4D vintage-aware calculations
-
-                    # New capacity entering operation (vintage = t - op_start)
-                    t_entering = t - op_start
-                    if t_entering in self.m.SYSTEM_TIME:
-                        installation_entering = pyo.value(self.m.var_installation[p, t_entering])
-                        prod_per_inst_vintage = sum(
-                            get_production_value(p, product, tau_op, t_entering)
-                            for tau_op in self.m.PROCESS_TIME
-                            if op_start <= tau_op <= op_end
-                        )
-                        capacity_additions[p][t] = installation_entering * prod_per_inst_vintage * fg_scale
-                    else:
-                        capacity_additions[p][t] = 0
-
-                    # Capacity exiting operation (vintage = t - op_end - 1)
-                    t_exiting = t - op_end - 1
-                    if t_exiting in self.m.SYSTEM_TIME:
-                        installation_exiting = pyo.value(self.m.var_installation[p, t_exiting])
-                        prod_per_inst_vintage = sum(
-                            get_production_value(p, product, tau_op, t_exiting)
-                            for tau_op in self.m.PROCESS_TIME
-                            if op_start <= tau_op <= op_end
-                        )
-                        capacity_removals[p][t] = installation_exiting * prod_per_inst_vintage * fg_scale
-                    else:
-                        capacity_removals[p][t] = 0
-
-                    # Existing capacity changes (use nearest vintage for rate)
-                    existing_add = 0
-                    existing_rem = 0
-                    nearest_vintage = min(self.m.SYSTEM_TIME)
-                    prod_per_inst_existing = sum(
-                        get_production_value(p, product, tau_op, nearest_vintage)
-                        for tau_op in self.m.PROCESS_TIME
-                        if op_start <= tau_op <= op_end
+                # New capacity entering operation (vintage = t - op_start), valued at
+                # the annual output it delivers in its first operating year
+                t_entering = t - op_start
+                if t_entering in self.m.SYSTEM_TIME:
+                    installation_entering = pyo.value(self.m.var_installation[p, t_entering])
+                    capacity_additions[p][t] = (
+                        installation_entering
+                        * annual_rate(p, product, op_start, t_entering)
+                        * fg_scale
                     )
-                    for (proc, inst_year), capacity in existing_cap_dict.items():
-                        if proc == p:
-                            tau_existing = t - inst_year
-                            tau_existing_prev = (t - 1) - inst_year
-                            if op_start <= tau_existing <= op_end:
-                                if tau_existing_prev < op_start:
-                                    existing_add += capacity * prod_per_inst_existing * fg_scale
-                            if tau_existing > op_end:
-                                if op_start <= tau_existing_prev <= op_end:
-                                    existing_rem += capacity * prod_per_inst_existing * fg_scale
-                    existing_additions[p][t] = existing_add
-                    existing_removals[p][t] = existing_rem
-
-                    # Operation level - sum production across all active vintages
-                    total_operation = 0
-                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
-                        if proc != p or time != t:
-                            continue
-                        # Get production rate for this vintage
-                        production_rate = sum(
-                            pyo.value(get_production_value(p, product, tau_op, v))
-                            for tau_op in self.m.PROCESS_TIME
-                            if op_start <= tau_op <= op_end
-                        )
-                        total_operation += production_rate * pyo.value(self.m.var_operation[p, v, t])
-
-                    operation[p][t] = total_operation * fg_scale
                 else:
-                    # 3D calculation: no overrides
-                    prod_per_inst = prod_per_inst_3d
+                    capacity_additions[p][t] = 0
 
-                    # New capacity entering operation
-                    t_entering = t - op_start
-                    if t_entering in self.m.SYSTEM_TIME:
-                        installation_entering = pyo.value(self.m.var_installation[p, t_entering])
-                        capacity_additions[p][t] = installation_entering * prod_per_inst * fg_scale
-                    else:
-                        capacity_additions[p][t] = 0
+                # Capacity exiting operation (vintage = t - op_end - 1), valued at the
+                # annual output it delivered in its last operating year
+                t_exiting = t - op_end - 1
+                if t_exiting in self.m.SYSTEM_TIME:
+                    installation_exiting = pyo.value(self.m.var_installation[p, t_exiting])
+                    capacity_removals[p][t] = (
+                        installation_exiting
+                        * annual_rate(p, product, op_end, t_exiting)
+                        * fg_scale
+                    )
+                else:
+                    capacity_removals[p][t] = 0
 
-                    # Capacity exiting operation
-                    t_exiting = t - op_end - 1
-                    if t_exiting in self.m.SYSTEM_TIME:
-                        installation_exiting = pyo.value(self.m.var_installation[p, t_exiting])
-                        capacity_removals[p][t] = installation_exiting * prod_per_inst * fg_scale
-                    else:
-                        capacity_removals[p][t] = 0
+                # Existing (brownfield) capacity entering/leaving operation
+                existing_add = 0
+                existing_rem = 0
+                for (proc, inst_year), capacity in existing_cap_dict.items():
+                    if proc != p:
+                        continue
+                    tau_existing = t - inst_year
+                    tau_existing_prev = (t - 1) - inst_year
+                    if op_start <= tau_existing <= op_end and tau_existing_prev < op_start:
+                        existing_add += (
+                            capacity
+                            * annual_rate(p, product, op_start, inst_year)
+                            * fg_scale
+                        )
+                    if tau_existing > op_end and op_start <= tau_existing_prev <= op_end:
+                        existing_rem += (
+                            capacity
+                            * annual_rate(p, product, op_end, inst_year)
+                            * fg_scale
+                        )
+                existing_additions[p][t] = existing_add
+                existing_removals[p][t] = existing_rem
 
-                    # Existing capacity changes
-                    existing_add = 0
-                    existing_rem = 0
-                    for (proc, inst_year), capacity in existing_cap_dict.items():
-                        if proc == p:
-                            tau_existing = t - inst_year
-                            tau_existing_prev = (t - 1) - inst_year
-                            if op_start <= tau_existing <= op_end:
-                                if tau_existing_prev < op_start:
-                                    existing_add += capacity * prod_per_inst * fg_scale
-                            if tau_existing > op_end:
-                                if op_start <= tau_existing_prev <= op_end:
-                                    existing_rem += capacity * prod_per_inst * fg_scale
-                    existing_additions[p][t] = existing_add
-                    existing_removals[p][t] = existing_rem
+                # Actual production at time t, summed over all active vintages
+                total_operation = 0
+                for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
+                    if proc != p or time != t:
+                        continue
+                    total_operation += annual_rate(p, product, t - v, v) * pyo.value(
+                        self.m.var_operation[p, v, t]
+                    )
 
-                    # Operation level - sum production across all active vintages
-                    total_operation = 0
-                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
-                        if proc != p or time != t:
-                            continue
-                        total_operation += prod_per_inst * pyo.value(self.m.var_operation[p, v, t])
-
-                    operation[p][t] = total_operation * fg_scale
+                operation[p][t] = total_operation * fg_scale
 
         # Convert to DataFrames
         capacity_additions_df = pd.DataFrame(capacity_additions)
@@ -1473,6 +1430,12 @@ class PostProcessor:
     ):
         """
         Plot detailed capacity balance with grouped bars on a given axis.
+
+        Everything is in product units per year. The capacity bars show the annual
+        capacity entering and leaving operation - unit counts converted with the output
+        per unit and year, and placed in the year operation starts or ends. They are
+        therefore neither `var_installation` nor the year it was installed, unlike
+        `plot_installation()`.
 
         Parameters
         ----------
@@ -1565,8 +1528,10 @@ class PostProcessor:
             process_legend = [Patch(facecolor=self._color_map.get(process_codes[i], 'black'), edgecolor='black', linewidth=0.5, label=col)
                             for i, col in enumerate(capacity_additions_df.columns)]
             type_legend = [
-                Patch(facecolor="white", edgecolor='#30A834', linewidth=2, label='+ Cap'),
-                Patch(facecolor="white", edgecolor='#CD221F', linewidth=2, label='− Cap'),
+                Patch(facecolor="white", edgecolor='#30A834', linewidth=2,
+                      label='+ Annual cap.'),
+                Patch(facecolor="white", edgecolor='#CD221F', linewidth=2,
+                      label='− Annual cap.'),
             ]
 
         # Plot production and capacity lines
@@ -1574,7 +1539,7 @@ class PostProcessor:
                 linewidth=self._plot_config["line_width"], label='Production / Demand',
                 color='#00549F', linestyle='-', zorder=3)
         ax.plot(x_positions, max_capacity.values, marker='s',
-                linewidth=self._plot_config["line_width"], label='Max Capacity',
+                linewidth=self._plot_config["line_width"], label='Max annual capacity',
                 color='#000000', linestyle='--', zorder=3)
 
         # Line legend entries
@@ -1582,11 +1547,11 @@ class PostProcessor:
             Line2D([0], [0], color='#00549F', marker='o', linestyle='-',
                    linewidth=self._plot_config["line_width"], label='Production / Demand'),
             Line2D([0], [0], color='#000000', marker='s', linestyle='--',
-                   linewidth=self._plot_config["line_width"], label='Max Capacity'),
+                   linewidth=self._plot_config["line_width"], label='Max annual capacity'),
         ]
 
         self._set_smart_xticks(ax, actual_production.index)
-        ax.set_ylabel("Quantity", fontsize=self._plot_config["label_fontsize"])
+        ax.set_ylabel("Quantity per year", fontsize=self._plot_config["label_fontsize"])
         ax.set_axisbelow(True)
         ax.grid(
             axis="both",
@@ -1615,17 +1580,26 @@ class PostProcessor:
         """
         Plot actual production vs maximum available capacity.
 
+        Everything in this plot is in PRODUCT UNITS PER YEAR, which is what makes
+        production and capacity comparable. The capacity shown is therefore not
+        `var_installation`: it is `get_production_capacity()`, i.e. the units of every
+        vintage that is in its operation phase multiplied by the output that vintage
+        yields per unit and year, and it is indexed by the year the capacity is
+        available rather than the year it was installed.
+
         When a specific product is given, plots a single chart. When product is
         None, auto-detects all products with non-zero demand or production and
         plots a grid of subplots.
 
         Shows two lines per product:
         - Production (demand is assumed equal and overlaid)
-        - Maximum available capacity (dashed line)
+        - Maximum available annual capacity (dashed line)
 
         When detailed=True, also shows grouped bars per time step:
-        - Left bar: Capacity changes (additions/removals stacked by process)
-        - Right bar: Operation level (stacked by process)
+        - Left bar: Annual capacity entering/leaving operation, stacked by process.
+          A cohort installed in year v appears here in the year it starts operating
+          (v + operation start), again converted to output per year.
+        - Right bar: Production of the running units, stacked by process
 
         Parameters
         ----------
@@ -1786,6 +1760,12 @@ class PostProcessor:
         This provides a clean, dedicated view of which processes are being
         operated vs sitting idle at each time step.
 
+        Utilization is computed per year as actual production divided by the annual
+        capacity of the vintages in their operation phase - both in product units per
+        year. It is not `var_operation / var_installation`: those are unit counts
+        indexed by different years (operation year vs vintage year), and a unit only
+        counts towards capacity while it is inside its operation window.
+
         Parameters
         ----------
         product : str, optional
@@ -1795,7 +1775,7 @@ class PostProcessor:
         show_values : bool, default=True
             If True, show utilization percentages in cells.
 
-        Note: Uses vintage-aware 4D calculation when production overrides exist.
+        Note: Uses vintage-specific production rates when overrides exist.
         """
         # Get demand to determine product
         demand_df = self.get_demand()
@@ -1824,6 +1804,20 @@ class PostProcessor:
             """Check if any vintage overrides exist for this process/product."""
             return (p, r) in production_overrides_index
 
+        def annual_rate(p, r, tau, vintage):
+            """Annual output per running unit of `vintage` at lifecycle stage `tau`."""
+            if tau not in self.m.PROCESS_TIME:
+                return 0.0
+            if has_production_overrides(p, r):
+                return pyo.value(get_production_value(p, r, tau, vintage))
+            return pyo.value(self.m.foreground_production[p, r, tau])
+
+        def units_available(p, v):
+            """Units of vintage v that can run: greenfield installs or brownfield stock."""
+            if v in self.m.SYSTEM_TIME:
+                return pyo.value(self.m.var_installation[p, v])
+            return existing_cap_dict.get((p, v), 0)
+
         # Calculate utilization for each process at each time
         utilization_data = {}
         capacity_data = {}
@@ -1833,92 +1827,32 @@ class PostProcessor:
             op_start = pyo.value(self.m.process_operation_start[p])
             op_end = pyo.value(self.m.process_operation_end[p])
 
-            # Check if process produces this product (3D base rate)
-            prod_per_inst_3d = sum(
-                pyo.value(self.m.foreground_production[p, product, tau])
+            # Skip processes that don't produce this product
+            if all(
+                annual_rate(p, product, tau, min(self.m.SYSTEM_TIME)) == 0
                 for tau in self.m.PROCESS_TIME
                 if op_start <= tau <= op_end
-            )
-
-            if prod_per_inst_3d == 0:
-                continue  # Skip processes that don't produce this product
+            ):
+                continue
 
             utilization_data[p] = {}
             capacity_data[p] = {}
             operation_data[p] = {}
 
             for t in self.m.SYSTEM_TIME:
-                if has_production_overrides(p, product):
-                    # 4D vintage-aware calculations
-                    # Capacity from new installations (sum by vintage)
-                    capacity = 0
-                    for tau in self.m.PROCESS_TIME:
-                        vintage = t - tau
-                        if vintage in self.m.SYSTEM_TIME and op_start <= tau <= op_end:
-                            production_per_unit = sum(
-                                get_production_value(p, product, tau_op, vintage)
-                                for tau_op in self.m.PROCESS_TIME
-                                if op_start <= tau_op <= op_end
-                            )
-                            installation = pyo.value(self.m.var_installation[p, vintage])
-                            capacity += production_per_unit * installation
+                # Both capacity and operation are annual quantities: unit counts times
+                # the output per unit and year at each vintage's lifecycle stage
+                capacity = 0
+                operation = 0
+                for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
+                    if proc != p or time != t:
+                        continue
+                    rate = annual_rate(p, product, t - v, v)
+                    capacity += rate * units_available(p, v)
+                    operation += rate * pyo.value(self.m.var_operation[p, v, t])
 
-                    # Add existing (brownfield) capacity
-                    nearest_vintage = min(self.m.SYSTEM_TIME)
-                    prod_per_inst_existing = sum(
-                        get_production_value(p, product, tau_op, nearest_vintage)
-                        for tau_op in self.m.PROCESS_TIME
-                        if op_start <= tau_op <= op_end
-                    )
-                    for (proc, inst_year), cap in existing_cap_dict.items():
-                        if proc == p:
-                            tau_existing = t - inst_year
-                            if op_start <= tau_existing <= op_end:
-                                capacity += prod_per_inst_existing * cap
-
-                    capacity *= fg_scale
-
-                    # Operation - sum production across all active vintages
-                    operation = 0
-                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
-                        if proc != p or time != t:
-                            continue
-                        # Get production rate for this vintage
-                        production_rate = sum(
-                            pyo.value(get_production_value(p, product, tau_op, v))
-                            for tau_op in self.m.PROCESS_TIME
-                            if op_start <= tau_op <= op_end
-                        )
-                        operation += production_rate * pyo.value(self.m.var_operation[p, v, t])
-                    operation *= fg_scale
-                else:
-                    # 3D calculation: no overrides
-                    prod_per_inst = prod_per_inst_3d
-
-                    # Calculate capacity from new installations
-                    installations_operating = sum(
-                        pyo.value(self.m.var_installation[p, t - tau])
-                        for tau in self.m.PROCESS_TIME
-                        if (t - tau in self.m.SYSTEM_TIME)
-                        and op_start <= tau <= op_end
-                    )
-
-                    # Add existing (brownfield) capacity in operation phase
-                    for (proc, inst_year), cap in existing_cap_dict.items():
-                        if proc == p:
-                            tau_existing = t - inst_year
-                            if op_start <= tau_existing <= op_end:
-                                installations_operating += cap
-
-                    capacity = installations_operating * prod_per_inst * fg_scale
-
-                    # Calculate operation - sum across all active vintages
-                    operation = 0
-                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
-                        if proc != p or time != t:
-                            continue
-                        operation += prod_per_inst * pyo.value(self.m.var_operation[p, v, t])
-                    operation *= fg_scale
+                capacity *= fg_scale
+                operation *= fg_scale
 
                 capacity_data[p][t] = capacity
                 operation_data[p][t] = operation

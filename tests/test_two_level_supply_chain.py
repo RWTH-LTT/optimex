@@ -159,22 +159,31 @@ def setup_two_level_system():
 
 
 def test_two_level_supply_chain_matches_lca(setup_two_level_system):
-    """Test that optimex produces same results as standard LCA for two-level system."""
+    """
+    Test that optimex produces same results as standard LCA for two-level system.
+
+    Both processes have a two-year operation window and produce 0.5 kg per unit and
+    year (1 kg over a unit's lifetime). The demand is placed in both operating years
+    of one cohort so that every installed unit is fully used - the condition under
+    which optimex and standard LCA must agree. The same holds one level down: the
+    Product 2 cohort consumes 0.5 kg Product 1 per unit and year, which a fully
+    utilized Product 1 cohort supplies.
+    """
 
     # Standard LCA calculation
     product_2 = bd.get_node(database="foreground", name="Product 2")
-    lca = bc.LCA({product_2: 10}, method=("GWP", "example"))
+    lca = bc.LCA({product_2: 20}, method=("GWP", "example"))
     lca.lci()
     lca.lcia()
     expected_gwp = lca.score
 
     print(f"\nStandard LCA GWP: {expected_gwp}")
 
-    # optimex calculation
+    # optimex calculation: 10 kg in each of the two operating years of one cohort
     years = range(2020, 2030)
     td_demand = TemporalDistribution(
         date=np.array([datetime(year, 1, 1).isoformat() for year in years], dtype='datetime64[s]'),
-        amount=np.asarray([0, 0, 10, 0, 0, 0, 0, 0, 0, 0]),
+        amount=np.asarray([0, 0, 10, 10, 0, 0, 0, 0, 0, 0]),
     )
 
     lca_config = lca_processor.LCAConfig(
@@ -239,15 +248,21 @@ def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
     2. Installation and operation are correctly distributed over time
     3. Internal demands (Product 1 for Product 2) are handled correctly
     4. PostProcessor extracts correct values for each time period
+
+    Demand comes in pairs of consecutive years with equal amounts, matching the
+    two-year operation window: each cohort is then fully utilized over its lifetime,
+    which is what makes the comparison with standard LCA exact.
     """
 
     product_2 = bd.get_node(database="foreground", name="Product 2")
 
-    # Define multi-temporal demand: 10 units in 2022, 5 units in 2024, 10 units in 2026
+    # Define multi-temporal demand: two fully utilized cohorts, in 2022/2023 and
+    # in 2026/2027
     demand_schedule = {
         2022: 10,
-        2024: 5,
-        2026: 10,
+        2023: 10,
+        2026: 5,
+        2027: 5,
     }
 
     # Calculate expected total impact from standard LCA
@@ -340,14 +355,18 @@ def test_two_level_supply_chain_multi_temporal_demand(setup_two_level_system):
     if p2_process_id in df_operation.columns:
         print(df_operation[[p2_process_id]])
 
-        # Verify operation matches demand at each time point
+        # Verify operation matches demand at each time point. get_operation() counts
+        # RUNNING UNITS, and each unit yields 0.5 kg per year, so twice as many units
+        # run as there are kg demanded.
+        annual_production_per_unit = 0.5
         for year, amount in demand_schedule.items():
             if year in df_operation.index:
                 operation = df_operation.loc[year, p2_process_id]
-                print(f"\nYear {year}: Operation={operation:.2f}, Demand={amount}")
-                # Operation should equal demand for single-route system
-                assert pytest.approx(operation, rel=1e-2) == amount, (
-                    f"Operation at {year} ({operation}) should match demand ({amount})"
+                produced = operation * annual_production_per_unit
+                print(f"\nYear {year}: Units running={operation:.2f}, "
+                      f"Production={produced:.2f}, Demand={amount}")
+                assert pytest.approx(produced, rel=1e-2) == amount, (
+                    f"Production at {year} ({produced}) should match demand ({amount})"
                 )
 
     print("\n" + "="*80)
