@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 * Added foreground_db_name argument to LCAConfig
+* Fixed under-counting of installation impacts: one installed unit now delivers its production over its whole lifetime, not in every operating year (changes results for processes with multi-year operation windows)
+* Postprocessing capacity outputs (`get_production_capacity`, `plot_capacity_balance`, `plot_utilization_heatmap`) now report annual capacity, comparable with production
 
 ## [0.4.2] - 2026-04-27
 * Fix conda publish workflow

@@ -101,7 +101,9 @@ class OptimizationModelInputs(BaseModel):
     foreground_production: Dict[Tuple[str, str, int], float] = Field(
         ...,
         description=(
-            "Maps (process, product, process_time) to produced amount."
+            "Maps (process, product, process_time) to produced amount. The entry is "
+            "the output of one running unit in that year of its lifecycle; the sum "
+            "over the operation window is the lifetime output of one installed unit."
         ),
     )
 
@@ -248,16 +250,31 @@ class OptimizationModelInputs(BaseModel):
         ),
     )
     process_deployment_limits_max: Optional[Dict[Tuple[str, int], float]] = Field(
-        None, description="Upper bounds on (process, system_time) deployment."
+        None,
+        description=(
+            "Upper bounds on (process, system_time) deployment, in process units. One "
+            "unit delivers its production temporal distribution over its whole lifetime."
+        ),
     )
     process_deployment_limits_min: Optional[Dict[Tuple[str, int], float]] = Field(
-        None, description="Lower bounds on (process, system_time) deployment."
+        None,
+        description=(
+            "Lower bounds on (process, system_time) deployment, in process units."
+        ),
     )
     process_operation_limits_max: Optional[Dict[Tuple[str, int], float]] = Field(
-        None, description="Upper bounds on (process, system_time) operation."
+        None,
+        description=(
+            "Upper bounds on (process, system_time) operation, i.e. on the number of "
+            "units running in that year, summed over all vintages."
+        ),
     )
     process_operation_limits_min: Optional[Dict[Tuple[str, int], float]] = Field(
-        None, description="Lower bounds on (process, system_time) operation."
+        None,
+        description=(
+            "Lower bounds on (process, system_time) operation, i.e. on the number of "
+            "units running in that year, summed over all vintages."
+        ),
     )
     cumulative_process_limits_max: Optional[Dict[str, float]] = Field(
         None, description=("Global upper bound on cumulative deployment for a process.")
@@ -277,7 +294,8 @@ class OptimizationModelInputs(BaseModel):
         None,
         description=(
             "Existing (brownfield) capacity installed before the optimization horizon. "
-            "Maps (process, installation_year) to capacity amount. Installation years "
+            "Maps (process, installation_year) to a number of process units, the same "
+            "unit as var_installation. Installation years "
             "must be before min(SYSTEM_TIME). These capacities contribute to operation "
             "and production but their installation impacts are excluded (sunk costs)."
         ),
