@@ -151,3 +151,9 @@ notebooks/data/premise_database_setup.ipynb
 
 # Local ethylene case-study research exports (contains unfinished price research)
 notebooks/data/ethylene_case_study_local/
+
+# Local Codex analysis artifacts and generated dependencies
+/.tmp-xlsx-analysis/
+.tmp-*.xlsx
+node_modules/
+work/
