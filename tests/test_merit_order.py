@@ -323,6 +323,11 @@ class TestOperationLimits:
         Scenario:
         - Multiple vintages operating at same time
         - Operation limit constrains total (not per-vintage)
+
+        With a demand of 50 and a production of 1.0 per unit and year, 50 units must
+        run at 2022, spread over the 2020, 2021 and 2022 vintages. A limit of 50 is
+        therefore exactly binding, while a limit of 40 must make the model infeasible —
+        which it only does if the limit applies to the sum across vintages.
         """
         model_inputs_dict = {
             "PROCESS": ["P1"],
@@ -349,7 +354,7 @@ class TestOperationLimits:
             "mapping": {("db", t): 1.0 for t in [2020, 2021, 2022]},
             "characterization": {("GWP", "CO2", t): 1.0 for t in [2020, 2021, 2022]},
             # Set a maximum operation limit at 2022
-            "process_operation_limits_max": {("P1", 2022): 30},
+            "process_operation_limits_max": {("P1", 2022): 50},
         }
 
         model_inputs = converter.OptimizationModelInputs(**model_inputs_dict)
@@ -373,9 +378,24 @@ class TestOperationLimits:
         )
 
         # Total operation should respect the limit
-        assert total_op_2022 <= 30 + 1e-6, (
-            f"Total operation at 2022 ({total_op_2022:.4f}) should not exceed limit of 30"
+        assert total_op_2022 <= 50 + 1e-6, (
+            f"Total operation at 2022 ({total_op_2022:.4f}) should not exceed limit of 50"
         )
+        assert pytest.approx(50.0, rel=0.01) == total_op_2022, (
+            f"50 units must run at 2022 to meet the demand, got {total_op_2022:.4f}"
+        )
+
+        # A limit below the required total must be infeasible: this only holds if the
+        # limit bounds the sum over vintages, not each vintage separately
+        model_inputs_dict["process_operation_limits_max"] = {("P1", 2022): 40}
+        tight_inputs = converter.OptimizationModelInputs(**model_inputs_dict)
+        tight_model = optimizer.create_model(
+            inputs=tight_inputs,
+            objective_category="GWP",
+            name="operation_limits_test_tight",
+        )
+        with pytest.raises(RuntimeError):
+            optimizer.solve_model(tight_model, solver_name="glpk", tee=False)
 
 
 class TestPerVintageCapacity:

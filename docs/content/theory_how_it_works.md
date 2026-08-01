@@ -45,8 +45,10 @@ Both the foreground and background systems can evolve over time:
 
 Traditional LCO assumes processes always run at full capacity. `optimex` separates the decision into two components:
 
-- **Capacity installation**: How much capacity is built at a given time (vintage)
-- **Operational level**: How much of that capacity is actually used at each point in time
+- **Capacity installation**: How many process units are built at a given time (vintage)
+- **Operational level**: How many of those units are actually running at each point in time
+
+One installed unit corresponds to one reference-flow unit of the underlying LCA process: it delivers the production stated by its production exchange over its **whole lifetime**, so the per-time-step entry of that exchange is what one running unit yields **per year**. Installation-dependent exchanges are charged once per unit, which means the construction burden of a unit is amortized over its lifetime output — no more and no less. A demand profile that leaves part of a unit's lifetime unused therefore shows up as idle capacity and a correspondingly higher impact.
 
 This separation is important because it enables **vintage-specific dispatch**: when multiple cohorts of the same technology coexist, the optimizer can preferentially utilize cleaner vintages — creating an emissions-aware merit order. It also allows the model to identify strategic overcapacities, where early investment in clean technologies offsets the stranded cost of idled fossil infrastructure.
 
