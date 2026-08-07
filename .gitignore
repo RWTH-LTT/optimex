@@ -157,3 +157,4 @@ notebooks/data/ethylene_case_study_local/
 .tmp-*.xlsx
 node_modules/
 work/
+tmp
