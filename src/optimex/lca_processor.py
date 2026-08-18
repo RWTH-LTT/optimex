@@ -196,7 +196,7 @@ class LCADataProcessor:
     """
 
     def __init__(
-        self, config: LCAConfig, foreground_db_name: str = "foreground"
+        self, config: LCAConfig, foreground_db_name: Optional[str] = None
     ) -> None:
         """
         Initialize the LCADataProcessor with the LCA configuration.
@@ -207,9 +207,13 @@ class LCADataProcessor:
             The configuration object containing all settings for demand,
             temporal parameters, characterization methods, and background inventory.
         foreground_db_name : str, optional
-            The name of the foreground Brightway database, by default "foreground".
+            The name of the foreground Brightway database. Defaults to
+            `config.foreground_db_name`, which is itself "foreground" unless set.
+            Passing a name here overrides the one on the config.
         """
         self.config = config
+        if foreground_db_name is None:
+            foreground_db_name = config.foreground_db_name
         if foreground_db_name not in bd.databases:
             raise ValueError(
                 f"Foreground database '{foreground_db_name}' is not defined."

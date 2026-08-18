@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 * Added foreground_db_name argument to LCAConfig
+* Fixed `LCAConfig.foreground_db_name` being ignored by `LCADataProcessor`, which
+  silently fell back to the database named "foreground". A config naming a
+  non-existent database now raises instead of falling back.
 
 ## [0.4.2] - 2026-04-27
 * Fix conda publish workflow
