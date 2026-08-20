@@ -41,6 +41,14 @@ from tqdm import tqdm
 # invalidates its entries automatically instead of silently reusing stale ones.
 _BACKGROUND_INVENTORY_CACHE = {}
 
+# Minimum number of intermediate flows per background database that makes
+# factorizing the technosphere matrix pay off. Factorizing an ecoinvent-sized
+# matrix (~44k x 44k) costs ~3.8 s with UMFPACK and turns each subsequent solve
+# from ~0.38 s into ~0.03 s, so it only amortizes above ~11 flows. With PARDISO
+# the flag is a no-op: `decompose_technosphere` warns and returns, and PARDISO
+# reuses its own factorization keyed on the matrix.
+_FACTORIZE_MIN_FLOWS = 10
+
 # {(project, biosphere db, modified): {flow id: (code, name)}}
 _BIOSPHERE_METADATA_CACHE = {}
 
@@ -246,8 +254,8 @@ def compute_db_inventory_entries(
     """
     Compute aggregated background inventories for the given intermediate flows.
 
-    All flows are solved against a single factorization of the database's
-    technosphere matrix. For an intermediate flow :math:`j` with unit demand, the
+    All flows are solved against one technosphere matrix, factorized once when
+    there are enough of them to amortize it. For an intermediate flow :math:`j` with unit demand, the
     aggregated elementary flow vector is :math:`g_j = B x_j`, i.e. the column of
     :math:`B A^{-1}` belonging to that flow. The per-background-process breakdown
     that `LCA.lci()` builds (B times diag(x_j)) is never needed here and is skipped,
@@ -313,8 +321,12 @@ def compute_db_inventory_entries(
     # No LCIA method is needed: the inventory does not depend on it, and the
     # characterization factors are applied later, per system year.
     lca = bc.LCA({activity: 1 for activity in activities.values()})
-    lca.lci(factorize=len(activities) > 1)
-    logger.info(f"Built and factorized technosphere matrix for: {db_name}")
+    factorize = len(activities) > _FACTORIZE_MIN_FLOWS
+    lca.lci(factorize=factorize)
+    logger.info(
+        f"Built {'and factorized ' if factorize else ''}technosphere matrix "
+        f"for: {db_name}"
+    )
 
     bio_meta = _biosphere_metadata(biosphere_db_name)
     reversed_biosphere = lca.dicts.biosphere.reversed
@@ -1303,8 +1315,8 @@ class LCADataProcessor:
 
         This method performs LCA calculations for each background database listed in
         `self.background_dbs`. All intermediate flows of a database are solved
-        against a single factorization of its technosphere matrix, yielding the
-        aggregated elementary flow vector per intermediate flow.
+        against its technosphere matrix, yielding the aggregated elementary flow
+        vector per intermediate flow.
 
         The results are stored in a sparse tensor structure that maps:
             (database name, intermediate flow code, elementary flow code) → amount
