@@ -959,6 +959,60 @@ def create_model(
         else {}
     )
 
+    def warn_about_unusable_flow_limits():
+        """
+        Report flow limits that cannot do anything.
+
+        `OptimizationModelInputs` rejects unknown flows when it is constructed,
+        but assigning a limit to an already-built instance bypasses that. The
+        constraint rules below are indexed over the model's own sets, so such a
+        limit would otherwise be dropped without a word.
+        """
+        known_flows = (
+            set(scaled_inputs.PRODUCT)
+            | set(scaled_inputs.INTERMEDIATE_FLOW)
+            | set(scaled_inputs.ELEMENTARY_FLOW)
+        )
+        flows_with_data = (
+            {key[1] for key in scaled_inputs.foreground_technosphere}
+            | {key[1] for key in scaled_inputs.foreground_biosphere}
+            | {key[1] for key in scaled_inputs.foreground_production}
+            | {key[1] for key in scaled_inputs.internal_demand_technosphere}
+            | {key[2] for key in scaled_inputs.background_inventory}
+        )
+
+        limited_flows = set(model._cumulative_flow_limits_max)
+        limited_flows |= set(model._cumulative_flow_limits_min)
+        limited_flows |= {key[0] for key in model._flow_limits_max}
+        limited_flows |= {key[0] for key in model._flow_limits_min}
+
+        unknown = sorted(limited_flows - known_flows)
+        if unknown:
+            logger.warning(
+                f"Ignoring flow limits for {unknown}: these flows are not in the "
+                "model. Elementary flows without a characterization factor in any "
+                "category are dropped during LCA processing; list them in "
+                "`LCAConfig.background_inventory.retain_flows` to keep them."
+            )
+
+        without_data = sorted((limited_flows & known_flows) - flows_with_data)
+        if without_data:
+            logger.warning(
+                f"Flow limits for {without_data} can never bind: no process "
+                "exchanges these flows, so the limited amount is always zero."
+            )
+
+        limited_times = {key[1] for key in model._flow_limits_max}
+        limited_times |= {key[1] for key in model._flow_limits_min}
+        unknown_times = sorted(limited_times - set(scaled_inputs.SYSTEM_TIME))
+        if unknown_times:
+            logger.warning(
+                f"Ignoring flow limits for years {unknown_times}: outside the "
+                "system time horizon."
+            )
+
+    warn_about_unusable_flow_limits()
+
     # Expression for total product output at time t (in SCALED units)
     def total_product_flow_rule(model, r, t):
         """

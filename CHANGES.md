@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#64](https://github.com/RWTH-LTT/optimex/pull/64))
 * `get_dynamic_inventory()` no longer returns rows whose amount is exactly zero
   ([#64](https://github.com/RWTH-LTT/optimex/pull/64))
+* Flow limits that cannot take effect are now reported: naming a flow that is not in
+  the model raises in `ModelInputManager.override()` (pointing at `retain_flows`), and
+  `create_model()` warns about limits it has to ignore or that can never bind
+  ([#64](https://github.com/RWTH-LTT/optimex/pull/64))
 * Background inventories are cached on disk per (project, database, activity), so a
   new session reuses them instead of rebuilding every technosphere matrix. Switch it
   off with `background_inventory.use_disk_cache` and clear it with

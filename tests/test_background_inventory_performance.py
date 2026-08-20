@@ -8,6 +8,7 @@ import bw2data as bd
 import numpy as np
 import pyomo.environ as pyo
 import pytest
+from loguru import logger
 from bw_temporalis import TemporalDistribution
 
 from optimex import converter, lca_processor, optimizer
@@ -250,3 +251,34 @@ def test_dropped_flow_limit_error_points_at_retain_flows(setup_brightway_databas
     manager.parse_from_lca_processor(processor)
     with pytest.raises(ValueError, match="retain_flows"):
         manager.override(cumulative_flow_limits_max={"CH4": 1.0})
+
+
+def test_unusable_flow_limits_are_reported(setup_brightway_databases):
+    """Limits that bypass validation must not be dropped silently."""
+    clear_lca_caches()
+    processor = LCADataProcessor(_config())
+    inputs = converter.ModelInputManager().parse_from_lca_processor(processor)
+
+    # Assigning to a built instance skips the pydantic validation that
+    # `override()` would run.
+    inputs.cumulative_flow_limits_max = {"not_a_flow": 1.0}
+    inputs.flow_limits_max = {("CO2", 1850): 1.0}
+
+    warnings = []
+    handler = logger.add(warnings.append, level="WARNING")
+    try:
+        model = optimizer.create_model(
+            inputs, name="unusable", objective_category="land_use"
+        )
+    finally:
+        logger.remove(handler)
+
+    logged = "".join(str(message) for message in warnings)
+    assert "not_a_flow" in logged
+    assert "retain_flows" in logged
+    assert "1850" in logged
+    assert not [
+        constraint
+        for constraint in model.component_data_objects(pyo.Constraint, active=True)
+        if "FlowLimit" in constraint.name
+    ]

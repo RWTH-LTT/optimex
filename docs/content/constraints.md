@@ -236,6 +236,12 @@ model_inputs.cumulative_flow_limits_max = {
     `LCAConfig.background_inventory.retain_flows`. See
     [Background Inventory](optimization_setup.md#background-inventory).
 
+    Setting the limit through `ModelInputManager.override()` raises if the flow is
+    not in the model. Assigning it to an existing `OptimizationModelInputs`
+    skips that check, so `create_model()` logs a warning instead — for flows it
+    has to ignore, for years outside the horizon, and for flows no process
+    exchanges, whose limit could never bind.
+
 ---
 
 ## Process Coupling
