@@ -6,10 +6,11 @@ from pathlib import Path
 import bw2calc as bc
 import bw2data as bd
 import numpy as np
+import pyomo.environ as pyo
 import pytest
 from bw_temporalis import TemporalDistribution
 
-from optimex import lca_processor
+from optimex import converter, lca_processor, optimizer
 from optimex.lca_processor import (
     LCAConfig,
     LCADataProcessor,
@@ -192,3 +193,60 @@ def test_disk_cache_can_be_switched_off(setup_brightway_databases):
 
     cache_dir = Path(bd.projects.dir) / "optimex-inventory-cache"
     assert not list(cache_dir.glob("*.pickle")) if cache_dir.exists() else True
+
+
+def test_retained_flow_can_be_constrained_end_to_end(setup_brightway_databases):
+    """A retained, uncharacterized background flow still drives a flow limit.
+
+    Impacts are characterized per intermediate flow now, but the inventory is
+    still tracked per elementary flow, so constraining one keeps working.
+    """
+    bd.Method(("only CO2", "example")).write([(("biosphere3", "CO2"), 1)])
+
+    clear_lca_caches()
+    config = _config(retain_flows=["CH4"])
+    config.characterization_methods[0].category_name = "climate_change"
+    config.characterization_methods[0].brightway_method = ("only CO2", "example")
+    processor = LCADataProcessor(config)
+
+    manager = converter.ModelInputManager()
+    inputs = manager.parse_from_lca_processor(processor)
+    assert "CH4" in inputs.ELEMENTARY_FLOW
+    assert any(key[2] == "CH4" for key in inputs.background_inventory)
+
+    model = optimizer.create_model(
+        inputs, name="unconstrained", objective_category="climate_change"
+    )
+    solved, _, _ = optimizer.solve_model(model, solver_name="glpk", tee=False)
+    fg_scale = solved.scales["foreground"]
+    unconstrained = sum(
+        pyo.value(solved.total_elementary_flow["CH4", t]) * fg_scale
+        for t in solved.SYSTEM_TIME
+    )
+    assert unconstrained > 0, "CH4 only enters through the background inventory"
+
+    limited = manager.override(cumulative_flow_limits_max={"CH4": unconstrained * 0.5})
+    model = optimizer.create_model(
+        limited, name="limited", objective_category="climate_change"
+    )
+    solved, _, _ = optimizer.solve_model(model, solver_name="glpk", tee=False)
+    constrained = sum(
+        pyo.value(solved.total_elementary_flow["CH4", t]) * fg_scale
+        for t in solved.SYSTEM_TIME
+    )
+    assert constrained <= unconstrained * 0.5 * 1.0001
+
+
+def test_dropped_flow_limit_error_points_at_retain_flows(setup_brightway_databases):
+    """Constraining a dropped flow fails with an error that says what to do."""
+    bd.Method(("only CO2", "example")).write([(("biosphere3", "CO2"), 1)])
+
+    clear_lca_caches()
+    config = _config()
+    config.characterization_methods[0].brightway_method = ("only CO2", "example")
+    processor = LCADataProcessor(config)
+
+    manager = converter.ModelInputManager()
+    manager.parse_from_lca_processor(processor)
+    with pytest.raises(ValueError, match="retain_flows"):
+        manager.override(cumulative_flow_limits_max={"CH4": 1.0})
