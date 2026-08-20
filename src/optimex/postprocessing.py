@@ -458,15 +458,40 @@ class PostProcessor:
             - amount: flow amount (float)
         """
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
-        inventory = {
-            (p, e, t): pyo.value(self.m.scaled_inventory[p, e, t]) * fg_scale
-            for p in self.m.PROCESS
-            for e in self.m.ELEMENTARY_FLOW
-            for t in self.m.SYSTEM_TIME
-        }
+
+        # The inventory is assembled from the solved flow values and the background
+        # inventory data rather than by evaluating the `scaled_inventory` expression
+        # once per (process, elementary flow, year): the latter walks a deep
+        # expression tree hundreds of thousands of times.
+        mapped_inventory = getattr(self.m, "_mapped_inventory_by_flow", None)
+        inventory = {}
+        if mapped_inventory is not None:
+            for (p, i, t) in self.m.scaled_technosphere_flow:
+                amount = pyo.value(self.m.scaled_technosphere_flow[p, i, t])
+                if not amount:
+                    continue
+                for e, factor in mapped_inventory.get((i, t), ()):
+                    key = (p, e, t)
+                    inventory[key] = inventory.get(key, 0.0) + amount * factor
+            for (p, e, t) in self.m.scaled_biosphere_flow:
+                amount = pyo.value(self.m.scaled_biosphere_flow[p, e, t])
+                if amount:
+                    key = (p, e, t)
+                    inventory[key] = inventory.get(key, 0.0) + amount
+        else:  # pragma: no cover - models built by earlier versions
+            inventory = {
+                (p, e, t): pyo.value(self.m.scaled_inventory[p, e, t])
+                for p in self.m.PROCESS
+                for e in self.m.ELEMENTARY_FLOW
+                for t in self.m.SYSTEM_TIME
+            }
 
         df = pd.DataFrame.from_records(
-            [(p, e, t, v) for (p, e, t), v in inventory.items()],
+            [
+                (p, e, t, value * fg_scale)
+                for (p, e, t), value in inventory.items()
+                if value
+            ],
             columns=["activity", "flow", "date", "amount"]
         ).astype({
             "activity": "str",
@@ -477,11 +502,12 @@ class PostProcessor:
         # Convert year integers to datetime
         df["date"] = pd.to_datetime(df["date"].astype(int), format="%Y")
 
-        # Convert flow codes to database IDs
-        biosphere_db = bd.Database(biosphere_database)
-        df["flow"] = df["flow"].apply(
-            lambda x: biosphere_db.get(code=x).id
-        )
+        # Convert flow codes to database IDs, from a single pass over the biosphere
+        # database instead of one query per row.
+        biosphere_ids = {
+            node["code"]: node["id"] for node in bd.Database(biosphere_database)
+        }
+        df["flow"] = df["flow"].map(biosphere_ids)
 
         self.df_dynamic_inventory = df
         return self.df_dynamic_inventory

@@ -61,11 +61,11 @@ OperationLimit (RHS):
 ```
 """
 
-import dill
 import pickle
 from pathlib import Path
 from typing import Any, Dict, Tuple, Union
 
+import dill
 import pyomo.environ as pyo
 from loguru import logger
 from pyomo.contrib.iis import write_iis
@@ -132,9 +132,7 @@ def create_model(
         initialize=scaled_inputs.ELEMENTARY_FLOW,
     )
     model.FLOW = pyo.Set(
-        initialize=lambda m: m.PRODUCT
-        | m.INTERMEDIATE_FLOW
-        | m.ELEMENTARY_FLOW,
+        initialize=lambda m: m.PRODUCT | m.INTERMEDIATE_FLOW | m.ELEMENTARY_FLOW,
         doc="Set of all flows, indexed by f",
     )
     model.CATEGORY = pyo.Set(
@@ -202,15 +200,15 @@ def create_model(
 
     # Store sparse vintage overrides as Python dicts (not Pyomo params)
     # These are looked up at expression construction time
-    model._technosphere_vintage_overrides = getattr(
-        scaled_inputs, 'foreground_technosphere_vintage_overrides', None
-    ) or {}
-    model._biosphere_vintage_overrides = getattr(
-        scaled_inputs, 'foreground_biosphere_vintage_overrides', None
-    ) or {}
-    model._production_vintage_overrides = getattr(
-        scaled_inputs, 'foreground_production_vintage_overrides', None
-    ) or {}
+    model._technosphere_vintage_overrides = (
+        getattr(scaled_inputs, "foreground_technosphere_vintage_overrides", None) or {}
+    )
+    model._biosphere_vintage_overrides = (
+        getattr(scaled_inputs, "foreground_biosphere_vintage_overrides", None) or {}
+    )
+    model._production_vintage_overrides = (
+        getattr(scaled_inputs, "foreground_production_vintage_overrides", None) or {}
+    )
 
     # Precompute sets of (process, flow) pairs that have overrides for O(1) lookup
     model._technosphere_overrides_index = frozenset(
@@ -422,8 +420,97 @@ def create_model(
     model.ACTIVE_VINTAGE_TIME = pyo.Set(
         dimen=3,
         initialize=_build_active_vintage_index,
-        doc="Set of (process, vintage, time) tuples where vintage is in operation phase at time t"
+        doc="Set of (process, vintage, time) tuples where vintage is in operation phase at time t",
     )
+
+    # ------------------------------------------------------------------
+    # Precomputed lookups
+    #
+    # The tensors below carry no decision variables, so they are combined here
+    # as plain Python numbers. Reading them through Pyomo `Param` objects inside
+    # the expression rules costs one indexed lookup with full index validation
+    # per scalar, which added up to tens of millions of lookups and dominated
+    # model construction.
+    # ------------------------------------------------------------------
+    active_vintages_by_process_time = {}
+    active_processes_by_time = {}
+    for _process, _vintage, _time in model.ACTIVE_VINTAGE_TIME:
+        active_vintages_by_process_time.setdefault((_process, _time), []).append(
+            _vintage
+        )
+        active_processes_by_time.setdefault(_time, []).append((_process, _vintage))
+
+    system_time_set = set(scaled_inputs.SYSTEM_TIME)
+    process_times = list(scaled_inputs.PROCESS_TIME)
+    operation_flow_data = dict(scaled_inputs.operation_flow)
+    operation_phase = {
+        process: (
+            pyo.value(model.process_operation_start[process]),
+            pyo.value(model.process_operation_end[process]),
+        )
+        for process in model.PROCESS
+    }
+
+    # Background inventory of an intermediate flow at a given time, collapsed
+    # over the background databases: sum_bkg G[bkg, i, e] * M[bkg, t].
+    inventory_by_background = {}
+    for (_bkg, _flow, _emission), _amount in scaled_inputs.background_inventory.items():
+        if _amount:
+            inventory_by_background.setdefault(_bkg, []).append(
+                ((_flow, _emission), _amount)
+            )
+
+    mapped_inventory = {}
+    for (_bkg, _time), _weight in scaled_inputs.mapping.items():
+        if not _weight:
+            continue
+        for (_flow, _emission), _amount in inventory_by_background.get(_bkg, ()):
+            _key = (_flow, _emission, _time)
+            mapped_inventory[_key] = mapped_inventory.get(_key, 0.0) + _weight * _amount
+
+    # (elementary flow, time) -> [(intermediate flow, amount), ...]
+    mapped_inventory_by_emission = {}
+    # (intermediate flow, time) -> [(elementary flow, amount), ...], kept on the
+    # model so post-processing can rebuild inventories numerically.
+    mapped_inventory_by_flow = {}
+    for (_flow, _emission, _time), _amount in mapped_inventory.items():
+        mapped_inventory_by_emission.setdefault((_emission, _time), []).append(
+            (_flow, _amount)
+        )
+        mapped_inventory_by_flow.setdefault((_flow, _time), []).append(
+            (_emission, _amount)
+        )
+    model._mapped_inventory_by_flow = mapped_inventory_by_flow
+
+    # Characterized impact per unit of an intermediate flow, i.e. the background
+    # inventory already multiplied by the characterization factors:
+    # (category, time) -> [(intermediate flow, factor), ...]. This collapses the
+    # sum over elementary flows out of the impact expressions entirely.
+    characterization_by_emission = {}
+    for (
+        _category,
+        _emission,
+        _time,
+    ), _factor in scaled_inputs.characterization.items():
+        if _factor:
+            characterization_by_emission.setdefault((_emission, _time), []).append(
+                (_category, _factor)
+            )
+
+    _impact_factors = {}
+    for (_flow, _emission, _time), _amount in mapped_inventory.items():
+        for _category, _factor in characterization_by_emission.get(
+            (_emission, _time), ()
+        ):
+            _key = (_category, _time, _flow)
+            _impact_factors[_key] = _impact_factors.get(_key, 0.0) + _factor * _amount
+
+    impact_factors_by_category_time = {}
+    for (_category, _time, _flow), _factor in _impact_factors.items():
+        if _factor:
+            impact_factors_by_category_time.setdefault((_category, _time), []).append(
+                (_flow, _factor)
+            )
 
     # Store category impact limit data for constraint generation
     model._category_impact_limits = (
@@ -457,13 +544,15 @@ def create_model(
     model.ProcessDeploymentLimitMax = pyo.Constraint(
         model.PROCESS,
         model.SYSTEM_TIME,
-        rule=lambda m, p, t: m.var_installation[p, t] <= m.process_deployment_limits_max[p, t],
+        rule=lambda m, p, t: m.var_installation[p, t]
+        <= m.process_deployment_limits_max[p, t],
     )
 
     model.ProcessDeploymentLimitMin = pyo.Constraint(
         model.PROCESS,
         model.SYSTEM_TIME,
-        rule=lambda m, p, t: m.var_installation[p, t] >= m.process_deployment_limits_min[p, t],
+        rule=lambda m, p, t: m.var_installation[p, t]
+        >= m.process_deployment_limits_min[p, t],
     )
 
     model.CumulativeProcessLimitMax = pyo.Constraint(
@@ -506,14 +595,10 @@ def create_model(
 
     # Operation limits apply to TOTAL operation across all vintages
     def process_operation_limit_max_rule(m, p, t):
-        active_vintages = [
-            (proc, v, time)
-            for (proc, v, time) in m.ACTIVE_VINTAGE_TIME
-            if proc == p and time == t
-        ]
+        active_vintages = active_vintages_by_process_time.get((p, t))
         if not active_vintages:
             return pyo.Constraint.Skip
-        total_op = sum(m.var_operation[proc, v, time] for (proc, v, time) in active_vintages)
+        total_op = sum(m.var_operation[p, v, t] for v in active_vintages)
         return total_op <= m.process_operation_limits_max[p, t]
 
     model.ProcessOperationLimitMax = pyo.Constraint(
@@ -523,14 +608,10 @@ def create_model(
     )
 
     def process_operation_limit_min_rule(m, p, t):
-        active_vintages = [
-            (proc, v, time)
-            for (proc, v, time) in m.ACTIVE_VINTAGE_TIME
-            if proc == p and time == t
-        ]
+        active_vintages = active_vintages_by_process_time.get((p, t))
         if not active_vintages:
             return pyo.Constraint.Skip
-        total_op = sum(m.var_operation[proc, v, time] for (proc, v, time) in active_vintages)
+        total_op = sum(m.var_operation[p, v, t] for v in active_vintages)
         return total_op >= m.process_operation_limits_min[p, t]
 
     model.ProcessOperationLimitMin = pyo.Constraint(
@@ -540,112 +621,98 @@ def create_model(
     )
 
     # Expression builders using sparse vintage override lookup
-    # Base tensor is always 3D; overrides are checked first for vintage-specific values
-    def scale_tensor_by_installation(tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset):
-        def expr(m, p, x, t):
-            result = 0
-            for tau in m.PROCESS_TIME:
-                vintage = t - tau
-                if (vintage in m.SYSTEM_TIME) and (
-                    not in_operation_phase(p, tau) or not m.operation_flow[p, x]
-                ):
-                    # Check sparse override first, fall back to base 3D tensor
-                    key = (p, x, tau, vintage)
-                    if key in overrides:
-                        flow_value = overrides[key]
-                    else:
-                        flow_value = tensor[p, x, tau]
-                    result += flow_value * m.var_installation[p, vintage]
-            return result
+    #
+    # Installation- and operation-driven contributions are always used together,
+    # so they are combined into a single Expression per (process, flow, time).
+    # The index only covers (process, flow) pairs that carry data: a process
+    # consumes a handful of the intermediate flows and emits a handful of the
+    # elementary flows, so a dense index would be almost entirely zeros.
+    def scaled_flow_expression(
+        tensor: dict, overrides: dict, overrides_index: frozenset
+    ):
+        pairs = {(p, x) for (p, x, _) in tensor} | set(overrides_index)
+        rates = {}
 
-        return pyo.Expression(
-            model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
-        )
-
-    def scale_tensor_by_operation(tensor: pyo.Param, flow_set: str, overrides: dict, overrides_index: frozenset):
-        """
-        Scale tensor by operation, summing flows across active vintages.
-
-        With 3D var_operation[p, v, t], we sum flow contributions from each
-        vintage cohort operating at time t.
-        """
-        def expr(m, p, x, t):
-            # Only apply operational scaling to flows marked as operational
-            if pyo.value(m.operation_flow[p, x]) == 0:
-                return 0
-
-            op_start = pyo.value(m.process_operation_start[p])
-            op_end = pyo.value(m.process_operation_end[p])
-
-            total = 0
-            # Sum flows across all active vintages at time t
-            for (proc, v, time) in m.ACTIVE_VINTAGE_TIME:
-                if proc != p or time != t:
-                    continue
-
-                # Get vintage-specific flow rate
+        def flow_rate(p, x, v):
+            """Flow per unit of operation, cached; equal for all vintages without
+            overrides."""
+            key = (p, x, v) if (p, x) in overrides_index else (p, x)
+            if key not in rates:
+                op_start, op_end = operation_phase[p]
                 if (p, x) in overrides_index:
-                    # Vintage-aware: sum flow rates across all operating taus for this vintage
-                    flow_rate = sum(
-                        overrides.get((p, x, tau, v), tensor[p, x, tau])
-                        for tau in m.PROCESS_TIME
+                    # Vintage-aware: sum flow rates across all operating taus
+                    rate = sum(
+                        overrides.get((p, x, tau, v), tensor.get((p, x, tau), 0))
+                        for tau in process_times
                         if op_start <= tau <= op_end
                     )
                 else:
-                    # No overrides: all vintages have same flow rate
-                    flow_rate = sum(
-                        tensor[p, x, tau]
-                        for tau in m.PROCESS_TIME
+                    # No overrides: all vintages have the same flow rate
+                    rate = sum(
+                        tensor.get((p, x, tau), 0)
+                        for tau in process_times
                         if op_start <= tau <= op_end
                     )
+                rates[key] = rate
+            return rates[key]
 
-                total += flow_rate * m.var_operation[p, v, t]
+        def expr(m, p, x, t):
+            is_operation_flow = bool(operation_flow_data.get((p, x)))
+            op_start, op_end = operation_phase[p]
 
-            return total
+            # Installation-driven part: flows outside the operation phase scale
+            # with the capacity installed in vintage t - tau.
+            result = 0
+            for tau in process_times:
+                vintage = t - tau
+                if vintage not in system_time_set:
+                    continue
+                if is_operation_flow and op_start <= tau <= op_end:
+                    continue
+                # Check sparse override first, fall back to base 3D tensor
+                flow_value = overrides.get((p, x, tau, vintage))
+                if flow_value is None:
+                    flow_value = tensor.get((p, x, tau), 0)
+                if flow_value:
+                    result += flow_value * m.var_installation[p, vintage]
 
-        return pyo.Expression(
-            model.PROCESS, getattr(model, flow_set), model.SYSTEM_TIME, rule=expr
-        )
+            # Operation-driven part: summed over the vintages operating at t.
+            if is_operation_flow:
+                for v in active_vintages_by_process_time.get((p, t), ()):
+                    rate = flow_rate(p, x, v)
+                    if rate:
+                        result += rate * m.var_operation[p, v, t]
 
-    # Create expressions with sparse vintage override lookup
-    model.scaled_technosphere_dependent_on_installation = (
-        scale_tensor_by_installation(
-            model.foreground_technosphere,
-            "INTERMEDIATE_FLOW",
-            model._technosphere_vintage_overrides,
-            model._technosphere_overrides_index,
-        )
-    )
-    model.scaled_biosphere_dependent_on_installation = scale_tensor_by_installation(
-        model.foreground_biosphere,
-        "ELEMENTARY_FLOW",
-        model._biosphere_vintage_overrides,
-        model._biosphere_overrides_index,
-    )
-    model.scaled_technosphere_dependent_on_operation = scale_tensor_by_operation(
-        model.foreground_technosphere,
-        "INTERMEDIATE_FLOW",
+            return result
+
+        index = [
+            (p, x, t) for (p, x) in sorted(pairs) for t in scaled_inputs.SYSTEM_TIME
+        ]
+        return pairs, pyo.Expression(index, rule=expr)
+
+    technosphere_pairs, model.scaled_technosphere_flow = scaled_flow_expression(
+        dict(scaled_inputs.foreground_technosphere),
         model._technosphere_vintage_overrides,
         model._technosphere_overrides_index,
     )
-    model.scaled_biosphere_dependent_on_operation = scale_tensor_by_operation(
-        model.foreground_biosphere,
-        "ELEMENTARY_FLOW",
+    biosphere_pairs, model.scaled_biosphere_flow = scaled_flow_expression(
+        dict(scaled_inputs.foreground_biosphere),
         model._biosphere_vintage_overrides,
         model._biosphere_overrides_index,
     )
     # Internal demand has no vintage overrides
-    _empty_index = frozenset()
-    model.scaled_internal_demand_dependent_on_installation = (
-        scale_tensor_by_installation(
-            model.internal_demand_technosphere, "PRODUCT", {}, _empty_index
-        )
+    internal_demand_pairs, model.scaled_internal_demand_flow = scaled_flow_expression(
+        dict(scaled_inputs.internal_demand_technosphere), {}, frozenset()
     )
-    model.scaled_internal_demand_dependent_on_operation = (
-        scale_tensor_by_operation(
-            model.internal_demand_technosphere, "PRODUCT", {}, _empty_index
-        )
-    )
+
+    # Which intermediate/elementary flows a process actually has, so the sums
+    # below skip the pairs whose expression would be zero.
+    technosphere_flows_by_process = {}
+    for _process, _flow in technosphere_pairs:
+        technosphere_flows_by_process.setdefault(_process, set()).add(_flow)
+    biosphere_flows_by_process = {}
+    for _process, _emission in biosphere_pairs:
+        biosphere_flows_by_process.setdefault(_process, set()).add(_emission)
 
     def scaled_inventory_tensor(model, p, e, t):
         """
@@ -653,20 +720,15 @@ def create_model(
         process p, elementary flow e, and time step t.
         """
 
-        return sum(
-            (
-                model.scaled_technosphere_dependent_on_installation[p, i, t]
-                + model.scaled_technosphere_dependent_on_operation[p, i, t]
-            )
-            * sum(
-                model.background_inventory[bkg, i, e] * model.mapping[bkg, t]
-                for bkg in model.BACKGROUND_ID
-            )
-            for i in model.INTERMEDIATE_FLOW
-        ) + (
-            model.scaled_biosphere_dependent_on_installation[p, e, t]
-            + model.scaled_biosphere_dependent_on_operation[p, e, t]
+        process_flows = technosphere_flows_by_process.get(p, ())
+        background = sum(
+            amount * model.scaled_technosphere_flow[p, i, t]
+            for i, amount in mapped_inventory_by_emission.get((e, t), ())
+            if i in process_flows
         )
+        if e in biosphere_flows_by_process.get(p, ()):
+            return background + model.scaled_biosphere_flow[p, e, t]
+        return background
 
     model.scaled_inventory = pyo.Expression(
         model.PROCESS,
@@ -688,6 +750,32 @@ def create_model(
         """Check if any vintage overrides exist for this process/product."""
         return (p, r) in model._production_overrides_index
 
+    production_data = dict(scaled_inputs.foreground_production)
+    _production_rates = {}
+
+    def production_rate(p, r, v):
+        """
+        Production of r per unit of operation of a vintage-v unit of p, cached.
+
+        Without overrides the rate is the same for every vintage, so it is
+        cached per (process, product) instead.
+        """
+        key = (p, r, v) if has_production_overrides(p, r) else (p, r)
+        if key not in _production_rates:
+            op_start, op_end = operation_phase[p]
+            taus = [tau for tau in process_times if op_start <= tau <= op_end]
+            if has_production_overrides(p, r):
+                rate = sum(
+                    model._production_vintage_overrides.get(
+                        (p, r, tau, v), production_data.get((p, r, tau), 0)
+                    )
+                    for tau in taus
+                )
+            else:
+                rate = sum(production_data.get((p, r, tau), 0) for tau in taus)
+            _production_rates[key] = rate
+        return _production_rates[key]
+
     def operation_capacity_constraint_rule(model, p, v, t, r):
         """
         Per-vintage capacity constraint: var_operation[p, v, t] ≤ capacity_for_vintage(p, v, t)
@@ -699,24 +787,11 @@ def create_model(
         For brownfield (v not in SYSTEM_TIME): capacity = production_rate * existing_capacity[p, v]
         """
         fg_scale = model.scales["foreground"]
-        op_start = pyo.value(model.process_operation_start[p])
-        op_end = pyo.value(model.process_operation_end[p])
 
         # Calculate production rate for this vintage
-        if has_production_overrides(p, r):
-            production_per_unit = sum(
-                pyo.value(get_production_value(p, r, tau_op, v))
-                for tau_op in model.PROCESS_TIME
-                if op_start <= tau_op <= op_end
-            )
-        else:
-            production_per_unit = sum(
-                model.foreground_production[p, r, tau_op]
-                for tau_op in model.PROCESS_TIME
-                if op_start <= tau_op <= op_end
-            )
+        production_per_unit = production_rate(p, r, v)
 
-        if pyo.value(production_per_unit) == 0:
+        if production_per_unit == 0:
             return pyo.Constraint.Skip
 
         # Determine capacity based on vintage type
@@ -728,14 +803,14 @@ def create_model(
             existing_cap = model._existing_capacity_dict.get((p, v), 0)
             if existing_cap == 0:
                 return pyo.Constraint.Skip
-            capacity = pyo.value(production_per_unit) * existing_cap * fg_scale
+            capacity = production_per_unit * existing_cap * fg_scale
 
         return model.var_operation[p, v, t] <= capacity
 
     # Build constraint over ACTIVE_VINTAGE_TIME × PRODUCT
     def _build_operation_capacity_constraints(m):
         """Generate constraint indices for per-vintage capacity bounds."""
-        for (p, v, t) in m.ACTIVE_VINTAGE_TIME:
+        for p, v, t in m.ACTIVE_VINTAGE_TIME:
             for r in m.PRODUCT:
                 yield (p, v, t, r)
 
@@ -743,6 +818,20 @@ def create_model(
         _build_operation_capacity_constraints(model),
         rule=lambda m, p, v, t, r: operation_capacity_constraint_rule(m, p, v, t, r),
     )
+
+    def as_constraint(expression):
+        """
+        Turn a rule result into something `pyo.Constraint` accepts.
+
+        Sparse expressions can collapse to plain numbers (a process that has no
+        flows of the requested kind), in which case the comparison evaluates to a
+        Python bool rather than a Pyomo object.
+        """
+        if expression is True:
+            return pyo.Constraint.Feasible
+        if expression is False:
+            return pyo.Constraint.Infeasible
+        return expression
 
     def product_demand_fulfillment_rule(model, r, t):
         """
@@ -754,47 +843,45 @@ def create_model(
         total_production = 0
 
         # Sum production across all active vintages at time t
-        for (p, v, time) in model.ACTIVE_VINTAGE_TIME:
-            if time != t:
-                continue
-
-            op_start = pyo.value(model.process_operation_start[p])
-            op_end = pyo.value(model.process_operation_end[p])
-
-            # Get production rate for this vintage
-            if has_production_overrides(p, r):
-                production_rate = sum(
-                    pyo.value(get_production_value(p, r, tau_op, v))
-                    for tau_op in model.PROCESS_TIME
-                    if op_start <= tau_op <= op_end
-                )
-            else:
-                production_rate = sum(
-                    model.foreground_production[p, r, tau_op]
-                    for tau_op in model.PROCESS_TIME
-                    if op_start <= tau_op <= op_end
-                )
-
-            total_production += production_rate * model.var_operation[p, v, t]
+        for p, v in active_processes_by_time.get(t, ()):
+            rate = production_rate(p, r, v)
+            if rate:
+                total_production += rate * model.var_operation[p, v, t]
 
         external_demand = model.demand[r, t]
         internal_consumption = sum(
-            model.scaled_internal_demand_dependent_on_installation[p, r, t]
-            + model.scaled_internal_demand_dependent_on_operation[p, r, t]
+            model.scaled_internal_demand_flow[p, r, t]
             for p in model.PROCESS
+            if (p, r) in internal_demand_pairs
         )
-        return total_production == external_demand + internal_consumption
+        return as_constraint(total_production == external_demand + internal_consumption)
 
     model.ProductDemandFulfillment = pyo.Constraint(
         model.PRODUCT, model.SYSTEM_TIME, rule=product_demand_fulfillment_rule
     )
 
     def category_process_time_specific_impact(model, c, p, t):
-        return sum(
-            model.characterization[c, e, t]
-            * (model.scaled_inventory[p, e, t])  # Total inventory impact
-            for e in model.ELEMENTARY_FLOW
+        """
+        Impact of process p at time t in category c.
+
+        The sum over elementary flows is folded into the background inventory
+        beforehand (`impact_factors_by_category_time`), so only the intermediate
+        flows and the process's own emissions remain here. Writing it as
+        `sum_e Q[c, e, t] * scaled_inventory[p, e, t]` is mathematically the same
+        but builds an expression tree that is orders of magnitude larger.
+        """
+        process_flows = technosphere_flows_by_process.get(p, ())
+        background = sum(
+            factor * model.scaled_technosphere_flow[p, i, t]
+            for i, factor in impact_factors_by_category_time.get((c, t), ())
+            if i in process_flows
         )
+        foreground = 0
+        for e in biosphere_flows_by_process.get(p, ()):
+            factor = scaled_inputs.characterization.get((c, e, t))
+            if factor:
+                foreground += factor * model.scaled_biosphere_flow[p, e, t]
+        return background + foreground
 
     # impact of process p at time t in category c
     model.specific_impact = pyo.Expression(
@@ -825,7 +912,10 @@ def create_model(
     # Time-specific category impact limits
     def category_impact_limits_rule(model, c, t):
         if (c, t) in model._category_impact_limits:
-            return model.time_specific_impact[c, t] <= model._category_impact_limits[(c, t)]
+            return (
+                model.time_specific_impact[c, t]
+                <= model._category_impact_limits[(c, t)]
+            )
         return pyo.Constraint.Skip
 
     model.CategoryImpactLimits = pyo.Constraint(
@@ -870,28 +960,10 @@ def create_model(
         Consistent with 3D var_operation[p, v, t].
         """
         total = 0
-        for (p, v, time) in model.ACTIVE_VINTAGE_TIME:
-            if time != t:
-                continue
-
-            op_start = pyo.value(model.process_operation_start[p])
-            op_end = pyo.value(model.process_operation_end[p])
-
-            # Get production rate for this vintage
-            if has_production_overrides(p, r):
-                production_rate = sum(
-                    pyo.value(get_production_value(p, r, tau_op, v))
-                    for tau_op in model.PROCESS_TIME
-                    if op_start <= tau_op <= op_end
-                )
-            else:
-                production_rate = sum(
-                    model.foreground_production[p, r, tau_op]
-                    for tau_op in model.PROCESS_TIME
-                    if op_start <= tau_op <= op_end
-                )
-
-            total += production_rate * model.var_operation[p, v, t]
+        for p, v in active_processes_by_time.get(t, ()):
+            rate = production_rate(p, r, v)
+            if rate:
+                total += rate * model.var_operation[p, v, t]
         return total
 
     model.total_product_flow = pyo.Expression(
@@ -901,9 +973,9 @@ def create_model(
     # Expression for total intermediate flow consumed at time t (in SCALED units)
     def total_intermediate_flow_rule(model, i, t):
         return sum(
-            model.scaled_technosphere_dependent_on_installation[p, i, t]
-            + model.scaled_technosphere_dependent_on_operation[p, i, t]
+            model.scaled_technosphere_flow[p, i, t]
             for p in model.PROCESS
+            if (p, i) in technosphere_pairs
         )
 
     model.total_intermediate_flow = pyo.Expression(
@@ -914,26 +986,9 @@ def create_model(
     # This includes both foreground biosphere flows AND background inventory flows
     # (flows from intermediate flows going through background databases)
     def total_elementary_flow_rule(model, e, t):
-        # Foreground biosphere contribution
-        foreground_flow = sum(
-            model.scaled_biosphere_dependent_on_installation[p, e, t]
-            + model.scaled_biosphere_dependent_on_operation[p, e, t]
-            for p in model.PROCESS
-        )
-        # Background inventory contribution (via intermediate flows)
-        background_flow = sum(
-            (
-                model.scaled_technosphere_dependent_on_installation[p, i, t]
-                + model.scaled_technosphere_dependent_on_operation[p, i, t]
-            )
-            * sum(
-                model.background_inventory[bkg, i, e] * model.mapping[bkg, t]
-                for bkg in model.BACKGROUND_ID
-            )
-            for i in model.INTERMEDIATE_FLOW
-            for p in model.PROCESS
-        )
-        return foreground_flow + background_flow
+        # Identical to summing the per-process inventory, which already covers
+        # both the foreground biosphere flows and the background contribution.
+        return sum(model.scaled_inventory[p, e, t] for p in model.PROCESS)
 
     model.total_elementary_flow = pyo.Expression(
         model.ELEMENTARY_FLOW, model.SYSTEM_TIME, rule=total_elementary_flow_rule
@@ -1110,9 +1165,7 @@ def solve_model(
         raise RuntimeError(msg)
 
     model.solutions.load_from(results)
-    logger.info(
-        f"Solver [{solver_name}] termination: {termination}"
-    )
+    logger.info(f"Solver [{solver_name}] termination: {termination}")
 
     # 4) Denormalize objective
     scaled_obj = pyo.value(model.OBJ)
@@ -1145,7 +1198,9 @@ def solve_model(
     return model, true_obj, results
 
 
-def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6) -> Dict[str, Any]:
+def validate_operation_bounds(
+    model: pyo.ConcreteModel, tolerance: float = 1e-6
+) -> Dict[str, Any]:
     """
     Validate that operation levels respect capacity constraints.
 
@@ -1186,7 +1241,9 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
 
     # Get sparse overrides for production with precomputed index for O(1) lookup
     production_overrides = getattr(model, "_production_vintage_overrides", {}) or {}
-    production_overrides_index = getattr(model, "_production_overrides_index", frozenset())
+    production_overrides_index = getattr(
+        model, "_production_overrides_index", frozenset()
+    )
     existing_cap_dict = getattr(model, "_existing_capacity_dict", {})
 
     def get_prod_value(p, r, tau, vintage):
@@ -1201,7 +1258,7 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
         return (p, r) in production_overrides_index
 
     # Validate per-vintage operation bounds
-    for (p, v, t) in model.ACTIVE_VINTAGE_TIME:
+    for p, v, t in model.ACTIVE_VINTAGE_TIME:
         operation_value = pyo.value(model.var_operation[p, v, t])
         op_start = pyo.value(model.process_operation_start[p])
         op_end = pyo.value(model.process_operation_end[p])
@@ -1244,7 +1301,9 @@ def validate_operation_bounds(model: pyo.ConcreteModel, tolerance: float = 1e-6)
             max_violation = max(max_violation, violation)
         elif max_capacity > 0 and operation_value > max_capacity * (1.0 + tolerance):
             violation = operation_value - max_capacity
-            violations.append((p, v, t, operation_value, max_capacity, "exceeds_capacity"))
+            violations.append(
+                (p, v, t, operation_value, max_capacity, "exceeds_capacity")
+            )
             max_violation = max(max_violation, violation)
 
     # Generate summary
