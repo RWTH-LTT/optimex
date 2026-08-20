@@ -229,6 +229,13 @@ model_inputs.cumulative_flow_limits_max = {
 }
 ```
 
+!!! warning "Constraining an elementary flow"
+    Elementary flows without a characterization factor in any of your impact
+    categories are dropped during LCA processing, since they cannot affect any
+    impact. To constrain such a flow, list it in
+    `LCAConfig.background_inventory.retain_flows`. See
+    [Background Inventory](optimization_setup.md#background-inventory).
+
 ---
 
 ## Process Coupling

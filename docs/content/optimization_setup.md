@@ -155,6 +155,58 @@ characterization_methods=[
 ]
 ```
 
+### Background Inventory
+
+`background_inventory` controls how the inventories of the background databases are
+calculated:
+
+```python
+config = lca_processor.LCAConfig(
+    ...,
+    background_inventory={
+        "calculation_method": "parallel",  # default; one process per background database
+        "retain_flows": [iridium["code"]],  # keep flows that carry no impact
+    },
+)
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `calculation_method` | `"parallel"` | `"parallel"` calculates each background database in its own process, `"sequential"` one after another |
+| `n_jobs` | `None` | Worker processes for `"parallel"`; defaults to one per background database, capped by the CPU count |
+| `restrict_to_characterized_flows` | `True` | Drop elementary flows that have no characterization factor in any configured category |
+| `retain_flows` | `[]` | Elementary flow codes to keep even when they carry no characterization factor |
+| `cutoff` | `None` | Optional number of largest elementary flows to keep per intermediate flow. `None` keeps all |
+| `path_to_save` / `path_to_load` | `None` | Cache the inventory tensor on disk |
+
+!!! warning "Uncharacterized flows are dropped"
+    By default, an elementary flow that has **no characterization factor in any of your
+    configured categories** is removed from the model. Such a flow cannot affect any
+    impact, and keeping it would only inflate the model (the inventory is expressed per
+    process, elementary flow and year).
+
+    This matters when you constrain a flow directly, e.g. a resource limit through
+    [`cumulative_flow_limits_max`](constraints.md). Iridium has no climate change or
+    water use factor, so it is dropped unless you ask for it:
+
+    ```python
+    background_inventory={"retain_flows": [iridium["code"]]}
+    ```
+
+    Set `restrict_to_characterized_flows=False` to keep every flow instead. The
+    calculation log reports how many flows were dropped.
+
+!!! note "Parallel calculation from a script"
+    Worker processes are spawned, so a **script** using the default
+    `calculation_method="parallel"` must guard its entry point:
+
+    ```python
+    if __name__ == "__main__":
+        main()
+    ```
+
+    Notebooks need no guard. Use `"sequential"` if a guard is not an option.
+
 ---
 
 ## Processing LCA Data
@@ -173,7 +225,11 @@ This step:
 - Builds interpolation weights between background databases
 
 !!! note "Computation Time"
-    This step can take time for large databases. The results can be saved and reused.
+    This step can take time for large databases. Background inventories are cached
+    per background database and activity for the rest of the Python session, so
+    rerunning the same configuration is nearly free. Clear that cache with
+    `lca_processor.clear_lca_caches()`. The results can also be saved to disk and
+    reused across sessions.
 
 ---
 
