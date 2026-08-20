@@ -75,7 +75,10 @@ df_installation = pp.get_installation()
 Returns a DataFrame with:
 - **Index**: System time (years)
 - **Columns**: Process IDs
-- **Values**: Capacity installed at that time
+- **Values**: Number of process **units** installed at that time
+
+!!! warning "Installed units are a lifetime quantity"
+    One installed unit delivers the production of its production exchange over its **whole lifetime** (the sum of its temporal distribution), spread across its operation window. These numbers are therefore not an annual capacity and must not be compared directly with production or demand. For the per-year quantity, use [`get_production_capacity()`](#production-capacity).
 
 ```
 Process     ProcessA    ProcessB
@@ -88,10 +91,10 @@ Time
 
 **Common analyses:**
 ```python
-# Total capacity installed per process
-total_capacity = df_installation.sum()
+# Total units installed per process
+total_units = df_installation.sum()
 
-# Cumulative capacity over time
+# Cumulative units installed over time
 cumulative = df_installation.cumsum()
 
 # When each process was first deployed
@@ -102,7 +105,7 @@ first_deployment = df_installation[df_installation > 0].idxmax()
 
 ### Operation Levels
 
-Get how much each process operates per time period:
+Get how many units of each process run per time period:
 
 ```python
 df_operation = pp.get_operation()
@@ -111,7 +114,7 @@ df_operation = pp.get_operation()
 Returns a DataFrame with:
 - **Index**: System time (years)
 - **Columns**: Process IDs
-- **Values**: Operation level (units operating)
+- **Values**: Number of units running in that year
 
 ```
 Process     ProcessA    ProcessB
@@ -124,10 +127,30 @@ Time
 
 **Capacity utilization:**
 ```python
-# Calculate utilization rate
-cumulative_capacity = df_installation.cumsum()
-utilization = df_operation / cumulative_capacity
+# Units running vs. units available: compare production against annual capacity
+df_capacity = pp.get_production_capacity()   # per year
+df_production = pp.get_production()          # per year
+utilization = df_production.groupby(level="Product", axis=1).sum() / df_capacity
 ```
+
+Do not divide `df_operation` by the cumulative sum of `df_installation`: units only run within their operation window, so a cumulative sum counts units that were never or are no longer available. `plot_utilization_heatmap()` does this correctly.
+
+---
+
+### Production Capacity
+
+Get the maximum **annual** production available in each year:
+
+```python
+df_capacity = pp.get_production_capacity()
+```
+
+Returns a DataFrame with:
+- **Index**: System time (years)
+- **Columns**: Products
+- **Values**: Output the installed and existing units could deliver in that year
+
+This multiplies the units of every vintage that is in its operation phase by the output that vintage yields per unit and year, so it is directly comparable with `get_production()` and `get_demand()`.
 
 ---
 
@@ -203,7 +226,7 @@ fig = pp.plot_installation()
 
 ### Operation Plot
 
-Shows operation levels over time:
+Shows how many units run over time:
 
 ```python
 fig = pp.plot_operation()
@@ -213,7 +236,7 @@ fig = pp.plot_operation()
 
 ### Capacity Balance Plot
 
-Compares actual production with maximum available capacity:
+Compares actual production with the maximum annual capacity available:
 
 ```python
 fig = pp.plot_capacity_balance()
@@ -232,12 +255,16 @@ For custom analysis, access the solved model directly:
 ```python
 import pyomo.environ as pyo
 
-# Get decision variable values
+# Get decision variable values: units installed per vintage, and units of each
+# vintage running in a given year
 for p in solved_model.PROCESS:
     for t in solved_model.SYSTEM_TIME:
         installation = pyo.value(solved_model.var_installation[p, t])
-        operation = pyo.value(solved_model.var_operation[p, t])
-        print(f"{p}, {t}: install={installation:.2f}, operate={operation:.2f}")
+        print(f"{p}, installed in {t}: {installation:.2f} units")
+
+for (p, v, t) in solved_model.ACTIVE_VINTAGE_TIME:
+    operation = pyo.value(solved_model.var_operation[p, v, t])
+    print(f"{p}, vintage {v}, year {t}: {operation:.2f} units running")
 
 # Access expressions
 for c in solved_model.CATEGORY:
@@ -315,7 +342,7 @@ for cat in df_impacts.columns.get_level_values(0).unique():
     total = df_impacts[cat].sum().sum()
     print(f"  {cat}: {total:.2f}")
 
-print(f"\nTotal capacity installed by process:")
+print(f"\nTotal units installed by process:")
 for proc in df_installation.columns:
     total = df_installation[proc].sum()
     print(f"  {proc}: {total:.2f}")

@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+* **Changed results**: fixed under-counting of installation impacts. One installed
+  unit now delivers its production temporal distribution over its whole lifetime
+  instead of in every operating year, so a process with an n-year operation window
+  no longer amortizes its construction and end-of-life impacts over n times the
+  output it actually delivers
+  ([#61](https://github.com/RWTH-LTT/optimex/pull/61))
+* `var_installation` and `var_operation` are both unit counts now, so
+  `OperationCapacity` compares them directly. `existing_capacity` and the deployment
+  and operation limits are in the same process units: values calibrated as an annual
+  capacity need multiplying by the number of operating years
+  ([#61](https://github.com/RWTH-LTT/optimex/pull/61))
+* Postprocessing capacity outputs (`get_production_capacity`,
+  `plot_capacity_balance`, `plot_utilization_heatmap`) now report ANNUAL capacity,
+  comparable with production; `get_installation` reports installed units, a lifetime
+  quantity ([#61](https://github.com/RWTH-LTT/optimex/pull/61))
 
 ## [0.6.0] - 2026-08-20
 * Sped up the whole pipeline a lot: the `notebooks/methanol_and_iron.ipynb` case
