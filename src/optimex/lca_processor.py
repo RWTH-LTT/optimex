@@ -348,7 +348,11 @@ def compute_db_inventory_entries(
         # (elementary flow x background process) inventory matrix, of which only
         # the row sums are used below.
         lca.build_demand_array({activity.id: 1})
-        aggregated = lca.biosphere_matrix @ lca.solve_linear_system()
+        # `reshape(-1)` guards against pypardiso: its `spsolve` squeezes the
+        # result, so a single-process background database yields a 0-d array,
+        # which sparse `@` rejects as a scalar operand.
+        supply = np.asarray(lca.solve_linear_system()).reshape(-1)
+        aggregated = lca.biosphere_matrix @ supply
 
         rows = np.flatnonzero(aggregated)
         if cutoff is not None and len(rows) > int(cutoff):

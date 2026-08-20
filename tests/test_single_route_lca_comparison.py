@@ -104,6 +104,33 @@ def setup_single_route_system():
     ])
 
 
+def test_background_inventory_handles_squeezed_solver_result(
+    setup_single_route_system, monkeypatch
+):
+    """A 0-d supply vector must not break the background inventory aggregation.
+
+    pypardiso's `spsolve` squeezes its result, so this database - whose
+    technosphere holds a single process - comes back as a 0-d array instead of
+    a length-1 vector. Sparse `@` rejects that as a scalar operand.
+    """
+    lca_processor.clear_lca_caches()
+    original = bc.LCA.solve_linear_system
+    monkeypatch.setattr(
+        bc.LCA,
+        "solve_linear_system",
+        lambda self, *a, **kw: np.squeeze(original(self, *a, **kw)),
+    )
+
+    entries = lca_processor.compute_db_inventory_entries(
+        "db_2020",
+        {"electricity": {"name": "electricity production", "reference product": "electricity"}},
+        biosphere_db_name="biosphere3",
+    )
+
+    ((_, amount),) = entries[("electricity production", "electricity", None)].values()
+    assert amount == pytest.approx(0.5)
+
+
 def test_single_route_matches_standard_lca(setup_single_route_system):
     """
     Test that optimex produces same results as standard LCA for a single-route system.
