@@ -40,7 +40,11 @@ dependencies = [
     # dependencies as strings with quotes, e.g. "foo"
     # You can add version requirements like "foo>2.0"
     "pydantic>=2.12.5",
-    "scikit-umfpack>=0.4.2",
+    # Fast sparse solvers for the background LCA matrices. MKL (pypardiso) is
+    # x86-only, so ARM macs get UMFPACK instead; both are optional at runtime,
+    # scipy's SuperLU is the fallback.
+    "pypardiso; platform_machine == 'x86_64' or platform_machine == 'AMD64'",
+    "scikit-umfpack>=0.4.2; platform_system == 'Darwin' and platform_machine == 'arm64'",
 ]
 
 [project.urls]
