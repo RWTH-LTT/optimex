@@ -139,15 +139,19 @@ def test_separated_background_matches_standard_lca(setup_separated_background_sy
     Test that optimex produces same results as standard LCA when background has
     separate process and product nodes.
 
-    Expected calculation for 100 kg Widget:
-    - Direct CO2 from operation: 100 * 5 * 1.0 = 500 kg CO2
-    - Background electricity at construction: 100 * 10 * 0.5 = 500 kg CO2
-    - Total: 1000 kg CO2
+    The process has a two-year operation window and yields 0.5 kg per unit and year,
+    so the demand is placed in both operating years of one cohort: every unit is then
+    fully used, which is the condition for optimex and standard LCA to agree.
+
+    Expected calculation for 200 kg Widget:
+    - Direct CO2 from operation: 200 * 5 * 1.0 = 1000 kg CO2
+    - Background electricity at construction: 200 * 10 * 0.5 = 1000 kg CO2
+    - Total: 2000 kg CO2
     """
 
     # Standard LCA calculation
     widget = bd.get_node(database="foreground", name="Widget")
-    lca = bc.LCA({widget: 100}, method=("GWP", "example"))
+    lca = bc.LCA({widget: 200}, method=("GWP", "example"))
     lca.lci()
     lca.lcia()
     expected_gwp = lca.score
@@ -158,7 +162,7 @@ def test_separated_background_matches_standard_lca(setup_separated_background_sy
     years = range(2020, 2030)
     td_demand = TemporalDistribution(
         date=np.array([datetime(year, 1, 1).isoformat() for year in years], dtype='datetime64[s]'),
-        amount=np.asarray([0, 0, 100, 0, 0, 0, 0, 0, 0, 0]),  # 100 kg at year 2022
+        amount=np.asarray([0, 0, 100, 100, 0, 0, 0, 0, 0, 0]),  # 100 kg in 2022 and 2023
     )
 
     lca_config = lca_processor.LCAConfig(

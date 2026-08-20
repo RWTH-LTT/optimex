@@ -92,12 +92,16 @@ def test_model_solution_is_optimal(solved_system_model):
     )
 
 
+# Note on magnitudes: one installed unit produces 0.5 R1 per operating year
+# (production 0.5 at tau=1 and tau=2, i.e. 1.0 over its lifetime), so meeting a demand
+# of 10 in a year requires 20 units running. Installation-dependent flows are incurred
+# per unit, operation-dependent flows per running unit.
 @pytest.mark.parametrize(
     "model_type, expected_value",
     [
         # ("fixed", 3.15417e-10),  # Expected value for the fixed model
-        ("flex", 1.9172462799736082e-10),  # Expected value for the flexible model
-        ("constrained", 1.9197314619763485e-10),  # Constrained by limiting P1 to 10 installations (0.13% higher)
+        ("flex", 2.8168480231004236e-10),  # Expected value for the flexible model
+        ("constrained", 2.827868523922197e-10),  # Constrained by limiting P1 to 10 installations (0.39% higher)
     ],
     ids=["flex_result", "constrained_process_limit"], # "fixed_result",
 )
@@ -124,19 +128,22 @@ def test_model_scaling_values_within_tolerance(solved_system_model):
         model.name == "abstract_system_model_fixed"
         or model.name == "abstract_system_model_flex"
     ):
+        # 20 units per cohort: each unit yields 0.5 R1 per operating year, and the
+        # cohort has to cover the demand of 10 in its first operating year
         expected_values = {
-            ("P1", 2025): 10.0,
-            ("P1", 2027): 10.0,
-            ("P2", 2021): 10.0,
-            ("P2", 2023): 10.0,
+            ("P1", 2025): 20.0,
+            ("P1", 2027): 20.0,
+            ("P2", 2021): 20.0,
+            ("P2", 2023): 20.0,
         }
     elif model.name == "abstract_system_model_constrained":
-        # With P1 limited to 10 total, optimizer shifts significantly more to P2
+        # With P1 limited to 10 units total, the optimizer shifts almost everything to P2
         expected_values = {
             ("P1", 2027): 10.0,
-            ("P2", 2021): 10.0,
-            ("P2", 2023): 10.0,
-            ("P2", 2025): 10.0,
+            ("P2", 2021): 20.0,
+            ("P2", 2023): 20.0,
+            ("P2", 2025): 20.0,
+            ("P2", 2027): 10.0,
         }
     else:
         pytest.skip(f"Unknown model name: {model.name}")
@@ -347,20 +354,20 @@ def test_capacity_constraint_with_high_production():
     inst = pyo.value(solved_model.var_installation["P1", 2020])
     oper = get_total_operation(solved_model, "P1", 2020)
 
-    # With production = 5.0 and demand = 10:
-    # - Need var_operation = 10/5 = 2 to produce 10 units
-    # - Capacity = 5.0 * installations, so need 5.0 * inst >= 2
-    # - Minimum installations = 2/5 = 0.4
-    assert pytest.approx(0.4, rel=0.01) == inst, (
-        f"With production=5.0, only 0.4 installations needed, got {inst}"
+    # With production = 5.0 per unit and year (operation window is the single tau=0)
+    # and demand = 10:
+    # - 2 units must be running to produce 10 units of product
+    # - Operation is bounded by installed units, so 2 units must be installed
+    assert pytest.approx(2.0, rel=0.01) == inst, (
+        f"With production=5.0 per unit, 2 units are needed for a demand of 10, got {inst}"
     )
     assert pytest.approx(2.0, rel=0.01) == oper, (
-        f"Operation should be 2.0 to produce 10 units, got {oper}"
+        f"Operation should be 2.0 units running to produce 10 units, got {oper}"
     )
 
-    # Verify emissions (capacity-dependent) = 0.4 * 10 = 4 kg CO2
-    assert pytest.approx(4.0, rel=0.01) == objective, (
-        f"Emissions should be 4.0 kg CO2, got {objective}"
+    # Verify emissions (installation-dependent) = 2 * 10 = 20 kg CO2
+    assert pytest.approx(20.0, rel=0.01) == objective, (
+        f"Emissions should be 20.0 kg CO2, got {objective}"
     )
 
 

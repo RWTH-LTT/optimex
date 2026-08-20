@@ -132,9 +132,37 @@ TemporalDistribution(
 
 ---
 
+## What One Installed Unit Means
+
+This convention decides how installation impacts are amortized, so it is worth stating explicitly:
+
+**One unit of a process delivers the production stated by its production exchange — over its entire lifetime, not per year.**
+
+For the example above (`amount=1`, spread as `[0, 0.5, 0.5, 0]` over a two-year operation window):
+
+| Quantity | Value |
+|----------|-------|
+| Lifetime output of one unit | 1 kg (the sum of the temporal distribution) |
+| Output of one running unit per year | 0.5 kg (the per-τ entry) |
+| Units needed to deliver 10 kg in a single year | 20 |
+| Units needed to deliver 10 kg in each of two consecutive years | 20 (one cohort, fully used) |
+
+Consequences for the optimization:
+
+- `var_installation[p, v]` counts **units**, and installation-dependent exchanges (construction, end-of-life) are incurred once per unit.
+- `var_operation[p, v, t]` counts how many of those units **run in year t**, bounded by the units installed: `var_operation[p, v, t] ≤ var_installation[p, v]`.
+- Annual output is `production[τ = t - v] × var_operation[p, v, t]`.
+
+This is what makes optimex agree with a standard LCA of the delivered amount whenever every unit is fully utilized. If the demand profile does not allow full utilization — for instance a single demand year for a process with a multi-year operation window — the model builds capacity that is partly idle, and the resulting impact is legitimately *higher* than the standard LCA score of the delivered amount.
+
+!!! tip "Reporting an annual capacity"
+    Because installed units cover a whole lifetime, `PostProcessor.get_installation()` is not comparable with per-year production. Use `PostProcessor.get_production_capacity()`, which multiplies unit counts by the output per unit and year.
+
+---
+
 ## The Operation Flag
 
-Exchanges marked with `"operation": True` **scale with the operational level** $\mathbf{o}_{t,v}$. This enables flexible operation where a process can run below its installed capacity $\mathbf{s}_v$ (see [Theory: Flexible Operation](theory.md#step-5-flexible-operation)).
+Exchanges marked with `"operation": True` **scale with the operational level** $\mathbf{o}_{t,v}$, the number of units running. This enables flexible operation where a process can run below its installed capacity $\mathbf{s}_v$ (see [Theory: Flexible Operation](theory.md#step-5-flexible-operation)).
 
 ```python
 "exchanges": [

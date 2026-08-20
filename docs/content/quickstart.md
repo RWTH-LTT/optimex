@@ -190,8 +190,9 @@ model_inputs.existing_capacity = {("old_plant", 2010): 500.0}
 | Method | Returns | Description |
 |--------|---------|-------------|
 | `get_impacts()` | DataFrame | Impact by process, category, time |
-| `get_installation()` | DataFrame | Capacity installed per time |
-| `get_operation()` | DataFrame | Operation level per time |
+| `get_installation()` | DataFrame | Process units installed per time (a lifetime quantity, not an annual capacity) |
+| `get_production_capacity()` | DataFrame | Maximum annual production available per time |
+| `get_operation()` | DataFrame | Units running per time |
 | `get_production()` | DataFrame | Production by process and product |
 | `get_demand()` | DataFrame | Demand fulfillment over time |
 | `plot_impacts()` | Figure | Stacked area plot of impacts |
