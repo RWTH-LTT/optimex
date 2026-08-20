@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#64](https://github.com/RWTH-LTT/optimex/pull/64))
 * `get_dynamic_inventory()` no longer returns rows whose amount is exactly zero
   ([#64](https://github.com/RWTH-LTT/optimex/pull/64))
+* Background inventories are cached on disk per (project, database, activity), so a
+  new session reuses them instead of rebuilding every technosphere matrix. Switch it
+  off with `background_inventory.use_disk_cache` and clear it with
+  `lca_processor.clear_lca_caches(include_disk=True)`
+  ([#64](https://github.com/RWTH-LTT/optimex/pull/64))
 
 ## [0.5.0] - 2026-08-18
 * Added foreground_db_name argument to LCAConfig

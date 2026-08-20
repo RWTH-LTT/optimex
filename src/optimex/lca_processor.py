@@ -11,6 +11,7 @@ Key classes:
     - LCADataProcessor: Main class for time-explicit LCA processing
 """
 
+import hashlib
 import os
 import pickle
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -50,12 +51,30 @@ _NODE_INDEX_CACHE = {}
 _CHARACTERIZATION_FUNCTION_CACHE = {}
 
 
-def clear_lca_caches() -> None:
-    """Clear the module-level background inventory and metadata caches."""
+def clear_lca_caches(include_disk: bool = False, cache_dir=None) -> None:
+    """
+    Clear the module-level background inventory and metadata caches.
+
+    Parameters
+    ----------
+    include_disk : bool, optional
+        Also delete the on-disk inventory cache of the current project.
+    cache_dir : str or Path, optional
+        Directory of the on-disk cache, if it is not in the default location.
+    """
     _BACKGROUND_INVENTORY_CACHE.clear()
     _BIOSPHERE_METADATA_CACHE.clear()
     _NODE_INDEX_CACHE.clear()
     _CHARACTERIZATION_FUNCTION_CACHE.clear()
+
+    if include_disk:
+        directory = Path(
+            cache_dir
+            if cache_dir is not None
+            else Path(bd.projects.dir) / "optimex-inventory-cache"
+        )
+        for path in directory.glob("*.pickle"):
+            path.unlink(missing_ok=True)
 
 
 def _cache_token(db_name: str, cutoff: Optional[float] = None) -> tuple:
@@ -66,6 +85,81 @@ def _cache_token(db_name: str, cutoff: Optional[float] = None) -> tuple:
         bd.Database(name=db_name).metadata.get("modified"),
         cutoff,
     )
+
+
+def _disk_cache_path(db_name: str, cutoff: Optional[float], cache_dir=None):
+    """
+    File holding the cached inventories of one background database.
+
+    The `modified` token of the database and the cutoff are part of the file
+    name, so an edited database or a different cutoff simply misses instead of
+    reading stale numbers.
+    """
+    if cache_dir is None:
+        cache_dir = Path(bd.projects.dir) / "optimex-inventory-cache"
+    cache_dir = Path(cache_dir)
+    token = _cache_token(db_name, cutoff)
+    digest = hashlib.sha256(repr(token).encode()).hexdigest()[:16]
+    stem = "".join(char if char.isalnum() or char in "-_" else "_" for char in db_name)
+    return cache_dir / f"{stem[:80]}.{digest}.pickle"
+
+
+def _load_disk_cache(db_name: str, cutoff: Optional[float], cache_dir=None) -> int:
+    """
+    Populate the in-memory cache from disk. Returns the number of entries read.
+
+    .. warning::
+        The cache is read with `pickle`. It is written by optimex itself inside
+        the Brightway project directory; point `disk_cache_dir` somewhere else
+        only if you trust its contents.
+    """
+    path = _disk_cache_path(db_name, cutoff, cache_dir)
+    if not path.is_file():
+        return 0
+    try:
+        with open(path, "rb") as file:
+            entries = pickle.load(file)
+    except Exception as e:  # A truncated or unreadable cache is not fatal.
+        logger.warning(f"Ignoring unreadable inventory cache {path}: {e}")
+        return 0
+
+    cache_token = _cache_token(db_name, cutoff)
+    _BACKGROUND_INVENTORY_CACHE.update(
+        {cache_token + identity: entry for identity, entry in entries.items()}
+    )
+    logger.info(f"Loaded {len(entries)} cached inventories from {path}")
+    return len(entries)
+
+
+def _store_disk_cache(
+    db_name: str, cutoff: Optional[float], entries: dict, cache_dir=None
+) -> None:
+    """Merge `entries` into the on-disk cache of a database, atomically."""
+    if not entries:
+        return
+    path = _disk_cache_path(db_name, cutoff, cache_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    stored = {}
+    if path.is_file():
+        try:
+            with open(path, "rb") as file:
+                stored = pickle.load(file)
+        except Exception:  # Overwrite a cache we cannot read.
+            stored = {}
+    stored.update(entries)
+
+    temporary = path.with_suffix(".pickle.tmp")
+    with open(temporary, "wb") as file:
+        pickle.dump(stored, file, protocol=pickle.HIGHEST_PROTOCOL)
+    os.replace(temporary, path)
+
+    # Drop caches of older versions of the same database.
+    for other in path.parent.glob(f"{path.name.split('.')[0]}.*.pickle"):
+        if other != path:
+            other.unlink(missing_ok=True)
+
+    logger.info(f"Cached {len(entries)} inventories in {path}")
 
 
 def _flow_identity(key: str, meta: Union[dict, str]) -> tuple:
@@ -397,6 +491,8 @@ class BackgroundInventoryConfig(BaseModel):
         retain_flows: Elementary flow codes to keep regardless of characterization.
         calculation_method: Method for calculating the inventory tensor. Options: 'sequential', 'parallel'.
         n_jobs: Number of worker processes used by the 'parallel' method.
+        use_disk_cache: Whether calculated inventories are cached on disk between sessions.
+        disk_cache_dir: Directory for the on-disk cache; defaults to a folder in the Brightway project.
         path_to_save: Optional path to save the inventory tensor.
         path_to_load: Optional path to load the inventory tensor.
     """
@@ -425,12 +521,24 @@ class BackgroundInventoryConfig(BaseModel):
         description="Method for calculating the inventory tensor. Options: "
         "'parallel' (default; one worker process per background database) and "
         "'sequential'. Scripts using 'parallel' must guard their entry point with "
-        "`if __name__ == \"__main__\":`; notebooks need no guard.",
+        '`if __name__ == "__main__":`; notebooks need no guard.',
     )
     n_jobs: Optional[int] = Field(
         None,
         description="Number of worker processes for the 'parallel' calculation "
         "method. Defaults to one per background database, capped by the CPU count.",
+    )
+    use_disk_cache: bool = Field(
+        True,
+        description="Cache calculated background inventories on disk, so that a "
+        "new session does not have to rebuild and factorize the technosphere "
+        "matrix of every background database again. Entries are keyed by the "
+        "database's `modified` token, so editing a database invalidates them.",
+    )
+    disk_cache_dir: Optional[str] = Field(
+        None,
+        description="Directory for the on-disk inventory cache. Defaults to "
+        "`optimex-inventory-cache` inside the current Brightway project.",
     )
     path_to_save: Optional[str] = Field(
         None, description="Optional path to save the inventory tensor."
@@ -995,6 +1103,52 @@ class LCADataProcessor:
         log_tensor_dimensions(biosphere_tensor, "Biosphere")
         log_tensor_dimensions(production_tensor, "Production")
 
+    def _disk_cache_dir(self):
+        """
+        Where the on-disk inventory cache lives.
+
+        Returns `False` when caching is switched off, `None` for the default
+        location inside the Brightway project, or a configured directory.
+        """
+        config = self.config.background_inventory
+        if not config.use_disk_cache:
+            return False
+        return config.disk_cache_dir
+
+    def _pending_flows(
+        self, db_name: str, intermediate_flows: dict, cutoff: Optional[float]
+    ) -> dict:
+        """
+        Intermediate flows of a database that still have to be calculated.
+
+        Reads the on-disk cache into memory on the first miss, so a fresh session
+        skips rebuilding and factorizing the technosphere matrix.
+        """
+        cache_token = _cache_token(db_name, cutoff)
+
+        def missing():
+            return {
+                key: meta
+                for key, meta in intermediate_flows.items()
+                if cache_token + _flow_identity(key, meta)
+                not in _BACKGROUND_INVENTORY_CACHE
+            }
+
+        pending = missing()
+        cache_dir = self._disk_cache_dir()
+        if pending and cache_dir is not False:
+            if _load_disk_cache(db_name, cutoff, cache_dir):
+                pending = missing()
+        return pending
+
+    def _store_on_disk(
+        self, db_name: str, cutoff: Optional[float], entries: dict
+    ) -> None:
+        """Write freshly calculated inventories to the on-disk cache."""
+        cache_dir = self._disk_cache_dir()
+        if cache_dir is not False:
+            _store_disk_cache(db_name, cutoff, entries, cache_dir)
+
     def _calculate_inventory_of_db(
         self, db_name: str, intermediate_flows: dict, cutoff: Optional[float] = None
     ) -> Tuple[dict, dict]:
@@ -1026,12 +1180,7 @@ class LCADataProcessor:
             Dictionary mapping elementary flow codes to their names.
         """
         cache_token = _cache_token(db_name, cutoff)
-        pending = {
-            key: meta
-            for key, meta in intermediate_flows.items()
-            if cache_token + _flow_identity(key, meta)
-            not in _BACKGROUND_INVENTORY_CACHE
-        }
+        pending = self._pending_flows(db_name, intermediate_flows, cutoff)
 
         if pending:
             entries = compute_db_inventory_entries(
@@ -1043,6 +1192,7 @@ class LCADataProcessor:
             _BACKGROUND_INVENTORY_CACHE.update(
                 {cache_token + identity: entry for identity, entry in entries.items()}
             )
+            self._store_on_disk(db_name, cutoff, entries)
         else:
             logger.info(f"Reused cached inventory for database: {db_name}")
 
@@ -1086,13 +1236,7 @@ class LCADataProcessor:
 
         pending_per_db = {}
         for db_name in self.background_dbs:
-            cache_token = _cache_token(db_name, cutoff)
-            pending = {
-                key: meta
-                for key, meta in self._intermediate_flows.items()
-                if cache_token + _flow_identity(key, meta)
-                not in _BACKGROUND_INVENTORY_CACHE
-            }
+            pending = self._pending_flows(db_name, self._intermediate_flows, cutoff)
             if pending:
                 pending_per_db[db_name] = pending
 
@@ -1107,6 +1251,7 @@ class LCADataProcessor:
             _BACKGROUND_INVENTORY_CACHE.update(
                 {cache_token + identity: entry for identity, entry in entries.items()}
             )
+            self._store_on_disk(db_name, cutoff, entries)
         elif pending_per_db:
             n_jobs = min(
                 n_jobs or len(pending_per_db),
@@ -1133,12 +1278,16 @@ class LCADataProcessor:
                 for future in as_completed(futures):
                     db_name = futures[future]
                     cache_token = _cache_token(db_name, cutoff)
+                    entries = future.result()
                     _BACKGROUND_INVENTORY_CACHE.update(
                         {
                             cache_token + identity: entry
-                            for identity, entry in future.result().items()
+                            for identity, entry in entries.items()
                         }
                     )
+                    # Written from the parent so that workers never contend for
+                    # the same cache file.
+                    self._store_on_disk(db_name, cutoff, entries)
 
         for db_name in self.background_dbs:
             inventory_tensor, elementary_flows = _assemble_inventory_tensor(

@@ -1,6 +1,7 @@
 """Tests for the batched, cached background inventory calculation."""
 
 from datetime import datetime
+from pathlib import Path
 
 import bw2calc as bc
 import bw2data as bd
@@ -18,7 +19,12 @@ from optimex.lca_processor import (
 
 
 def _config(**background_inventory):
-    """Config mirroring the fixture project, with overridable inventory settings."""
+    """Config mirroring the fixture project, with overridable inventory settings.
+
+    The on-disk cache is off unless a test asks for it, so that each test really
+    runs the calculation it is about.
+    """
+    background_inventory.setdefault("use_disk_cache", False)
     years = range(2020, 2030)
     td_demand = TemporalDistribution(
         date=np.array(
@@ -143,3 +149,46 @@ def test_retain_flows_keeps_uncharacterized_flow(setup_brightway_databases):
     processor = LCADataProcessor(config)
 
     assert "CH4" in processor.elementary_flows
+
+
+def test_disk_cache_survives_a_cleared_session(setup_brightway_databases, monkeypatch):
+    """A new session reads inventories from disk instead of recalculating them."""
+    clear_lca_caches(include_disk=True)
+    reference = LCADataProcessor(_config(use_disk_cache=True))
+
+    clear_lca_caches()  # as if a new Python session started
+    monkeypatch.setattr(
+        lca_processor,
+        "compute_db_inventory_entries",
+        lambda *args, **kwargs: pytest.fail("recalculated despite the disk cache"),
+    )
+    processor = LCADataProcessor(_config(use_disk_cache=True))
+
+    assert processor.background_inventory == reference.background_inventory
+    assert processor.elementary_flows == reference.elementary_flows
+
+
+def test_disk_cache_is_invalidated_by_a_database_edit(setup_brightway_databases):
+    """Editing a background database must not serve stale inventories."""
+    clear_lca_caches(include_disk=True)
+    LCADataProcessor(_config(use_disk_cache=True))
+
+    node = bd.get_node(database="db_2020", code="I1")
+    for exchange in node.biosphere():
+        exchange["amount"] = exchange["amount"] * 2
+        exchange.save()
+    bd.Database("db_2020").process()
+
+    clear_lca_caches()
+    processor = LCADataProcessor(_config(use_disk_cache=True))
+    doubled = processor.background_inventory[("db_2020", "I1", "CO2")]
+    assert doubled == pytest.approx(2.0)
+
+
+def test_disk_cache_can_be_switched_off(setup_brightway_databases):
+    """Nothing is written when the cache is disabled."""
+    clear_lca_caches(include_disk=True)
+    LCADataProcessor(_config(use_disk_cache=False))
+
+    cache_dir = Path(bd.projects.dir) / "optimex-inventory-cache"
+    assert not list(cache_dir.glob("*.pickle")) if cache_dir.exists() else True

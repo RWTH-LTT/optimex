@@ -177,7 +177,9 @@ config = lca_processor.LCAConfig(
 | `restrict_to_characterized_flows` | `True` | Drop elementary flows that have no characterization factor in any configured category |
 | `retain_flows` | `[]` | Elementary flow codes to keep even when they carry no characterization factor |
 | `cutoff` | `None` | Optional number of largest elementary flows to keep per intermediate flow. `None` keeps all |
-| `path_to_save` / `path_to_load` | `None` | Cache the inventory tensor on disk |
+| `use_disk_cache` | `True` | Keep calculated inventories in a cache inside the Brightway project, so a new session does not rebuild them |
+| `disk_cache_dir` | `None` | Where that cache lives; defaults to `optimex-inventory-cache` in the current project |
+| `path_to_save` / `path_to_load` | `None` | Save or load the whole inventory tensor as a pickle |
 
 !!! warning "Uncharacterized flows are dropped"
     By default, an elementary flow that has **no characterization factor in any of your
@@ -225,11 +227,21 @@ This step:
 - Builds interpolation weights between background databases
 
 !!! note "Computation Time"
-    This step can take time for large databases. Background inventories are cached
-    per background database and activity for the rest of the Python session, so
-    rerunning the same configuration is nearly free. Clear that cache with
-    `lca_processor.clear_lca_caches()`. The results can also be saved to disk and
-    reused across sessions.
+    Most of this step is building and factorizing the technosphere matrix of each
+    background database. Results are cached per (project, database, activity), in
+    memory for the running session and on disk for the next one, so only the first
+    run pays for it. On the methanol & iron case study that is ~37 s for the first
+    run and ~0.3 s afterwards.
+
+    Cache entries carry the database's `modified` token, so editing a background
+    database invalidates them automatically. To clear them by hand:
+
+    ```python
+    from optimex import lca_processor
+
+    lca_processor.clear_lca_caches()                     # this session
+    lca_processor.clear_lca_caches(include_disk=True)    # and the files
+    ```
 
 ---
 
