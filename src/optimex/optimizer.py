@@ -481,6 +481,9 @@ def create_model(
             (_emission, _amount)
         )
     model._mapped_inventory_by_flow = mapped_inventory_by_flow
+    # The flat form held the same numbers a third time; the groupings cover every
+    # use from here on.
+    del mapped_inventory, inventory_by_background
 
     # Characterized impact per unit of an intermediate flow, i.e. the background
     # inventory already multiplied by the characterization factors:
@@ -498,12 +501,15 @@ def create_model(
             )
 
     _impact_factors = {}
-    for (_flow, _emission, _time), _amount in mapped_inventory.items():
-        for _category, _factor in characterization_by_emission.get(
-            (_emission, _time), ()
-        ):
-            _key = (_category, _time, _flow)
-            _impact_factors[_key] = _impact_factors.get(_key, 0.0) + _factor * _amount
+    for (_flow, _time), _emissions in mapped_inventory_by_flow.items():
+        for _emission, _amount in _emissions:
+            for _category, _factor in characterization_by_emission.get(
+                (_emission, _time), ()
+            ):
+                _key = (_category, _time, _flow)
+                _impact_factors[_key] = (
+                    _impact_factors.get(_key, 0.0) + _factor * _amount
+                )
 
     impact_factors_by_category_time = {}
     for (_category, _time, _flow), _factor in _impact_factors.items():
