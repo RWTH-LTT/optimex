@@ -5,4 +5,4 @@ __all__ = (
     # Add functions and variables you want exposed in `optimex.` namespace here
 )
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
