@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+* Sped up LCA processing a lot: the `notebooks/methanol_and_iron.ipynb` case study
+  goes from 613 s to 85 s end to end ([#64](https://github.com/RWTH-LTT/optimex/pull/64))
+* **Changed results**: `background_inventory.cutoff` now defaults to `None`. The old
+  default truncated background inventories before aggregating them, biasing flow
+  amounts low by up to 30% ([#64](https://github.com/RWTH-LTT/optimex/pull/64))
+* Background databases are now calculated in parallel by default, and elementary
+  flows without a characterization factor are dropped from the optimization model.
+  See `background_inventory.retain_flows` and `restrict_to_characterized_flows`
+  ([#64](https://github.com/RWTH-LTT/optimex/pull/64))
 
 ## [0.5.0] - 2026-08-18
 * Added foreground_db_name argument to LCAConfig
@@ -33,4 +42,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Improved user-facing API
 
 ## [0.1.0] - 2025-02-27
-* Initial release. 
+* Initial release.
