@@ -146,4 +146,4 @@ notebooks/premise_usage.ipynb
 notebooks/results
 
 # Generated plot files
-notebooks/plots/figs/*.png
+notebooks/paper/plots/figs/*.png

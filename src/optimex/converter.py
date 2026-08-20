@@ -19,6 +19,15 @@ from pydantic import BaseModel, Field, model_validator
 from optimex.lca_processor import LCADataProcessor
 
 
+# Elementary flows that carry no characterization factor are dropped during LCA
+# processing, which is easy to trip over when constraining a flow directly.
+_DROPPED_FLOW_HINT = (
+    " Note that elementary flows without a characterization factor in any category"
+    " are dropped from the model; list a flow in"
+    " `LCAConfig.background_inventory.retain_flows` to keep it available for flow"
+    " limits."
+)
+
 class OptimizationModelInputs(BaseModel):
     """
     Interface data structure for linking LCA-based outputs with optimization inputs.
@@ -369,11 +378,11 @@ class OptimizationModelInputs(BaseModel):
         system_times = set(data.get("SYSTEM_TIME", []))
         categories = set(data.get("CATEGORY", []))
 
-        def validate_keys(keys, valid_set, context):
+        def validate_keys(keys, valid_set, context, hint=""):
             invalid = [k for k in keys if k not in valid_set]
             if invalid:
                 raise ValueError(
-                    f"Invalid keys {invalid} in {context}. "
+                    f"Invalid keys {invalid} in {context}.{hint} "
                     f"Valid keys: {sorted(valid_set)}"
                 )
 
@@ -511,21 +520,29 @@ class OptimizationModelInputs(BaseModel):
 
         if data.get("flow_limits_max") is not None:
             for key in data["flow_limits_max"].keys():
-                validate_keys([key[0]], all_flows, "flow_limits_max flows")
+                validate_keys(
+                    [key[0]], all_flows, "flow_limits_max flows", hint=_DROPPED_FLOW_HINT
+                )
                 validate_keys([key[1]], system_times, "flow_limits_max system times")
 
         if data.get("flow_limits_min") is not None:
             for key in data["flow_limits_min"].keys():
-                validate_keys([key[0]], all_flows, "flow_limits_min flows")
+                validate_keys(
+                    [key[0]], all_flows, "flow_limits_min flows", hint=_DROPPED_FLOW_HINT
+                )
                 validate_keys([key[1]], system_times, "flow_limits_min system times")
 
         if data.get("cumulative_flow_limits_max") is not None:
             for key in data["cumulative_flow_limits_max"].keys():
-                validate_keys([key], all_flows, "cumulative_flow_limits_max flows")
+                validate_keys(
+                    [key], all_flows, "cumulative_flow_limits_max flows", hint=_DROPPED_FLOW_HINT
+                )
 
         if data.get("cumulative_flow_limits_min") is not None:
             for key in data["cumulative_flow_limits_min"].keys():
-                validate_keys([key], all_flows, "cumulative_flow_limits_min flows")
+                validate_keys(
+                    [key], all_flows, "cumulative_flow_limits_min flows", hint=_DROPPED_FLOW_HINT
+                )
 
         # Vintage-related validation
         # Infer REFERENCE_VINTAGES from the vintage data (union of all vintage years)
