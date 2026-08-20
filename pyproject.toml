@@ -40,11 +40,10 @@ dependencies = [
     # dependencies as strings with quotes, e.g. "foo"
     # You can add version requirements like "foo>2.0"
     "pydantic>=2.12.5",
-    # Fast sparse solvers for the background LCA matrices. MKL (pypardiso) is
-    # x86-only, so ARM macs get UMFPACK instead; both are optional at runtime,
-    # scipy's SuperLU is the fallback.
+    # Fast sparse solver for the background LCA matrices. MKL is x86-only, so
+    # ARM macs fall back to scipy's SuperLU unless the `umfpack` extra is
+    # installed (see below).
     "pypardiso; platform_machine == 'x86_64' or platform_machine == 'AMD64'",
-    "scikit-umfpack>=0.4.2; platform_system == 'Darwin' and platform_machine == 'arm64'",
 ]
 
 [project.urls]
@@ -75,6 +74,12 @@ docs = [
     "mkdocstrings[python]",
     "mkdocs-autorefs",
     "nbconvert>=7.0",
+]
+# UMFPACK is the fast sparse solver for ARM macs, where MKL/pypardiso does not
+# exist. It is opt-in because it ships no wheels: building it needs swig and
+# SuiteSparse (`brew install swig suite-sparse`), which cannot be assumed.
+umfpack = [
+    "scikit-umfpack>=0.4.2",
 ]
 gurobi = [
     "gurobipy"

@@ -2985,7 +2985,6 @@ dependencies = [
     { name = "pyomo" },
     { name = "pypardiso", marker = "platform_machine == 'AMD64' or platform_machine == 'x86_64'" },
     { name = "pyyaml" },
-    { name = "scikit-umfpack", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
     { name = "tdqm" },
 ]
 
@@ -3012,6 +3011,9 @@ testing = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "python-coveralls" },
+]
+umfpack = [
+    { name = "scikit-umfpack" },
 ]
 
 [package.dev-dependencies]
@@ -3048,12 +3050,12 @@ requires-dist = [
     { name = "pytest-randomly", marker = "extra == 'dev'" },
     { name = "python-coveralls", marker = "extra == 'testing'" },
     { name = "pyyaml" },
-    { name = "scikit-umfpack", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", specifier = ">=0.4.2" },
+    { name = "scikit-umfpack", marker = "extra == 'umfpack'", specifier = ">=0.4.2" },
     { name = "setuptools", marker = "extra == 'dev'" },
     { name = "tdqm" },
     { name = "zensical", marker = "extra == 'docs'" },
 ]
-provides-extras = ["testing", "dev", "docs", "gurobi"]
+provides-extras = ["testing", "dev", "docs", "umfpack", "gurobi"]
 
 [package.metadata.requires-dev]
 mfa = [{ name = "flodym", specifier = ">=0.5.4" }]
