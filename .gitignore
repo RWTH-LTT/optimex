@@ -158,3 +158,4 @@ notebooks/data/ethylene_case_study_local/
 node_modules/
 work/
 tmp
+notebooks/paper/plots/figs/*.png
