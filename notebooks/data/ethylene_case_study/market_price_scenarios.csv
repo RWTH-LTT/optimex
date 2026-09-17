@@ -1,0 +1,79 @@
+year,scenario,electricity_factor,natural_gas_factor,fossil_feedstock_factor,source,derivation
+2025,fossil_favorable,1.0,1.0,1.0,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2026,fossil_favorable,1.0,1.0,1.0,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2027,fossil_favorable,1.0,0.9821428571428572,0.9818181818181818,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2028,fossil_favorable,1.0,0.9821428571428572,0.9642857142857143,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2029,fossil_favorable,1.0,0.9649122807017543,0.9642857142857143,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2030,fossil_favorable,1.0,0.9649122807017543,0.9473684210526315,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2031,fossil_favorable,1.0,0.9649122807017543,0.9310344827586207,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2032,fossil_favorable,1.0,0.9482758620689656,0.9310344827586207,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2033,fossil_favorable,1.0,0.9482758620689656,0.9152542372881356,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2034,fossil_favorable,1.0,0.9322033898305084,0.9,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2035,fossil_favorable,1.0,0.9322033898305084,0.8852459016393442,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2036,fossil_favorable,1.0,0.9166666666666667,0.8852459016393442,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2037,fossil_favorable,1.0,0.9166666666666667,0.8709677419354838,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2038,fossil_favorable,1.0,0.9166666666666667,0.8571428571428571,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2039,fossil_favorable,1.0,0.9016393442622951,0.8571428571428571,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2040,fossil_favorable,1.0,0.9016393442622951,0.84375,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2041,fossil_favorable,1.0,0.8870967741935484,0.8307692307692308,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2042,fossil_favorable,1.0,0.8870967741935484,0.8307692307692308,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2043,fossil_favorable,1.0,0.8730158730158731,0.8181818181818181,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2044,fossil_favorable,1.0,0.8730158730158731,0.8059701492537313,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2045,fossil_favorable,1.0,0.8730158730158731,0.7941176470588236,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2046,fossil_favorable,1.0,0.8593749999999999,0.7941176470588236,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2047,fossil_favorable,1.0,0.8593749999999999,0.782608695652174,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2048,fossil_favorable,1.0,0.8461538461538461,0.7714285714285715,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2049,fossil_favorable,1.0,0.8461538461538461,0.7714285714285715,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2050,fossil_favorable,1.0,0.8333333333333334,0.7605633802816901,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2025,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2026,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2027,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2028,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2029,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2030,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2031,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2032,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2033,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2034,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2035,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2036,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2037,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2038,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2039,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2040,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2041,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2042,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2043,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2044,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2045,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2046,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2047,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2048,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2049,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2050,constant_prices,1.0,1.0,1.0,Case-study reference,Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2025,electrification_favorable,1.0,1.0,1.0,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2026,electrification_favorable,0.894878706199461,1.0185185185185184,1.0454545454545452,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2027,electrification_favorable,0.7830188679245284,1.0367063492063493,1.071074380165289,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2028,electrification_favorable,0.681687014428413,1.0548941798941798,1.0957792207792205,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2029,electrification_favorable,0.5645019745502413,1.0542560103963612,1.1396103896103895,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2030,electrification_favorable,0.4734532689776218,1.0721247563352825,1.1626794258373205,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2031,electrification_favorable,0.4734532689776218,1.089993502274204,1.1849529780564263,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2032,electrification_favorable,0.4734532689776218,1.0887611749680715,1.227272727272727,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2033,electrification_favorable,0.4734532689776218,1.1063218390804597,1.2480739599383666,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2034,electrification_favorable,0.4680112773801779,1.1048336472065285,1.268181818181818,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2035,electrification_favorable,0.4680112773801779,1.1393596986817323,1.301043219076006,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2036,electrification_favorable,0.4734532689776218,1.1373456790123455,1.3412816691505216,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2037,electrification_favorable,0.4734532689776218,1.1543209876543208,1.3592375366568914,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2038,electrification_favorable,0.4790233074361821,1.1712962962962963,1.3766233766233764,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2039,electrification_favorable,0.4790233074361821,1.1687917425622345,1.4155844155844155,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2040,electrification_favorable,0.4847259658580414,1.1854887674559804,1.4318181818181817,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2041,electrification_favorable,0.4847259658580414,1.1827956989247312,1.4475524475524473,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2042,electrification_favorable,0.4905660377358491,1.1992234169653522,1.4853146853146852,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2043,electrification_favorable,0.4905660377358491,1.2125220458553791,1.4999999999999998,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2044,electrification_favorable,0.49654855039116436,1.2286890064667841,1.514246947082768,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2045,electrification_favorable,0.49654855039116436,1.2448559670781894,1.5401069518716577,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2046,electrification_favorable,0.5026787794083392,1.2413194444444444,1.5762032085561497,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2047,electrification_favorable,0.5026787794083392,1.257233796296296,1.5889328063241106,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2048,electrification_favorable,0.5089622641509435,1.2535612535612535,1.6012987012987012,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2049,electrification_favorable,0.5089622641509435,1.2692307692307692,1.6363636363636362,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0
+2050,electrification_favorable,0.5154048244566516,1.265432098765432,1.6478873239436618,"Zibunas et al. (2022), Supplementary Method 4 and Supplementary Table 4",Scenario-to-SDS ratio normalized to 1.0 in 2025; constant prices fixed at 1.0

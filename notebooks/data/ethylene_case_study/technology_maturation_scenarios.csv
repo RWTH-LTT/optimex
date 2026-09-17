@@ -1,0 +1,22 @@
+change_type,process,input_flow,advanced_reduction_2050,moderate_share_of_advanced,basis
+operating_exchange,mto,interface_electricity_mv,0.1,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,mto,interface_cooling,0.1,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,mto,interface_cooling_minus_25,0.1,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,mto,interface_cooling_minus_100,0.1,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,co2_hydrogenation,interface_electricity_mv,0.15,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,pem,interface_electricity_mv,0.15,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,dac,interface_electricity_mv,0.2,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,dac,interface_heat_pump,0.2,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,eco2r,interface_electricity_mv,0.3,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,eco2r,interface_cooling,0.2,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,eco2r,interface_cooling_minus_15,0.2,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,eco2r,interface_cooling_minus_25,0.2,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,eco2r,interface_cooling_minus_45,0.2,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,eco2r,interface_cooling_minus_55,0.2,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,eco2r,interface_cooling_minus_100,0.2,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+operating_exchange,eco2r,interface_industrial_heat,0.2,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+installation_price,mto,mto_installation,0.15,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+installation_price,co2_hydrogenation,co2_hydrogenation_installation,0.2,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+installation_price,pem,pem_electrolyzer_system_installation_1mwe,0.3,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+installation_price,dac,ethylene_case_study_dac_solid_sorbent_4kt_construction,0.25,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
+installation_price,eco2r,eco2r_system_installation,0.4,0.5,Illustrative case-study assumption following the qualitative technology-maturity hierarchy
