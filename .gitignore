@@ -156,6 +156,17 @@ notebooks/data/ethylene_case_study_local/
 /.tmp-xlsx-analysis/
 .tmp-*.xlsx
 node_modules/
-work/
-tmp
+/outputs/
+/work/
+/tmp/
+/.agents/
+/.codex/
 notebooks/paper/plots/figs/*.png
+
+# Local case-study diagnostics
+/notebooks/*_diagnostics.ipynb
+/notebooks/data/ethylene_case_study/**/*diagnostic*
+/notebooks/data/ethylene_case_study/results/maturation_diagnostic_sweep.csv
+
+# Generated database reports
+/notebooks/data/export/
