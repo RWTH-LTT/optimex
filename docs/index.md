@@ -87,9 +87,9 @@ Time-explicit LCO reveals transition strategies that are invisible to static app
 
 ## Citation
 
-If you use `optimex` in your research, please consider citing our preprint:
+If you use `optimex` in your research, please consider citing our paper:
 
-> Diepers, T., Tautorus, J., Hartmann, J. M., & von der Assen, N. (2026). *A Framework for Time-Explicit Life Cycle Optimization*. Research Square. [https://doi.org/10.21203/rs.3.rs-9630408/v1](https://doi.org/10.21203/rs.3.rs-9630408/v1)
+> Diepers, T., Tautorus, J., Hartmann, J. M., & von der Assen, N. (2026). *A Framework for Time-Explicit Life Cycle Optimization*. Environmental Science & Technology. [https://doi.org/10.1021/acs.est.6c06868](https://doi.org/10.1021/acs.est.6c06868)
 
 ---
 
