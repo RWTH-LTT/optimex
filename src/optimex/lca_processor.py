@@ -1242,6 +1242,12 @@ class LCADataProcessor:
             - self._elementary_flows: Updated dictionary of all observed elementary
               flows.
         """
+        # ``bw2calc.LCA`` calls ``bd.databases.clean()`` while preparing its
+        # inputs. Process pending database changes once in the parent so that
+        # spawned workers only read an already-clean registry and do not write
+        # the shared metadata file concurrently.
+        bd.databases.clean()
+
         cutoff = self.config.background_inventory.cutoff
         project = bd.projects.current
         biosphere_db_name = self.biosphere_db.name
