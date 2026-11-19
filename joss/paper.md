@@ -55,7 +55,7 @@ Designing sustainable transitions requires decisions about *which* processes to 
 LCO is well suited to this task because it links process and supply-chain decisions to environmental objectives and constraints [@Heijungs:2002]. 
 However, existing LCO approaches treat life cycles as static, instantaneous events, collapsing the flows from construction, operation, maintenance, and end-of-life into a single point in time. 
 This simplification neglects two temporal dimensions that are essential for transition pathways: 
-flows are *distributed* over time, and product systems *evolve* over time. 
+flows are *distributed* over time, and product systems *evolve* over time [@MuellerDiepers:2025]. 
 Crucially, the two dimensions are interlinked — when a flow occurs dictates the system conditions it encounters — so both must be considered jointly. 
 Resolving when each flow actually occurs is decisive for whether a designed pathway is genuinely feasible and environmentally sustainable once deployed: 
 the relevant limits are themselves time-dependent, spanning cumulative stock limits such as carbon budgets and finite mineral reserves as well as flow-related limits on the rate at which resources can be extracted or emissions absorbed. 
@@ -63,7 +63,7 @@ A pathway that appears compliant under static, time-aggregated accounting can br
 
 `optimex` addresses this gap by providing a general, open-source implementation of time-explicit LCO. 
 Its target audience comprises LCA practitioners, energy- and industrial-systems modelers, and sustainability researchers who design technology transition pathways and need to optimize them against time-resolved environmental objectives and constraints. 
-Because `optimex` is built on `Brightway`, practitioners can temporalize foreground models they have already built for standard LCA and turn them into optimization problems without rebuilding anything from scratch; temporalized product systems prepared with the time-explicit *assessment* framework `bw_timex` [@MuellerDiepers:2025] can be reused directly.
+Because `optimex` is built on `Brightway`, practitioners can temporalize foreground models they have already built for standard LCA and turn them into optimization problems without rebuilding anything from scratch; temporalized product systems prepared with the time-explicit *assessment* framework `bw_timex` [@DiepersMueller:2026] can be reused directly.
 
 # State of the field
 
@@ -71,7 +71,7 @@ Holistically evaluating the environmental sustainability of a system requires ac
 LCA is traditionally static, but several methods have been proposed to add temporal considerations. 
 Dynamic LCA tools such as `Temporalis` [@Cardellini:2018] capture *temporal distribution*, the timing of flows as they cascade through the many tiers of the supply chain, while assuming a fixed product system [@Beloin:2020]. 
 Prospective LCA tools such as `premise` [@Sacchi:2022], `Futura` [@Joyce:2022], and `pathways` [@Sacchi:2024] instead capture *temporal evolution* but assess product systems at individual points in time [@Arvidsson:2024]. 
-Recent tools combine both dimensions, including `bw_timex` [@MuellerDiepers:2025], `ProsperDyn` [@LangQuantzendorff:2025], and `TRAILS` [@Sacchi:2026], but all *assess* a predefined product system rather than determining an optimal one from a set of alternatives.
+Recent tools combine both dimensions, including `bw_timex` [@DiepersMueller:2026], `ProsperDyn` [@LangQuantzendorff:2025], and `TRAILS` [@Sacchi:2026], but all *assess* a predefined product system rather than determining an optimal one from a set of alternatives.
 
 Resolving time, however, multiplies the number of viable alternatives: which technology to deploy, when, and how to operate it all interact through distributed flows and evolving conditions. 
 This combinatorial complexity is precisely what optimization is meant to handle, yet conventional optimization tools cannot. 
