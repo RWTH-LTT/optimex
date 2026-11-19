@@ -8,8 +8,8 @@ import bw2data as bd
 import numpy as np
 import pyomo.environ as pyo
 import pytest
-from loguru import logger
 from bw_temporalis import TemporalDistribution
+from loguru import logger
 
 from optimex import converter, lca_processor, optimizer
 from optimex.lca_processor import (
@@ -106,6 +106,33 @@ def test_parallel_matches_sequential(setup_brightway_databases):
 
     assert parallel.background_inventory == sequential.background_inventory
     assert parallel.elementary_flows == sequential.elementary_flows
+
+
+def test_parallel_cleans_database_registry_before_workers(
+    setup_brightway_databases, monkeypatch
+):
+    """Pending database changes must be processed before workers are started."""
+    clear_lca_caches()
+    processor = LCADataProcessor(_config(calculation_method="sequential"))
+    clear_lca_caches()
+    clean_calls = []
+
+    class ExecutorReached(Exception):
+        pass
+
+    def stop_before_starting_workers(*args, **kwargs):
+        assert clean_calls == [True]
+        raise ExecutorReached
+
+    monkeypatch.setattr(bd.databases, "clean", lambda: clean_calls.append(True))
+    monkeypatch.setattr(
+        lca_processor, "ProcessPoolExecutor", stop_before_starting_workers
+    )
+
+    with pytest.raises(ExecutorReached):
+        processor.parallel_inventory_tensor_calculation(n_jobs=2)
+
+    assert clean_calls == [True]
 
 
 def test_cutoff_keeps_largest_flows(setup_brightway_databases):
