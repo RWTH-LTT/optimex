@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use optimex in your research, please cite the preprint below."
+message: "If you use optimex in your research, please cite the paper below."
 title: "optimex: Time-Explicit Life Cycle Optimization"
 abstract: "Open-source Python package for time-explicit Life Cycle Optimization (LCO). Identifies optimal technology transition pathways while accounting for when emissions occur and how product systems evolve over time."
 type: software
@@ -27,12 +27,12 @@ preferred-citation:
   type: article
   title: "A Framework for Time-Explicit Life Cycle Optimization"
   year: 2026
-  month: 5
-  doi: "10.21203/rs.3.rs-9630408/v1"
-  url: "https://doi.org/10.21203/rs.3.rs-9630408/v1"
+  month: 10
+  journal: "Environmental Science & Technology"
+  doi: "10.1021/acs.est.6c06868"
+  url: "https://doi.org/10.1021/acs.est.6c06868"
   publisher:
-    name: "Research Square"
-  notes: "Preprint, In Review"
+    name: "American Chemical Society"
   authors:
     - family-names: Diepers
       given-names: Timo
