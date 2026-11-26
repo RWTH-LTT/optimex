@@ -8,7 +8,7 @@ tags:
 # Solving
 
 With the [optimization inputs](lca_processing.md) ready, the
-[objective](choosing_objective.md) chosen, and any [constraints](constraints.md)
+[objective](choosing_objective/index.md) chosen, and any [constraints](constraints.md)
 added, build the Pyomo model and solve it.
 
 ---
@@ -29,7 +29,7 @@ model = optimizer.create_model(
 |-----------|-------------|
 | `inputs` | The `OptimizationModelInputs` object |
 | `name` | Identifier for the model |
-| `objective` | What to minimize: `"environmental"` (default) or `"cost"`, see [Choosing an Objective](choosing_objective.md) |
+| `objective` | What to minimize: `"environmental"` (default) or `"cost"`, see [Choosing an Objective](choosing_objective/index.md) |
 | `objective_category` | Impact category to minimize; required for `objective="environmental"`, ignored for `"cost"` |
 | `debug_path` | Optional path of an LP file to write the model to |
 

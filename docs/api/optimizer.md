@@ -24,7 +24,7 @@ This module creates and solves Pyomo optimization models that minimize either an
 | `objective="cost"` | `total_cost`, the discounted cost of the background purchases priced with `intermediate_flow_prices` |
 
 Impact limits apply with either objective. See
-[Choosing an Objective](../content/choosing_objective.md).
+[Choosing an Objective](../content/choosing_objective/index.md).
 
 ## Scaling Convention
 

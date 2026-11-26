@@ -7,7 +7,7 @@ tags:
 
 # Quick Start
 
-A condensed reference for using `optimex`. For the underlying framework, see the [Theory](theory_how_it_works.md) page. For detailed explanations, see the [User Guide](workflow.md), [Examples](examples/index.md), or the [API Reference](../api/index.md).
+A condensed reference for using `optimex`. For the underlying framework, see the [Theory](theory_how_it_works.md) page. For detailed explanations, see the [User Guide](workflow/index.md), [Examples](examples/index.md), or the [API Reference](../api/index.md).
 
 ---
 

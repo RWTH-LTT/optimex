@@ -7,7 +7,7 @@ tags:
 
 # LCA Processing
 
-With the [background data](background_data.md) and [foreground](foreground_modeling.md) in place, the second step of the [workflow](workflow.md) turns them into optimization inputs: define the time-specific demand $\mathbf{f}_t$, configure characterization methods (static or [dynamic](theory_scope_and_limits.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and convert them into `OptimizationModelInputs`.
+With the [background data](background_data.md) and [foreground](foreground_modeling.md) in place, step 4 of the [workflow](workflow/index.md) turns them into optimization inputs: define the time-specific demand $\mathbf{f}_t$, configure characterization methods (static or [dynamic](theory_scope_and_limits.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and convert them into `OptimizationModelInputs`.
 
 ---
 
@@ -17,7 +17,7 @@ With the [background data](background_data.md) and [foreground](foreground_model
 Demand + LCAConfig → LCADataProcessor → ModelInputManager → OptimizationModelInputs
 ```
 
-This is the slow step of the workflow, so the resulting inputs can be [saved](#saving-and-loading-model-inputs) and reused for any number of optimizations.
+This is the slowest step of the workflow, so the resulting inputs can be [saved](#saving-and-loading-model-inputs) and reused for any number of optimizations.
 
 ---
 
@@ -306,12 +306,12 @@ manager.load_inputs("model_inputs.json")
 model_inputs = manager.model_inputs
 ```
 
-The model inputs are the hand-over to the optimization: [constraints](constraints.md) are added to them, and the [objective](choosing_objective.md) is chosen when the model is built from them, see [Solving](solving.md).
+The model inputs are the hand-over to the optimization: [constraints](constraints.md) are added to them, and the [objective](choosing_objective/index.md) is chosen when the model is built from them, see [Solving](solving.md).
 
 ---
 
 ## Next Steps
 
-- [Choosing an Objective](choosing_objective.md): Minimize impacts or costs
+- [Choosing an Objective](choosing_objective/index.md): Minimize impacts or costs
 - [Constraints](constraints.md): Add deployment limits, impact budgets, and more
 - [Solving](solving.md): Build and solve the model

@@ -21,21 +21,21 @@ nav = [
   { "User Guide" = [
     { Installation = "content/installation.md" },
     { "Quick Start" = "content/quickstart.md" },
-    { Workflow = "content/workflow.md" },
-    { "Choosing an Objective" = "content/choosing_objective.md" },
-    { "1 · Data" = [
-      { "Background Data" = "content/background_data.md" },
-      { "Foreground Modeling" = "content/foreground_modeling.md" },
+    { Workflow = [
+      "content/workflow/index.md",
+      { "1 · Choosing an Objective" = [
+        "content/choosing_objective/index.md",
+        { "Minimizing Impacts" = "content/minimizing_impacts.md" },
+        { "Minimizing Costs" = "content/minimizing_costs.md" },
+        { "Trade-offs" = "content/trade_offs.md" },
+      ]},
+      { "2 · Background Data" = "content/background_data.md" },
+      { "3 · Foreground Modeling" = "content/foreground_modeling.md" },
+      { "4 · LCA Processing" = "content/lca_processing.md" },
+      { "5 · Constraints" = "content/constraints.md" },
+      { "6 · Solving" = "content/solving.md" },
+      { "7 · Results" = "content/postprocessing.md" },
     ]},
-    { "2 · LCA Processing" = "content/lca_processing.md" },
-    { "3 · Optimization" = [
-      { "Minimizing Impacts" = "content/minimizing_impacts.md" },
-      { "Minimizing Costs" = "content/minimizing_costs.md" },
-      { Constraints = "content/constraints.md" },
-      { "Trade-offs" = "content/trade_offs.md" },
-      { Solving = "content/solving.md" },
-    ]},
-    { "4 · Results" = "content/postprocessing.md" },
   ]},
   { Examples = [
     { Overview = "content/examples/index.md" },
@@ -81,6 +81,7 @@ features = [
   "content.tabs.link",
   "content.tooltips",
   "navigation.footer",
+  "navigation.indexes",
   "navigation.instant",
   "navigation.instant.prefetch",
   "navigation.tabs",

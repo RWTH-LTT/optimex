@@ -8,7 +8,7 @@ tags:
 
 # Trade-offs
 
-A model minimizes one [objective](choosing_objective.md) at a time. To see how
+A model minimizes one [objective](choosing_objective/index.md) at a time. To see how
 two objectives trade off against each other, for example costs and climate
 impact, minimize one while limiting the other, and repeat for a range of limits.
 Impact limits are a standard [constraint](constraints.md), so the common pattern

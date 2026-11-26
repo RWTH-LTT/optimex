@@ -14,14 +14,14 @@ operation decisions as the [environmental objective](minimizing_impacts.md), so
 impact limits still apply and can constrain the cost-optimal pathway.
 
 Compared with minimizing impacts, it needs three additions along the
-[workflow](workflow.md):
+[workflow](workflow/index.md):
 
-1. **Data:** write market prices to the background nodes, see
-   [Market Prices](background_data.md#market-prices).
-2. **LCA processing:** read them by setting `LCAConfig.price_attribute`, see
-   [LCA Processing](lca_processing.md#market-prices).
-3. **Optimization:** build the model with `objective="cost"`, optionally with a
-   discount rate (below).
+- **Step 2, background data:** write market prices to the background nodes, see
+  [Market Prices](background_data.md#market-prices).
+- **Step 4, LCA processing:** read them by setting `LCAConfig.price_attribute`,
+  see [LCA Processing](lca_processing.md#market-prices).
+- **Step 6, solving:** build the model with `objective="cost"`, optionally with
+  a discount rate (below).
 
 This page explains what the cost objective computes and how to interpret it.
 

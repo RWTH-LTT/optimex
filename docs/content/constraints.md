@@ -7,7 +7,7 @@ tags:
 
 # Optimization Constraints
 
-`optimex` minimizes the [objective](choosing_objective.md) of your choice, an impact category or costs, while meeting the time-specific demand $\mathbf{f}_t$ (see [Theory: Complete Formulation](theory_how_it_works.md)). Real-world optimization problems often require additional constraints to reflect practical limitations, policy requirements, or scenario-specific conditions — such as existing brownfield capacities, resource bottlenecks, or cumulative environmental budgets.
+`optimex` minimizes the [objective](choosing_objective/index.md) of your choice, an impact category or costs, while meeting the time-specific demand $\mathbf{f}_t$ (see [Theory: Complete Formulation](theory_how_it_works.md)). Real-world optimization problems often require additional constraints to reflect practical limitations, policy requirements, or scenario-specific conditions — such as existing brownfield capacities, resource bottlenecks, or cumulative environmental budgets.
 
 This page documents all available constraint options in `optimex`.
 

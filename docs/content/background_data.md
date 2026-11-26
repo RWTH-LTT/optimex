@@ -7,7 +7,7 @@ tags:
 
 # Background Data
 
-`optimex` builds on the [Brightway](https://docs.brightway.dev/) LCA framework. The first step of the [workflow](workflow.md) is a Brightway project with the required data: a biosphere database for elementary flows, one or more background databases representing supply chains at different points in time (see [Theory: Background Evolution](theory_how_it_works.md#step-4-modeling-temporal-evolution)), LCIA methods, and, for the [cost objective](minimizing_costs.md), market prices of the background products. The foreground database with the candidate processes has its own page, [Foreground Modeling](foreground_modeling.md).
+`optimex` builds on the [Brightway](https://docs.brightway.dev/) LCA framework. Step 2 of the [workflow](workflow/index.md) is a Brightway project with the required data: a biosphere database for elementary flows, one or more background databases representing supply chains at different points in time (see [Theory: Background Evolution](theory_how_it_works.md#step-4-modeling-temporal-evolution)), LCIA methods, and, for the [cost objective](minimizing_costs.md), market prices of the background products. The foreground database with the candidate processes follows in step 3, [Foreground Modeling](foreground_modeling.md).
 
 ---
 

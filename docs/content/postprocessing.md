@@ -7,7 +7,7 @@ tags:
 
 # Postprocessing Results
 
-After solving an optimization model, `optimex` provides tools to extract, analyze, and visualize the results through the `PostProcessor` class. Results include capacity installations $\mathbf{s}_v$, operational levels $\mathbf{o}_{t,v}$, production volumes, and time-resolved environmental impacts across all defined categories.
+After solving an optimization model, `optimex` provides tools to extract, analyze, and visualize the results through the `PostProcessor` class. Results include capacity installations $\mathbf{s}_v$, operational levels $\mathbf{o}_{t,v}$, production volumes, time-resolved environmental impacts across all defined categories, and costs if prices are available.
 
 ---
 
@@ -23,7 +23,7 @@ solved_model, objective, results = optimizer.solve_model(model, solver_name="glp
 pp = postprocessing.PostProcessor(solved_model)
 ```
 
-The `PostProcessor` works the same for every [objective](choosing_objective.md): impacts in all categories, and costs if prices are available, are reported for any solved model.
+The `PostProcessor` works the same for every [objective](choosing_objective/index.md): impacts in all categories, and costs if prices are available, are reported for any solved model.
 
 ---
 
