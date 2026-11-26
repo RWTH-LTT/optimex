@@ -14,17 +14,6 @@ Standard LCA evaluates predefined product systems. But transition planning asks 
 
 `optimex` closes this gap by combining temporalized LCA with optimization in one workflow.
 
----
-
-## What Can You Optimize?
-
-`optimex` minimizes **one objective** and lets you **constrain the others**. The objective is either:
-
-- **An environmental impact** (the default): any impact category of your LCA, e.g. climate change, assessed statically or dynamically, water use, or land use.
-- **Economic costs**: the money spent on the background products your processes buy, e.g. electricity or steel, based on market prices you provide and optionally discounted. These are monetary costs, not environmental costs or damages.
-
-Whatever you minimize, you can limit everything else: annual or cumulative budgets for any impact category, limits on resource and emission flows, and limits on deploying and operating processes. For example, find the lowest-climate-impact pathway within a water budget, or the cheapest pathway within a carbon budget, and sweep the budget to see what each tightening costs. Most studies only need the environmental objective; see [Choosing an Objective](content/choosing_objective/index.md).
-
 [:lucide-rocket: Get Started](content/quickstart.md){ .md-button .md-button--primary } [:fontawesome-brands-github: View on GitHub](https://github.com/RWTH-LTT/optimex){ .md-button }
 
 ---

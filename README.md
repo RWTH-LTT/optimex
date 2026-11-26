@@ -28,21 +28,6 @@ However, both LCA and LCO are traditionally *static*: all flows are collapsed to
 
 `optimex` solves this by making both the assessment and the optimization **time-explicit**.
 
-## What can you optimize?
-
-`optimex` minimizes **one objective** and lets you **constrain the others**. The objective is either:
-
-- **An environmental impact** (the default): any impact category of your LCA, e.g. climate change, assessed statically or dynamically (e.g. cumulative radiative forcing), water use, or land use.
-- **Economic costs**: the money spent on the background products your processes buy, e.g. electricity, steel, or natural gas, based on market prices you provide and optionally discounted. These are monetary costs, not environmental costs or damages.
-
-Whatever you minimize, you can limit everything else: annual or cumulative budgets for any impact category, limits on resource and emission flows, and limits on deploying and operating processes. This lets you ask, for example:
-
-- What is the lowest-climate-impact pathway that stays within a water budget?
-- What is the cheapest pathway that stays within a carbon budget?
-- How do costs rise as the carbon budget tightens? Sweeping a limit traces the trade-off between two objectives.
-
-Most studies only need the environmental objective; the cost objective is an optional addition. See [Choosing an Objective](https://optimex.readthedocs.io/en/latest/content/choosing_objective/) in the documentation.
-
 ## Why go time-explicit?
 
 Making your optimization time-explicit unlocks insights that static approaches simply cannot provide:
