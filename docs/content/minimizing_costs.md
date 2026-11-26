@@ -14,16 +14,18 @@ operation decisions as the [environmental objective](minimizing_impacts.md), so
 impact limits still apply and can constrain the cost-optimal pathway.
 
 Compared with minimizing impacts, it needs three additions along the
-[workflow](workflow/index.md):
+[workflow](workflow.md):
 
-- **Step 2, background data:** write market prices to the background nodes, see
-  [Market Prices](background_data.md#market-prices).
-- **Step 4, LCA processing:** read them by setting `LCAConfig.price_attribute`,
-  see [LCA Processing](lca_processing.md#market-prices).
-- **Step 6, solving:** build the model with `objective="cost"`, optionally with
-  a discount rate (below).
+- **Product system modeling:** write market prices to the background nodes, see
+  [Setting Market Prices](#setting-market-prices).
+- **LCA processing:** read them by setting `LCAConfig.price_attribute`, see
+  [Reading Prices](#reading-prices).
+- **Solving:** build the model with `objective="cost"`, optionally with a
+  [discount rate](#model-inputs-and-discounting).
 
-This page explains what the cost objective computes and how to interpret it.
+This page covers everything specific to costs, so the other pages of the guide
+can stay focused on the environmental workflow; they only point here in boxes
+marked with :lucide-badge-euro:.
 
 The [basic cost example](examples/basic_example_econ.md) walks through all steps
 with a synthetic one-product system that needs no ecoinvent data.
@@ -64,17 +66,72 @@ a replacement ten years after a 2030 installation is priced and discounted in
 
 A product has one price per year, whichever decision drives its purchase.
 
-## Prices
+## Setting Market Prices
 
-Prices are data: they are written to the background nodes while
-[setting up the background data](background_data.md#market-prices), one price per
-node and background database. Each price refers to one unit of the node's
-reference product, in one currency and price basis for all prices.
-[LCA Processing](lca_processing.md#market-prices) reads them when
-`LCAConfig.price_attribute` is set, interpolates them to every system year like
-the inventories, and reports products without a price.
+Prices are data on the background nodes, written while modeling the [background data](background_data.md), one price per node and background database. Price the background products that the foreground buys **directly**; their upstream supply chains need no prices.
 
-A product without a price is treated as free, so check the warning listing them.
+`set_market_prices()` writes the prices from a table, with one row per node and database year:
+
+```python
+from optimex.economics import set_market_prices
+
+background_databases = {
+    2020: "ei312_REMIND-EU_SSP2_NDC_2020",
+    2030: "ei312_REMIND-EU_SSP2_NDC_2030",
+}
+price_data = [
+    {
+        "name": "market group for electricity, medium voltage",
+        "location": "RER",
+        "product": "electricity, medium voltage",
+        "unit": "kilowatt hour",
+        "year": year,
+        "price": price,  # constant 2020 EUR/kWh
+    }
+    for year, price in [(2020, 0.09), (2030, 0.07)]
+]
+
+set_market_prices(
+    price_data=price_data,
+    background_databases=background_databases,
+    product_col="product",
+    unit_col="unit",
+)
+```
+
+- **Units:** each price refers to one unit of the node's reference product. Use one currency and price basis throughout: 90 EUR/MWh becomes 0.09 EUR/kWh for a product measured in kilowatt hours. No unit, currency, or inflation conversion is applied.
+- **Every database:** set a price in each background database. Prospective databases, for example from `premise`, carry no prices themselves, and a product priced in some databases but not in others is rejected when the prices are [read](#reading-prices).
+- **Matching:** rows identify nodes by name and location, optionally narrowed by reference product and unit. Codes are not used, because premise gives the same activity a different code in each scenario database.
+- **Options:** `price_data` can also be a pandas DataFrame; `name_col`, `location_col`, `product_col`, `unit_col`, `year_col`, and `price_col` map custom column names. `overwrite=False` keeps existing prices, `strict=False` turns unresolvable rows into warnings instead of errors, and `price_attribute` changes the node attribute the price is written to (default `"market_price"`).
+
+To find the products that need a price, list the background inputs of the foreground processes:
+
+```python
+purchased = {
+    (exc.input["name"], exc.input["location"], exc.input["reference product"])
+    for process in bd.Database("foreground")
+    for exc in process.technosphere()
+    if exc.input["database"] != "foreground"
+}
+```
+
+## Reading Prices
+
+Prices are only read when `LCAConfig.price_attribute` names the node attribute holding them, so impact-only studies are unaffected:
+
+```python
+config = lca_processor.LCAConfig(
+    ...,
+    price_attribute="market_price",  # attribute written by set_market_prices
+)
+```
+
+The processor then resolves each directly purchased background product in every background database, the same way as for the inventories, and interpolates its prices to every system year with the same weights: linearly between database years, with the nearest database used outside that range. The result is available as `lca_data.intermediate_flow_prices`, keyed by `(intermediate flow, year)`, and is passed on to the optimization inputs.
+
+Missing prices are handled conservatively:
+
+- A product without a price in **any** database is left out and treated as free. All such products are listed in a single warning: check it, since a free purchase is rarely intended.
+- A product priced in **some** databases but not in others raises a `ValueError`, because interpolating with the missing price would silently pull the price towards zero.
 
 ## Model Inputs and Discounting
 

@@ -8,11 +8,11 @@ tags:
 
 # Time-Explicit Life Cycle Optimization with optimex
 
-`optimex` is an open-source Python package for **time-explicit Life Cycle Optimization (LCO)**. It finds optimal technology transition pathways while accounting for *when* emissions occur and *how* product systems evolve over time.
+`optimex` is an open-source Python package for **time-explicit Life Cycle Optimization (LCO)**. It finds optimal technology transition pathways, minimizing environmental impacts or costs, while accounting for *when* emissions occur and *how* product systems evolve over time.
 
 Standard LCA evaluates predefined product systems. But transition planning asks a different question: *which technologies should be deployed, when, and at what scale*? That is the domain of Life Cycle Optimization. In fast-changing energy and industrial systems, static formulations can be misleading because construction, operation, and end-of-life happen at different times, while background supply chains and technology performance evolve in parallel.
 
-`optimex` closes this gap by combining temporalized LCA with optimization in one workflow, so pathways can be assessed against both time-specific and cumulative environmental constraints.
+`optimex` closes this gap by combining temporalized LCA with optimization in one workflow. It finds the pathway with the lowest impact in a chosen category, or the cheapest pathway that stays within time-specific and cumulative environmental limits, such as a carbon budget. Comparing both shows what environmental targets cost.
 
 [:lucide-rocket: Get Started](content/quickstart.md){ .md-button .md-button--primary } [:fontawesome-brands-github: View on GitHub](https://github.com/RWTH-LTT/optimex){ .md-button }
 

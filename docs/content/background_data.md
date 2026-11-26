@@ -7,7 +7,7 @@ tags:
 
 # Background Data
 
-`optimex` builds on the [Brightway](https://docs.brightway.dev/) LCA framework. Step 2 of the [workflow](workflow/index.md) is a Brightway project with the required data: a biosphere database for elementary flows, one or more background databases representing supply chains at different points in time (see [Theory: Background Evolution](theory_how_it_works.md#step-4-modeling-temporal-evolution)), LCIA methods, and, for the [cost objective](minimizing_costs.md), market prices of the background products. The foreground database with the candidate processes follows in step 3, [Foreground Modeling](foreground_modeling.md).
+`optimex` builds on the [Brightway](https://docs.brightway.dev/) LCA framework. [Product system modeling](product_system/index.md) starts with a Brightway project with the required data: a biosphere database for elementary flows, one or more background databases representing supply chains at different points in time (see [Theory: Background Evolution](theory_how_it_works.md#step-4-modeling-temporal-evolution)), and LCIA methods. The foreground database with the candidate processes follows in [Foreground Modeling](foreground_modeling.md).
 
 ---
 
@@ -159,58 +159,8 @@ bd.Method(("Water use", "m3")).write([
 !!! tip "Using existing methods"
     If you import ecoinvent with `bw2io`, standard methods like IPCC GWP and ReCiPe are available automatically.
 
----
-
-## Market Prices
-
-Only needed for the [cost objective](minimizing_costs.md). Prices are stored on the background nodes, one value per time-specific database, so they can change over time like the inventories. Price the background products that the foreground buys **directly**; their upstream supply chains need no prices.
-
-`set_market_prices()` writes the prices from a table, with one row per node and database year:
-
-```python
-from optimex.economics import set_market_prices
-
-background_databases = {
-    2020: "ei312_REMIND-EU_SSP2_NDC_2020",
-    2030: "ei312_REMIND-EU_SSP2_NDC_2030",
-}
-price_data = [
-    {
-        "name": "market group for electricity, medium voltage",
-        "location": "RER",
-        "product": "electricity, medium voltage",
-        "unit": "kilowatt hour",
-        "year": year,
-        "price": price,  # constant 2020 EUR/kWh
-    }
-    for year, price in [(2020, 0.09), (2030, 0.07)]
-]
-
-set_market_prices(
-    price_data=price_data,
-    background_databases=background_databases,
-    product_col="product",
-    unit_col="unit",
-)
-```
-
-- **Units:** each price refers to one unit of the node's reference product. Use one currency and price basis throughout: 90 EUR/MWh becomes 0.09 EUR/kWh for a product measured in kilowatt hours. No unit, currency, or inflation conversion is applied.
-- **Every database:** set a price in each background database. Prospective databases, for example from `premise`, carry no prices themselves, and a product priced in some databases but not in others is rejected during [LCA processing](lca_processing.md#market-prices).
-- **Matching:** rows identify nodes by name and location, optionally narrowed by reference product and unit. Codes are not used, because premise gives the same activity a different code in each scenario database.
-- **Options:** `price_data` can also be a pandas DataFrame; `name_col`, `location_col`, `product_col`, `unit_col`, `year_col`, and `price_col` map custom column names. `overwrite=False` keeps existing prices, `strict=False` turns unresolvable rows into warnings instead of errors, and `price_attribute` changes the node attribute the price is written to (default `"market_price"`).
-
-To find the products that need a price, list the background inputs of the foreground processes:
-
-```python
-purchased = {
-    (exc.input["name"], exc.input["location"], exc.input["reference product"])
-    for process in bd.Database("foreground")
-    for exc in process.technosphere()
-    if exc.input["database"] != "foreground"
-}
-```
-
-Prices are only read when `LCAConfig.price_attribute` is set, so they do not affect impact-only studies.
+??? cost "Cost objective: market prices"
+    If you want to [minimize costs](minimizing_costs.md), the background products the foreground buys directly also need market prices, stored on their nodes in every background database. See [Setting Market Prices](minimizing_costs.md#setting-market-prices). Impact-only studies need no prices.
 
 ---
 

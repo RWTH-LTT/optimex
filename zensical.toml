@@ -21,21 +21,25 @@ nav = [
   { "User Guide" = [
     { Installation = "content/installation.md" },
     { "Quick Start" = "content/quickstart.md" },
-    { Workflow = [
-      "content/workflow/index.md",
-      { "1 · Choosing an Objective" = [
-        "content/choosing_objective/index.md",
-        { "Minimizing Impacts" = "content/minimizing_impacts.md" },
-        { "Minimizing Costs" = "content/minimizing_costs.md" },
-        { "Trade-offs" = "content/trade_offs.md" },
-      ]},
-      { "2 · Background Data" = "content/background_data.md" },
-      { "3 · Foreground Modeling" = "content/foreground_modeling.md" },
-      { "4 · LCA Processing" = "content/lca_processing.md" },
-      { "5 · Constraints" = "content/constraints.md" },
-      { "6 · Solving" = "content/solving.md" },
-      { "7 · Results" = "content/postprocessing.md" },
+    { "Workflow Overview" = "content/workflow.md" },
+    { "1 · Choosing an Objective" = [
+      "content/choosing_objective/index.md",
+      { "Minimizing Impacts" = "content/minimizing_impacts.md" },
+      { "Minimizing Costs" = "content/minimizing_costs.md" },
+      { "Trade-offs" = "content/trade_offs.md" },
     ]},
+    { "2 · Product System Modeling" = [
+      "content/product_system/index.md",
+      { "Background Data" = "content/background_data.md" },
+      { "Foreground Modeling" = "content/foreground_modeling.md" },
+    ]},
+    { "3 · Optimization" = [
+      "content/optimization/index.md",
+      { "LCA Processing" = "content/lca_processing.md" },
+      { Constraints = "content/constraints.md" },
+      { Solving = "content/solving.md" },
+    ]},
+    { "4 · Results" = "content/postprocessing.md" },
   ]},
   { Examples = [
     { Overview = "content/examples/index.md" },
@@ -191,7 +195,7 @@ filters = ["!^_", "!^__"]
 # Pages that moved; old URLs redirect to the new ones.
 [project.plugins.redirects.redirect_maps]
 "content/brightway_setup.md" = "content/background_data.md"
-"content/optimization_setup.md" = "content/lca_processing.md"
+"content/optimization_setup.md" = "content/optimization/index.md"
 "content/postprocessing_guide.md" = "content/postprocessing.md"
 
 [project.plugins.tags]

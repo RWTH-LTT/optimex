@@ -33,11 +33,12 @@ model = optimizer.create_model(
 | `objective_category` | Impact category to minimize; required for `objective="environmental"`, ignored for `"cost"` |
 | `debug_path` | Optional path of an LP file to write the model to |
 
-To minimize costs instead, pass `objective="cost"` and leave out the category:
+??? cost "Cost objective: building the model"
+    To minimize costs instead, pass `objective="cost"` and leave out the category. This needs market prices in the inputs, see [Minimizing Costs](minimizing_costs.md).
 
-```python
-model = optimizer.create_model(model_inputs, name="cost_minimum", objective="cost")
-```
+    ```python
+    model = optimizer.create_model(model_inputs, name="cost_minimum", objective="cost")
+    ```
 
 `create_model()` checks the objective first: an unknown objective, a category
 that is not in the inputs, or the cost objective without prices raise a

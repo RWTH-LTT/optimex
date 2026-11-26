@@ -7,7 +7,7 @@ tags:
 
 # LCA Processing
 
-With the [background data](background_data.md) and [foreground](foreground_modeling.md) in place, step 4 of the [workflow](workflow/index.md) turns them into optimization inputs: define the time-specific demand $\mathbf{f}_t$, configure characterization methods (static or [dynamic](theory_scope_and_limits.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and convert them into `OptimizationModelInputs`.
+With the [background data](background_data.md) and [foreground](foreground_modeling.md) in place, the [optimization](optimization/index.md) starts by turning them into optimization inputs: define the time-specific demand $\mathbf{f}_t$, configure characterization methods (static or [dynamic](theory_scope_and_limits.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and convert them into `OptimizationModelInputs`.
 
 ---
 
@@ -100,7 +100,7 @@ Further options:
 |-----------|-------------|
 | `background_inventory` | How background inventories are calculated, see [Background Inventory](#background-inventory) |
 | `foreground_db_name` | Name of the foreground database (default `"foreground"`) |
-| `price_attribute` | Background node attribute holding market prices, needed for the [cost objective](minimizing_costs.md); see [Market Prices](#market-prices) (default `None`: no prices are read) |
+| `price_attribute` | Only for the [cost objective](minimizing_costs.md): node attribute holding market prices, see [Reading Prices](minimizing_costs.md#reading-prices) (default `None`: no prices are read) |
 
 ### Temporal Settings
 
@@ -217,23 +217,8 @@ config = lca_processor.LCAConfig(
 
     Notebooks need no guard. Use `"sequential"` if a guard is not an option.
 
-### Market Prices
-
-For the [cost objective](minimizing_costs.md), set `price_attribute` to the node attribute holding the prices written while [setting up the background data](background_data.md#market-prices):
-
-```python
-config = lca_processor.LCAConfig(
-    ...,
-    price_attribute="market_price",  # attribute written by set_market_prices
-)
-```
-
-The processor then resolves each directly purchased background product in every background database, the same way as for the inventories, and interpolates its prices to every system year with the same weights: linearly between database years, with the nearest database used outside that range. The result is available as `lca_data.intermediate_flow_prices`, keyed by `(intermediate flow, year)`, and is passed on to the optimization inputs.
-
-Missing prices are handled conservatively:
-
-- A product without a price in **any** database is left out and treated as free. All such products are listed in a single warning: check it, since a free purchase is rarely intended.
-- A product priced in **some** databases but not in others raises a `ValueError`, because interpolating with the missing price would silently pull the price towards zero.
+??? cost "Cost objective: reading prices"
+    To [minimize costs](minimizing_costs.md), set `price_attribute="market_price"` so the processor reads the market prices from the background nodes and interpolates them to every system year. See [Reading Prices](minimizing_costs.md#reading-prices).
 
 ---
 

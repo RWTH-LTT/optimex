@@ -66,27 +66,28 @@ climate_impacts = df_impacts["climate_change"].sum().sum()
 
 ### Costs
 
-If the model inputs carry market prices (see [Minimizing Costs](minimizing_costs.md)), get the cost of the background purchases by driver, process, and time:
+??? cost "Cost objective: only with market prices"
+    If the inputs carry market prices (see [Minimizing Costs](minimizing_costs.md)), get the cost of the background purchases by driver, process, and time:
 
-```python
-df_costs = pp.get_costs()                    # undiscounted
-df_costs_pv = pp.get_costs(discounted=True)  # discounted to the reference year
-```
+    ```python
+    df_costs = pp.get_costs()                    # undiscounted
+    df_costs_pv = pp.get_costs(discounted=True)  # discounted to the reference year
+    ```
 
-Returns a DataFrame with:
-- **Index**: System time (years)
-- **Columns**: MultiIndex of (Driver, Process), with driver `"installation"` (purchases scaling with installed units, e.g. construction) or `"operation"` (purchases scaling with the units running)
-- **Values**: Cost in the currency of the input prices
+    Returns a DataFrame with:
+    - **Index**: System time (years)
+    - **Columns**: MultiIndex of (Driver, Process), with driver `"installation"` (purchases scaling with installed units, e.g. construction) or `"operation"` (purchases scaling with the units running)
+    - **Values**: Cost in the currency of the input prices
 
-```python
-# Discounted total cost, equal to the objective of a cost-minimal model
-total_cost = df_costs_pv.sum().sum()
+    ```python
+    # Discounted total cost, equal to the objective of a cost-minimal model
+    total_cost = df_costs_pv.sum().sum()
 
-# Operation-driven cost per year
-operation_costs = df_costs["operation"].sum(axis=1)
-```
+    # Operation-driven cost per year
+    operation_costs = df_costs["operation"].sum(axis=1)
+    ```
 
-Costs are also available for an impact-minimal model, so you can report what the environmentally optimal pathway costs. Without prices, the DataFrame has no columns.
+    Costs are also available for an impact-minimal model, so you can report what the environmentally optimal pathway costs. Without prices, the DataFrame has no columns.
 
 ---
 

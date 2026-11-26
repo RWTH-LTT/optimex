@@ -15,10 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PostProcessor.get_costs()` reports costs by installation/operation driver and
   process for any solved model. `objective_category` is now optional
   ([#71](https://github.com/RWTH-LTT/optimex/pull/71))
-* Restructured the user guide along the workflow (data, LCA processing,
-  optimization, results), with new pages on choosing an objective, minimizing
-  impacts, minimizing costs, trade-offs, and solving. Old page URLs redirect to
-  the new ones. Added a basic cost example ending in a cost-climate Pareto
+* Restructured the user guide into a workflow overview and four steps (choosing
+  an objective, product system modeling, optimization, results), with new pages
+  on minimizing impacts, minimizing costs, trade-offs, and solving. The guide is
+  written for environmental studies; everything specific to costs is collected
+  on one page and only referenced elsewhere in collapsed boxes. Old page URLs
+  redirect to the new ones. Added a basic cost example ending in a cost-climate Pareto
   frontier ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
 
 ## [0.7.0] - 2026-08-20
