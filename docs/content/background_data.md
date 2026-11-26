@@ -5,9 +5,9 @@ tags:
   - database
 ---
 
-# Setting Up Brightway
+# Background Data
 
-`optimex` builds on the [Brightway](https://docs.brightway.dev/) LCA framework. Before running an optimization, you need to set up a Brightway project with the required databases: a biosphere database for elementary flows, one or more background databases representing supply chains at different points in time (see [Theory: Background Evolution](theory.md#background-evolution-prospective-databases)), and a foreground database with the candidate processes to optimize.
+`optimex` builds on the [Brightway](https://docs.brightway.dev/) LCA framework. [Product system modeling](product_system/index.md) starts with a Brightway project with the required data: a biosphere database for elementary flows, one or more background databases representing supply chains at different points in time (see [Theory: Background Evolution](theory_how_it_works.md#step-4-modeling-temporal-evolution)), and LCIA methods. The foreground database with the candidate processes follows in [Foreground Modeling](foreground_modeling.md).
 
 ---
 
@@ -19,7 +19,7 @@ An `optimex` project requires three types of databases:
 Brightway Project
 ├── biosphere3          # Elementary flows (emissions, resources)
 ├── Background DBs      # e.g., db_2020, db_2030 (ecoinvent variants)
-└── foreground          # Your processes to optimize (must be named "foreground")
+└── foreground          # Your products and processes to optimize
 ```
 
 ---
@@ -37,7 +37,7 @@ bd.projects.set_current("my_optimex_project")
 
 ## Biosphere Database
 
-The biosphere database contains elementary flows (emissions to air/water/soil, resource extractions). If you're using ecoinvent, this is imported automatically. For custom setups:
+The biosphere database contains elementary flows (emissions to air/water/soil, resource extractions). If you're using ecoinvent, this is imported automatically. `optimex` uses the database Brightway is configured for, `bd.config.biosphere` (`"biosphere3"` by default). For custom setups:
 
 ```python
 biosphere_data = {
@@ -117,6 +117,9 @@ bg_2040.register()
 
 `optimex` automatically interpolates between these databases based on when exchanges occur.
 
+!!! tip "Dates without database metadata"
+    Instead of setting `representative_time` on each database, you can pass the dates when configuring the LCA processing: `LCAConfig(temporal={..., "database_dates": {"db_2020": datetime(2020, 1, 1), ...}})`. Then only the listed databases are used as background, which also lets you leave out databases from the project.
+
 !!! info "Using premise"
     The [premise](https://premise.readthedocs.io/) package can automatically generate future versions of ecoinvent based on IAM scenarios. This is the recommended approach for realistic prospective LCA.
 
@@ -124,7 +127,7 @@ bg_2040.register()
 
 ## Foreground Database
 
-The foreground database contains the processes you want to optimize. **It must be named `"foreground"`**.
+The foreground database contains the products and the processes you want to optimize. It is named `"foreground"` by default; to use another name, set `LCAConfig(foreground_db_name=...)`.
 
 See [Foreground Modeling](foreground_modeling.md) for detailed guidance on setting up foreground processes with temporal distributions.
 
@@ -158,6 +161,9 @@ bd.Method(("Water use", "m3")).write([
 
 !!! tip "Using existing methods"
     If you import ecoinvent with `bw2io`, standard methods like IPCC GWP and ReCiPe are available automatically.
+
+??? cost "Cost objective: market prices"
+    If you want to [minimize costs](minimizing_costs.md), the background products the foreground buys directly also need market prices, stored on their nodes in every background database. See [Setting Market Prices](cost_modeling.md#setting-market-prices). Impact-only studies need no prices.
 
 ---
 
@@ -217,7 +223,7 @@ for db_name in bd.databases:
     if "representative_time" in db.metadata:
         print(f"{db_name}: {db.metadata['representative_time']}")
 
-# Verify foreground exists
+# Verify foreground exists (or the name set in LCAConfig.foreground_db_name)
 assert "foreground" in bd.databases, "Foreground database required!"
 ```
 
@@ -226,4 +232,4 @@ assert "foreground" in bd.databases, "Foreground database required!"
 ## Next Steps
 
 - [Foreground Modeling](foreground_modeling.md): Set up foreground processes with temporal distributions, operation flags, and vintage parameters
-- [Optimization Setup](optimization_setup.md): Configure demand, characterization, and run the optimization
+- [LCA Processing](lca_processing.md): Define the demand, configure the time-explicit LCA, and build the optimization inputs

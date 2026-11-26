@@ -136,6 +136,9 @@ def test_json_with_optional_fields():
         "process_operation_limits_max": {("P1", 2020): 50.0},
         "process_operation_limits_min": {("P1", 2020): 0.0},
         "process_coupling": {("P1", "P1"): 1.0},
+        "intermediate_flow_prices": {("I1", 2020): 100.0},
+        "discount_rate": 0.05,
+        "discount_reference_year": 2020,
     }
 
     manager = converter.ModelInputManager()
@@ -156,6 +159,9 @@ def test_json_with_optional_fields():
         assert loaded_inputs.process_operation_limits_max == original_inputs.process_operation_limits_max
         assert loaded_inputs.process_operation_limits_min == original_inputs.process_operation_limits_min
         assert loaded_inputs.process_coupling == original_inputs.process_coupling
+        assert loaded_inputs.intermediate_flow_prices == original_inputs.intermediate_flow_prices
+        assert loaded_inputs.discount_rate == original_inputs.discount_rate
+        assert loaded_inputs.discount_reference_year == original_inputs.discount_reference_year
 
 
 def test_invalid_file_extension():

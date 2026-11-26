@@ -16,7 +16,7 @@ This notebook demonstrates `optimex` on a realistic case study using **ecoinvent
 
 Intermediate products (hydrogen, captured CO2) create cross-linkages between the systems.
 
-**Prerequisites**: ecoinvent 3.12 + premise databases must be set up (see `premise_database_setup.ipynb`).
+**Prerequisites**: ecoinvent 3.12 + premise databases must be set up, see the notebook [`notebooks/data/premise_database_setup.ipynb`](https://github.com/RWTH-LTT/optimex/blob/main/notebooks/data/premise_database_setup.ipynb). This requires an ecoinvent license and a premise decryption key.
 
 
 <div class="example-flowchart"><img src="data/product_system.svg" alt="Product system flowchart"></div>

@@ -33,7 +33,7 @@ This section contains the API documentation automatically generated from the `op
 
     ---
 
-    Constructs and solves Pyomo optimization models. Minimizes environmental impacts while respecting demand and process constraints.
+    Constructs and solves Pyomo optimization models. Minimizes environmental impacts or costs while respecting demand and process constraints.
 
     [:lucide-arrow-right: `optimizer`](optimizer.md)
 
@@ -44,5 +44,13 @@ This section contains the API documentation automatically generated from the `op
     Extracts results from solved models. Provides DataFrames and publication-quality visualizations for impacts, installations, and production.
 
     [:lucide-arrow-right: `postprocessing`](postprocessing.md)
+
+-   :lucide-badge-euro:{ style="color: #d4932e; margin-right: 0.25rem;" } **Economics** (cost objective)
+
+    ---
+
+    Writes market prices to the background databases, for the optional cost objective.
+
+    [:lucide-arrow-right: `economics`](economics.md)
 
 </div>

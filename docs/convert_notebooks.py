@@ -28,6 +28,10 @@ NOTEBOOK_META: dict[str, tuple[str, list[str]]] = {
         "lucide/play",
         ["learning", "tutorial"],
     ),
+    "basic_example_econ": (
+        "lucide/badge-euro",
+        ["learning", "tutorial", "costs"],
+    ),
     "methanol_and_iron": (
         "lucide/flask-conical",
         ["case study", "industry"],
@@ -36,6 +40,7 @@ NOTEBOOK_META: dict[str, tuple[str, list[str]]] = {
 
 NOTEBOOK_SOURCE_PATHS: dict[str, str] = {
     "basic_example": "notebooks/basic_example.ipynb",
+    "basic_example_econ": "notebooks/basic_example_econ.ipynb",
     "methanol_and_iron": "notebooks/methanol_and_iron.ipynb",
 }
 
@@ -86,6 +91,16 @@ def convert(
     # then rebases them correctly for /content/examples/<page>/ URLs.
     body = re.sub(r"src=(['\"])data/", r"src=\1data/", body)
     body = body.replace("](../data/", "](data/")
+
+    # Notebooks link to the docs sources and to each other by repository path,
+    # which works on GitHub. Rebase those links onto the generated pages, which
+    # live in docs/content/examples/.
+    body = re.sub(r"\]\(\.\./docs/content/([^)]+\.md(?:#[^)]*)?)\)", r"](../\1)", body)
+    body = re.sub(
+        r"\]\((?!http)([\w-]+)\.ipynb(#[^)]*)?\)",
+        lambda m: f"]({m.group(1)}.md{m.group(2) or ''})",
+        body,
+    )
 
     # Preserve the explicit white backdrop around the product-system SVG, as the
     # source asset itself is transparent and otherwise disappears in dark mode.

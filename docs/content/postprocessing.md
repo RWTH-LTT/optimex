@@ -7,7 +7,7 @@ tags:
 
 # Postprocessing Results
 
-After solving an optimization model, `optimex` provides tools to extract, analyze, and visualize the results through the `PostProcessor` class. Results include capacity installations $\mathbf{s}_v$, operational levels $\mathbf{o}_{t,v}$, production volumes, and time-resolved environmental impacts across all defined categories.
+After solving an optimization model, `optimex` provides tools to extract, analyze, and visualize the results through the `PostProcessor` class. Results include installed process units per vintage, the units running per year, production volumes, time-resolved environmental impacts across all defined categories, and costs if prices are available.
 
 ---
 
@@ -22,6 +22,8 @@ solved_model, objective, results = optimizer.solve_model(model, solver_name="glp
 # Create postprocessor
 pp = postprocessing.PostProcessor(solved_model)
 ```
+
+The `PostProcessor` works the same for every [objective](choosing_objective/index.md): impacts in all categories, and costs if prices are available, are reported for any solved model.
 
 ---
 
@@ -62,6 +64,31 @@ process_total = df_impacts.sum(axis=0)
 climate_impacts = df_impacts["climate_change"].sum().sum()
 ```
 
+<a id="costs"></a>
+
+??? cost "Cost objective: costs, only with market prices"
+    If the inputs carry market prices (see [Minimizing Costs](minimizing_costs.md)), get the cost of the background purchases by driver, process, and time:
+
+    ```python
+    df_costs = pp.get_costs()                    # undiscounted
+    df_costs_pv = pp.get_costs(discounted=True)  # discounted to the reference year
+    ```
+
+    Returns a DataFrame with:
+    - **Index**: System time (years)
+    - **Columns**: MultiIndex of (Driver, Process), with driver `"installation"` (purchases scaling with installed units, e.g. construction) or `"operation"` (purchases scaling with the units running)
+    - **Values**: Cost in the currency of the input prices
+
+    ```python
+    # Discounted total cost, equal to the objective of a cost-minimal model
+    total_cost = df_costs_pv.sum().sum()
+
+    # Operation-driven cost per year
+    operation_costs = df_costs["operation"].sum(axis=1)
+    ```
+
+    Costs are also available for an impact-minimal model, so you can report what the environmentally optimal pathway costs. Without prices, the DataFrame has no columns.
+
 ---
 
 ### Installation (Capacity Deployment)
@@ -97,8 +124,9 @@ total_units = df_installation.sum()
 # Cumulative units installed over time
 cumulative = df_installation.cumsum()
 
-# When each process was first deployed
-first_deployment = df_installation[df_installation > 0].idxmax()
+# First year each process is installed (ignoring solver noise around zero);
+# processes that are never installed show the first year, so check total_units
+first_deployment = (df_installation > 1e-9).idxmax()
 ```
 
 ---
@@ -130,7 +158,8 @@ Time
 # Units running vs. units available: compare production against annual capacity
 df_capacity = pp.get_production_capacity()   # per year
 df_production = pp.get_production()          # per year
-utilization = df_production.groupby(level="Product", axis=1).sum() / df_capacity
+production_per_product = df_production.T.groupby(level="Product").sum().T
+utilization = production_per_product / df_capacity
 ```
 
 Do not divide `df_operation` by the cumulative sum of `df_installation`: units only run within their operation window, so a cumulative sum counts units that were never or are no longer available. `plot_utilization_heatmap()` does this correctly.
@@ -164,7 +193,7 @@ df_production = pp.get_production()
 
 Returns a DataFrame with:
 - **Index**: System time (years)
-- **Columns**: MultiIndex of (Product, Process)
+- **Columns**: MultiIndex of (Process, Product)
 - **Values**: Production amount
 
 ---
@@ -184,31 +213,41 @@ Returns a DataFrame with:
 
 **Verify demand is met:**
 ```python
-total_production = df_production.groupby(level=0, axis=1).sum()
-demand_met = (total_production >= df_demand).all().all()
+total_production = df_production.T.groupby(level="Product").sum().T
+demand_met = (total_production[df_demand.columns] >= df_demand - 1e-6).all().all()
 ```
 
 ---
 
 ## Visualization
 
-### Impact Plot
+The plot methods draw the figure with matplotlib and show it; they return nothing.
+The examples below come from the [basic example](examples/basic_example.md).
 
-Stacked area chart of environmental impacts over time:
+**Customization:** layout and colors are set once for all plots via `plot_config`,
+for example `figsize`, the font sizes, `colormap`, or a fixed `color_map` from
+process or product code to color:
 
 ```python
-fig = pp.plot_impacts()
-```
-
-![Impact plot example](../_static/placeholder_impacts.png)
-
-**Customization:**
-```python
-fig = pp.plot_impacts(
-    category="climate_change",  # Specific category (default: all)
-    figsize=(12, 6),
+pp = postprocessing.PostProcessor(
+    solved_model,
+    plot_config={"figsize": (8, 4), "legend_fontsize": 8},
 )
 ```
+
+To plot a subset, pass a filtered DataFrame from the matching `get_*()` method,
+e.g. `pp.plot_impacts(df_impacts=pp.get_impacts()[["climate_change"]])`, and set
+`annotated=False` to label processes by code instead of name.
+
+### Impact Plot
+
+Stacked bars of the impact per process and year, one panel per category:
+
+```python
+pp.plot_impacts()
+```
+
+![Impact plot example](../_static/postprocessing/impacts.png)
 
 ---
 
@@ -217,10 +256,10 @@ fig = pp.plot_impacts(
 Bar chart showing capacity deployment timeline:
 
 ```python
-fig = pp.plot_installation()
+pp.plot_installation()
 ```
 
-![Installation plot example](../_static/placeholder_installation.png)
+![Installation plot example](../_static/postprocessing/installation.png)
 
 ---
 
@@ -229,8 +268,10 @@ fig = pp.plot_installation()
 Shows how many units run over time:
 
 ```python
-fig = pp.plot_operation()
+pp.plot_operation()
 ```
+
+![Operation plot example](../_static/postprocessing/operation.png)
 
 ---
 
@@ -239,10 +280,13 @@ fig = pp.plot_operation()
 Compares actual production with the maximum annual capacity available:
 
 ```python
-fig = pp.plot_capacity_balance()
+pp.plot_capacity_balance()
 ```
 
-![Capacity balance plot](../_static/placeholder_production.png)
+![Capacity balance plot](../_static/postprocessing/capacity_balance.png)
+
+`detailed=True` additionally breaks the capacity down by process, and
+`product=` restricts the plot to one product.
 
 ---
 
@@ -272,6 +316,20 @@ for c in solved_model.CATEGORY:
     print(f"{c}: {total}")
 ```
 
+### Dynamic Inventory
+
+The time-resolved inventory of the optimal pathway, i.e. every elementary flow in every year, can be passed on to [dynamic_characterization](https://dynamic-characterization.readthedocs.io), e.g. to plot the radiative forcing over time:
+
+```python
+df_inventory = pp.get_dynamic_inventory(biosphere_database="biosphere3")
+pp.plot_characterized_dynamic_inventory(
+    base_lcia_method=("GWP", "100 years"),  # a method from bd.methods
+    biosphere_database="biosphere3",
+)
+```
+
+Pass the name of your biosphere database as `biosphere_database`; the default is `"ecoinvent-3.12-biosphere"`.
+
 ### Denormalization
 
 `optimex` internally scales values for numerical stability. The `PostProcessor` automatically denormalizes, but for manual access:
@@ -284,6 +342,9 @@ cat_scales = solved_model.scales["characterization"]
 # Denormalize a scaled value
 scaled_value = pyo.value(solved_model.some_expression)
 real_value = scaled_value * fg_scale * cat_scales["climate_change"]
+
+# Cost expressions use the cost scale instead of a category scale
+real_cost = pyo.value(solved_model.total_cost) * fg_scale * solved_model.scales["cost"]
 ```
 
 ---
@@ -301,7 +362,11 @@ df_operation.to_csv("operation.csv")
 
 ### To Excel
 
+Writing Excel files needs the `openpyxl` package (`pip install openpyxl`).
+
 ```python
+import pandas as pd
+
 with pd.ExcelWriter("results.xlsx") as writer:
     df_impacts.to_excel(writer, sheet_name="Impacts")
     df_installation.to_excel(writer, sheet_name="Installation")
@@ -310,11 +375,23 @@ with pd.ExcelWriter("results.xlsx") as writer:
 
 ### Saving Figures
 
+The plot methods show the figure instead of returning it. In a script, use a
+non-interactive matplotlib backend, so the figure stays open after the call, and
+save it with `plt.savefig()`:
+
 ```python
-fig = pp.plot_impacts()
-fig.savefig("impacts.png", dpi=300, bbox_inches="tight")
-fig.savefig("impacts.pdf", bbox_inches="tight")
+import matplotlib
+matplotlib.use("Agg")  # before importing pyplot; draw without displaying
+import matplotlib.pyplot as plt
+
+pp.plot_impacts()
+plt.savefig("impacts.png", dpi=300, bbox_inches="tight")
+plt.savefig("impacts.pdf", bbox_inches="tight")
+plt.close("all")
 ```
+
+In a notebook, the displayed figure is closed once shown; save it from a script
+as above, or plot the DataFrames from the `get_*()` methods yourself.
 
 ---
 
@@ -347,19 +424,16 @@ for proc in df_installation.columns:
     total = df_installation[proc].sum()
     print(f"  {proc}: {total:.2f}")
 
-# Generate all plots
-fig_impacts = pp.plot_impacts()
-fig_install = pp.plot_installation()
-fig_prod = pp.plot_capacity_balance()
+# Show all plots
+pp.plot_impacts()
+pp.plot_installation()
+pp.plot_capacity_balance()
 
 # Save results
 with pd.ExcelWriter("optimization_results.xlsx") as writer:
     df_impacts.to_excel(writer, sheet_name="Impacts")
     df_installation.to_excel(writer, sheet_name="Installation")
     df_operation.to_excel(writer, sheet_name="Operation")
-
-fig_impacts.savefig("impacts.png", dpi=300)
-fig_install.savefig("installation.png", dpi=300)
 ```
 
 ---
@@ -369,16 +443,23 @@ fig_install.savefig("installation.png", dpi=300)
 Run multiple scenarios and compare:
 
 ```python
+from optimex import converter, optimizer, postprocessing
+
+scenarios = {
+    "baseline": {},
+    "carbon_budget": {"cumulative_category_impact_limits": {"climate_change": 5.0e5}},
+}
+base = model_inputs.model_dump()
 results = {}
 
 for scenario_name, constraints in scenarios.items():
-    # Apply scenario-specific constraints
-    model_inputs_copy = model_inputs.model_copy(deep=True)
-    for key, value in constraints.items():
-        setattr(model_inputs_copy, key, value)
+    # Validated copy of the inputs with the scenario-specific constraints
+    scenario_inputs = converter.OptimizationModelInputs(**{**base, **constraints})
 
     # Solve
-    model = optimizer.create_model(model_inputs_copy, name=scenario_name, ...)
+    model = optimizer.create_model(
+        scenario_inputs, name=scenario_name, objective_category="climate_change"
+    )
     solved, obj, _ = optimizer.solve_model(model, solver_name="glpk")
 
     # Store results
@@ -398,5 +479,6 @@ for name, data in results.items():
 
 ## Next Steps
 
-- [Examples](../examples/index.md): See complete worked examples
+- [Trade-offs](trade_offs.md): Compare the results of a series of models
+- [Examples](examples/index.md): See complete worked examples
 - [API Reference](../api/postprocessing.md): Full PostProcessor API documentation

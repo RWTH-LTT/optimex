@@ -469,7 +469,7 @@ class TemporalConfig(BaseModel):
     Attributes:
         start_date: The start date of the time horizon.
         temporal_resolution: Temporal resolution for the model.
-            Options: 'year', 'month', 'day'.
+            Only 'year' is supported.
         time_horizon: Length of the time horizon (in units of `temporal_resolution`).
         fixed_time_horizon: If True, the time horizon is calculated from the time of the functional
             unit (FU) instead of the time of emission
@@ -577,6 +577,8 @@ class LCAConfig(BaseModel):
         characterization_methods: List of characterization method configurations.
         background_inventory: Configuration for background inventory data calculation.
         foreground_db_name: Name of the foreground Brightway database.
+        price_attribute: Name of the background node attribute that holds market
+            prices (e.g. "market_price"). `None` (default) reads no prices.
     """
 
     demand: Dict[bd.backends.proxies.Activity, TemporalDistribution]
@@ -588,6 +590,14 @@ class LCAConfig(BaseModel):
     foreground_db_name: str = Field(
         "foreground",
         description="Name of the foreground Brightway database.",
+    )
+    price_attribute: Optional[str] = Field(
+        None,
+        description="Name of the background node attribute holding the market "
+        "price per unit of the node's reference product, e.g. 'market_price' as "
+        "written by `optimex.economics.set_market_prices`. Prices are read for "
+        "every background product the foreground purchases directly and are "
+        "needed for the cost objective. `None` (default) reads no prices.",
     )
 
     class Config:
@@ -661,6 +671,7 @@ class LCADataProcessor:
         self._foreground_production = {}
         self._background_inventory = {}
         self._mapping = {}
+        self._intermediate_flow_prices = {}  # (intermediate flow, year) -> price
         self._characterization = {}
         self._operation_flow = {}
         self._operation_time_limits = {}
@@ -678,6 +689,8 @@ class LCADataProcessor:
         self._construct_characterization_tensor()
         self._prune_uncharacterized_flows()
         self._construct_mapping_matrix()
+        if config.price_attribute is not None:
+            self._construct_intermediate_flow_prices(config.price_attribute)
 
     @property
     def processes(self) -> dict:
@@ -738,6 +751,11 @@ class LCADataProcessor:
     def mapping(self) -> dict:
         """Read-only access to the mapping matrix."""
         return self._mapping
+
+    @property
+    def intermediate_flow_prices(self) -> dict:
+        """Read-only access to the market prices of intermediate flows per year."""
+        return self._intermediate_flow_prices
 
     @property
     def characterization(self) -> dict:
@@ -855,9 +873,9 @@ class LCADataProcessor:
 
         self._system_time = range(start_year, start_year + longest_demand_interval + 1)
         logger.info(
-            "Identified demand in system time range of %s for products %s",
-            self._system_time,
-            set(product_code for product_code, _ in self._demand.keys()),
+            f"Identified demand in system time range {start_year}-"
+            f"{self._system_time[-1]} for products "
+            f"{sorted(set(product_code for product_code, _ in self._demand.keys()))}"
         )
 
     def _construct_foreground_tensors(self) -> None:
@@ -957,8 +975,9 @@ class LCADataProcessor:
                 #    Example: {2020: 1.0, 2030: 0.75}
                 #
                 # 2. vintage_amounts: Dict mapping vintage years to amounts
-                #    Format: {vintage_year: amount} OR {(process_time, vintage_year): amount}
-                #    Example: {2020: 60, 2030: 45} or {(1, 2020): 60, (1, 2030): 45}
+                #    Format: {vintage_year: total amount} OR
+                #            {(process_time, vintage_year): amount at that process time}
+                #    Example: {2020: 60, 2030: 45} or {(1, 2020): 30, (1, 2030): 22.5}
                 # ==========================================================================
 
                 vintage_amounts = exc.get("vintage_amounts")
@@ -1008,29 +1027,34 @@ class LCADataProcessor:
 
                             self._reference_vintages.add(vintage_year)
 
-                            # Determine which process times to apply this vintage value to
-                            if process_time_vintage is not None:
-                                process_times_to_update = [process_time_vintage]
+                            # A vintage-year key gives the exchange total of that
+                            # vintage, distributed over process time like `amount`;
+                            # a (process_time, vintage_year) key gives the amount
+                            # at that process time directly.
+                            if process_time_vintage is None:
+                                amounts_by_tau = {
+                                    tau: float(vintage_amount * factor)
+                                    for tau, factor in zip(years, temporal_factor)
+                                }
                             else:
-                                # Apply to all process times in temporal distribution
-                                process_times_to_update = years
+                                amounts_by_tau = {process_time_vintage: vintage_amount}
 
-                            for tau in process_times_to_update:
+                            for tau, tau_amount in amounts_by_tau.items():
                                 # Store in appropriate vintage dictionary based on edge type
                                 if edge_type == bd.labels.production_edge_default:
                                     self._foreground_production_vintages[
                                         (act["code"], input_code, tau, vintage_year)
-                                    ] = vintage_amount
+                                    ] = tau_amount
                                 elif edge_type == bd.labels.consumption_edge_default:
                                     if input_db != self.foreground_db.name:
                                         # Only for background consumption (technosphere)
                                         self._foreground_technosphere_vintages[
                                             (act["code"], input_code, tau, vintage_year)
-                                        ] = vintage_amount
+                                        ] = tau_amount
                                 elif edge_type == bd.labels.biosphere_edge_default:
                                     self._foreground_biosphere_vintages[
                                         (act["code"], input_code, tau, vintage_year)
-                                    ] = vintage_amount
+                                    ] = tau_amount
 
                 # Handle production edges
                 if edge_type == bd.labels.production_edge_default:
@@ -1519,6 +1543,96 @@ class LCADataProcessor:
             "Constructed mapping matrix for background databases "
             "based on linear interpolation."
         )
+
+    def _construct_intermediate_flow_prices(self, price_attribute: str) -> None:
+        """
+        Read market prices of the intermediate flows and map them to system time.
+
+        Each intermediate flow is a background product purchased directly by the
+        foreground. Its price is read from the `price_attribute` of the equivalent
+        node in every background database, resolved the same way as for the
+        background inventory, and interpolated to system time with the mapping
+        matrix, exactly like the inventories.
+
+        A flow without a price in any database is reported once and left out, so
+        the optimizer treats it as free. A flow priced in some databases but not in
+        others raises an error: interpolating with a missing price would silently
+        pull the price towards zero.
+
+        Side Effects
+        ------------
+        Updates
+            - `self._intermediate_flow_prices`: dict with keys
+              (intermediate flow code, year) and price values.
+
+        Raises
+        ------
+        ValueError
+            If a flow is priced in some, but not all, relevant background databases.
+        """
+        # Only databases that carry weight in some system year affect the prices.
+        relevant_dbs = sorted(
+            {db for (db, _), weight in self._mapping.items() if weight}
+        )
+
+        unpriced, incomplete = [], {}
+        for flow_code, meta in self._intermediate_flows.items():
+            prices = {}
+            for db_name in relevant_dbs:
+                try:
+                    if isinstance(meta, dict):
+                        node = _resolve_node(db_name, meta)
+                    else:
+                        node = bd.Database(db_name).get(code=flow_code)
+                except Exception:
+                    continue
+                if (price := node.get(price_attribute)) is not None:
+                    prices[db_name] = float(price)
+
+            if not prices:
+                unpriced.append(flow_code)
+                continue
+            if len(prices) < len(relevant_dbs):
+                incomplete[flow_code] = sorted(set(relevant_dbs) - set(prices))
+                continue
+
+            for (db_name, year), weight in self._mapping.items():
+                if weight:
+                    key = (flow_code, year)
+                    self._intermediate_flow_prices[key] = (
+                        self._intermediate_flow_prices.get(key, 0.0)
+                        + weight * prices[db_name]
+                    )
+
+        if incomplete:
+            details = "; ".join(
+                f"{self._flow_label(code)} missing in {dbs}"
+                for code, dbs in incomplete.items()
+            )
+            raise ValueError(
+                f"Background products are priced ('{price_attribute}') in some "
+                f"background databases but not in others: {details}. Set a price in "
+                "every background database, e.g. with "
+                "`optimex.economics.set_market_prices`."
+            )
+        if unpriced:
+            logger.warning(
+                f"{len(unpriced)} of {len(self._intermediate_flows)} directly "
+                f"purchased background products have no '{price_attribute}' and are "
+                f"treated as free in the cost objective: "
+                f"{', '.join(self._flow_label(code) for code in unpriced)}"
+            )
+        logger.info(
+            f"Read market prices of {len(self._intermediate_flows) - len(unpriced)} "
+            "intermediate flows."
+        )
+
+    def _flow_label(self, flow_code: str) -> str:
+        """Human-readable label of an intermediate flow for messages."""
+        meta = self._intermediate_flows.get(flow_code)
+        if isinstance(meta, dict):
+            return f"'{meta['name']}' ({meta.get('location')}, code '{flow_code}')"
+        return f"'{flow_code}'"
 
     def _characterization_functions(self, method: tuple) -> dict:
         """

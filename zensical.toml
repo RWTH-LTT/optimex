@@ -19,17 +19,33 @@ nav = [
     { "Code of Conduct" = "content/codeofconduct.md" },
   ]},
   { "User Guide" = [
-    { "Quick Start" = "content/quickstart.md" },
     { Installation = "content/installation.md" },
-    { "Brightway Setup" = "content/brightway_setup.md" },
-    { "Foreground Modeling" = "content/foreground_modeling.md" },
-    { "Optimization Setup" = "content/optimization_setup.md" },
-    { Constraints = "content/constraints.md" },
-    { Postprocessing = "content/postprocessing_guide.md" },
+    { "Quick Start" = "content/quickstart.md" },
+    { "Workflow Overview" = "content/workflow.md" },
+    { "1 · Choosing an Objective" = [
+      "content/choosing_objective/index.md",
+      { "Minimizing Impacts" = "content/minimizing_impacts.md" },
+      { "Minimizing Costs" = "content/minimizing_costs.md" },
+      { "Trade-offs" = "content/trade_offs.md" },
+    ]},
+    { "2 · Product System Modeling" = [
+      "content/product_system/index.md",
+      { "Background Data" = "content/background_data.md" },
+      { "Foreground Modeling" = "content/foreground_modeling.md" },
+      { "Cost Modeling" = "content/cost_modeling.md" },
+    ]},
+    { "3 · Optimization" = [
+      "content/optimization/index.md",
+      { "LCA Processing" = "content/lca_processing.md" },
+      { Constraints = "content/constraints.md" },
+      { Solving = "content/solving.md" },
+    ]},
+    { "4 · Results" = "content/postprocessing.md" },
   ]},
   { Examples = [
     { Overview = "content/examples/index.md" },
     { "Basic Example" = "content/examples/basic_example.md" },
+    { "Basic Cost Example" = "content/examples/basic_example_econ.md" },
     { "Methanol & Pig Iron Case Study" = "content/examples/methanol_and_iron.md" },
   ]},
   { Theory = [
@@ -42,6 +58,7 @@ nav = [
     { "LCA Processor" = "api/lca_processor.md" },
     { Converter = "api/converter.md" },
     { Optimizer = "api/optimizer.md" },
+    { Economics = "api/economics.md" },
     { Postprocessing = "api/postprocessing.md" },
   ]},
 ]
@@ -69,6 +86,7 @@ features = [
   "content.tabs.link",
   "content.tooltips",
   "navigation.footer",
+  "navigation.indexes",
   "navigation.instant",
   "navigation.instant.prefetch",
   "navigation.tabs",
@@ -174,5 +192,11 @@ merge_init_into_class = true
 show_source = true
 inherited_members = false
 filters = ["!^_", "!^__"]
+
+# Pages that moved; old URLs redirect to the new ones.
+[project.plugins.redirects.redirect_maps]
+"content/brightway_setup.md" = "content/background_data.md"
+"content/optimization_setup.md" = "content/optimization/index.md"
+"content/postprocessing_guide.md" = "content/postprocessing.md"
 
 [project.plugins.tags]

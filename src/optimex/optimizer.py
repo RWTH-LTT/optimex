@@ -1,8 +1,9 @@
 """
 Optimization model construction and solving for temporal LCA-based pathway optimization.
 
-This module creates and solves Pyomo optimization models that minimize environmental
-impacts over time while meeting demand constraints and respecting process limits.
+This module creates and solves Pyomo optimization models that minimize either an
+environmental impact category or the discounted cost of background purchases over
+time, while meeting demand constraints and respecting process limits.
 
 ## Unit Convention
 
@@ -13,7 +14,7 @@ operation window. The per-tau entry is therefore the unit's output *per year of
 operation*, and the sum over the window is its *lifetime* output.
 
 Consequences:
-- `var_installation[p, v]` counts units of vintage v; its installation-dependent
+- `var_installation[p, v]` counts units of vintage v; its installation-driven
   flows (construction, end-of-life) are incurred once per unit.
 - `var_operation[p, v, t]` counts how many of those units are running in year t,
   so the capacity bound is `var_operation[p, v, t] <= var_installation[p, v]`.
@@ -53,6 +54,11 @@ Both decision variables remain in REAL (unscaled) units to:
 - `category_impact_limits[(c, t)]`: time-specific maximum impact allowed [SCALED]
 - `cumulative_category_impact_limits[c]`: cumulative maximum impact allowed [SCALED]
 
+**Price parameters** (scaled by `cost_scale`):
+- `intermediate_flow_prices[i, t]`: price per kg intermediate [SCALED]
+- Cost expressions are therefore in units of `fg_scale * cost_scale`, the same way
+  impact expressions are in units of `fg_scale * cat_scales[category]`.
+
 **Unscaled parameters**:
 - `background_inventory[bkg, i, e]`: kg emission / kg intermediate [UNSCALED]
 - `mapping[bkg, t]`: interpolation weights [UNSCALED, dimensionless]
@@ -85,7 +91,7 @@ OperationCapacity:
 
 import pickle
 from pathlib import Path
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import dill
 import pyomo.environ as pyo
@@ -100,8 +106,9 @@ from optimex.converter import OptimizationModelInputs
 def create_model(
     inputs: OptimizationModelInputs,
     name: str,
-    objective_category: str,
+    objective_category: Optional[str] = None,
     debug_path: str = None,
+    objective: str = "environmental",
 ) -> pyo.ConcreteModel:
     """
     Build a Pyomo ConcreteModel for the optimization problem based on the provided
@@ -118,11 +125,17 @@ def create_model(
         required for model construction.
     name : str
         Name of the Pyomo model instance.
-    objective_category : str
-        The category of impact to be minimized in the optimization problem.
+    objective_category : str, optional
+        The impact category to minimize. Required for `objective="environmental"`,
+        ignored for `objective="cost"`.
     debug_path : str, optional
         If provided, specifies the directory path where intermediate model data (such as
         the LP formulation) or diagnostics may be stored.
+    objective : {"environmental", "cost"}, optional
+        What to minimize. "environmental" (default) minimizes the cumulative impact in
+        `objective_category`. "cost" minimizes the discounted cost of the background
+        products the foreground purchases directly, priced with
+        `inputs.intermediate_flow_prices`. Impact limits apply in both cases.
 
     Returns
     -------
@@ -130,8 +143,13 @@ def create_model(
         A fully constructed Pyomo model ready for optimization.
     """
 
+    _validate_objective(inputs, objective, objective_category)
+
     model = pyo.ConcreteModel(name=name)
-    model._objective_category = objective_category
+    model._objective = objective
+    model._objective_category = (
+        objective_category if objective == "environmental" else None
+    )
     scaled_inputs, scales = inputs.get_scaled_copy()
     model.scales = scales  # Store scales for denormalization later
 
@@ -650,15 +668,17 @@ def create_model(
 
     # Expression builders using sparse vintage override lookup
     #
-    # Installation- and operation-driven contributions are always used together,
-    # so they are combined into a single Expression per (process, flow, time).
-    # The index only covers (process, flow) pairs that carry data: a process
-    # consumes a handful of the intermediate flows and emits a handful of the
-    # elementary flows, so a dense index would be almost entirely zeros.
-    def scaled_flow_expression(
-        tensor: dict, overrides: dict, overrides_index: frozenset
+    # A flow of process p at time t has an installation-driven part (flows outside
+    # the operation phase, scaling with var_installation) and an operation-driven
+    # part (scaling with var_operation). `flow_rule` builds either or both parts;
+    # impacts and constraints use both, the cost reporting each part separately.
+    def flow_rule(
+        tensor: dict,
+        overrides: dict,
+        overrides_index: frozenset,
+        installation: bool = True,
+        operation: bool = True,
     ):
-        pairs = {(p, x) for (p, x, _) in tensor} | set(overrides_index)
         rates = {}
 
         def flow_rate(p, x, v, tau):
@@ -688,7 +708,7 @@ def create_model(
             # Installation-driven part: flows outside the operation phase scale
             # with the capacity installed in vintage t - tau.
             result = 0
-            for tau in process_times:
+            for tau in process_times if installation else ():
                 vintage = t - tau
                 if vintage not in system_time_set:
                     continue
@@ -703,7 +723,7 @@ def create_model(
 
             # Operation-driven part: summed over the vintages operating at t,
             # each at its own lifecycle stage tau = t - v.
-            if is_operation_flow:
+            if operation and is_operation_flow:
                 for v in active_vintages_by_process_time.get((p, t), ()):
                     rate = flow_rate(p, x, v, t - v)
                     if rate:
@@ -711,10 +731,23 @@ def create_model(
 
             return result
 
+        return expr
+
+    # Installation- and operation-driven contributions are combined into a single
+    # Expression per (process, flow, time). The index only covers (process, flow)
+    # pairs that carry data: a process consumes a handful of the intermediate flows
+    # and emits a handful of the elementary flows, so a dense index would be almost
+    # entirely zeros.
+    def scaled_flow_expression(
+        tensor: dict, overrides: dict, overrides_index: frozenset
+    ):
+        pairs = {(p, x) for (p, x, _) in tensor} | set(overrides_index)
         index = [
             (p, x, t) for (p, x) in sorted(pairs) for t in scaled_inputs.SYSTEM_TIME
         ]
-        return pairs, pyo.Expression(index, rule=expr)
+        return pairs, pyo.Expression(
+            index, rule=flow_rule(tensor, overrides, overrides_index)
+        )
 
     technosphere_pairs, model.scaled_technosphere_flow = scaled_flow_expression(
         dict(scaled_inputs.foreground_technosphere),
@@ -1120,10 +1153,27 @@ def create_model(
         model.FLOW, rule=cumulative_flow_limit_min_rule
     )
 
-    def objective_function(model):
-        return model.total_impact[model._objective_category]
+    # Economic costs of the background purchases. Built for every model, so the
+    # cost of an environmentally optimal pathway can be reported as well.
+    technosphere_args = (
+        dict(scaled_inputs.foreground_technosphere),
+        model._technosphere_vintage_overrides,
+        model._technosphere_overrides_index,
+    )
+    _add_cost_components(
+        model,
+        scaled_inputs,
+        technosphere_pairs,
+        installation_rule=flow_rule(*technosphere_args, operation=False),
+        operation_rule=flow_rule(*technosphere_args, installation=False),
+    )
 
-    model.OBJ = pyo.Objective(sense=pyo.minimize, rule=objective_function)
+    if objective == "cost":
+        model.OBJ = pyo.Objective(sense=pyo.minimize, expr=model.total_cost)
+    else:
+        model.OBJ = pyo.Objective(
+            sense=pyo.minimize, expr=model.total_impact[objective_category]
+        )
 
     if debug_path is not None:
         model.write(
@@ -1132,6 +1182,135 @@ def create_model(
             format=ProblemFormat.cpxlp,
         )
     return model
+
+
+def _validate_objective(
+    inputs: OptimizationModelInputs, objective: str, objective_category: Optional[str]
+) -> None:
+    """Check that the requested objective can be built from `inputs`."""
+    if objective == "environmental":
+        if objective_category not in inputs.CATEGORY:
+            raise ValueError(
+                f"objective='environmental' needs an objective_category from "
+                f"{sorted(inputs.CATEGORY)}, got {objective_category!r}."
+            )
+    elif objective == "cost":
+        if not any((inputs.intermediate_flow_prices or {}).values()):
+            raise ValueError(
+                "objective='cost' needs non-zero intermediate_flow_prices. Set prices "
+                "on the background nodes (optimex.economics.set_market_prices) and "
+                "LCAConfig.price_attribute, or pass them with "
+                "ModelInputManager.override(intermediate_flow_prices=...)."
+            )
+    else:
+        raise ValueError(
+            f"Unknown objective {objective!r}. Expected 'environmental' or 'cost'."
+        )
+
+
+def _add_cost_components(
+    model: pyo.ConcreteModel,
+    scaled_inputs: OptimizationModelInputs,
+    technosphere_pairs: set,
+    installation_rule,
+    operation_rule,
+) -> None:
+    """
+    Add the economic cost of the background purchases to `model`.
+
+    The foreground buys intermediate flows (background products) at the market
+    prices in `intermediate_flow_prices`; costs are not propagated through the
+    background supply chains. Each purchase is attributed to the decision driving
+    it, mirroring the split of the technosphere flows:
+
+    - installation-driven: flows outside the operation phase (e.g. construction or
+      end-of-life), scaling with `var_installation`,
+    - operation-driven: operation flows within the operation phase, scaling with
+      `var_operation`.
+
+    A purchase is priced and discounted in the system year in which it occurs,
+    which for installation-driven flows is not necessarily the installation year.
+    All components are in SCALED units; multiply by
+    `scales["foreground"] * scales["cost"]` for real currency units.
+
+    Adds
+    ----
+    intermediate_flow_prices[i, t] : Param
+        Scaled price per unit of intermediate flow i at time t.
+    discount_factor[t] : Param
+        ``(1 + discount_rate) ** -(t - discount_reference_year)``.
+    COST_PROCESS : Set
+        Processes purchasing at least one priced intermediate flow.
+    installation_cost[p, t], operation_cost[p, t] : Expression
+        Undiscounted cost of process p's purchases at time t, per driver.
+    total_cost : Expression
+        Discounted sum of all costs over the time horizon.
+    """
+    prices = scaled_inputs.intermediate_flow_prices or {}
+    model.intermediate_flow_prices = pyo.Param(
+        model.INTERMEDIATE_FLOW,
+        model.SYSTEM_TIME,
+        within=pyo.Reals,
+        doc="time-specific market price of intermediate flows [SCALED]",
+        default=0,
+        initialize=prices,
+    )
+
+    rate = scaled_inputs.discount_rate
+    reference_year = scaled_inputs.discount_reference_year
+    if reference_year is None:
+        reference_year = min(scaled_inputs.SYSTEM_TIME)
+    model.discount_factor = pyo.Param(
+        model.SYSTEM_TIME,
+        within=pyo.NonNegativeReals,
+        doc="discount factor of costs at time t",
+        initialize={
+            t: (1 + rate) ** -(t - reference_year) for t in scaled_inputs.SYSTEM_TIME
+        },
+    )
+
+    # Only (process, flow) pairs with a price somewhere contribute any cost.
+    priced_flows = {i for (i, _), price in prices.items() if price}
+    priced_flows_by_process = {}
+    for p, i in sorted(technosphere_pairs):
+        if i in priced_flows:
+            priced_flows_by_process.setdefault(p, []).append(i)
+
+    def cost_rule(flow_rule):
+        def rule(m, p, t):
+            return sum(
+                prices[i, t] * flow_rule(m, p, i, t)
+                for i in priced_flows_by_process[p]
+                if prices.get((i, t))
+            )
+
+        return rule
+
+    model.COST_PROCESS = pyo.Set(
+        initialize=sorted(priced_flows_by_process),
+        doc="Processes purchasing at least one priced intermediate flow",
+    )
+    model.installation_cost = pyo.Expression(
+        model.COST_PROCESS,
+        model.SYSTEM_TIME,
+        rule=cost_rule(installation_rule),
+        doc="undiscounted cost of installation-driven purchases [SCALED]",
+    )
+    model.operation_cost = pyo.Expression(
+        model.COST_PROCESS,
+        model.SYSTEM_TIME,
+        rule=cost_rule(operation_rule),
+        doc="undiscounted cost of operation-driven purchases [SCALED]",
+    )
+    model.total_cost = pyo.Expression(
+        expr=sum(
+            model.discount_factor[t]
+            * (model.installation_cost[p, t] + model.operation_cost[p, t])
+            for p in model.COST_PROCESS
+            for t in model.SYSTEM_TIME
+        ),
+        doc="discounted total cost [SCALED]",
+    )
 
 
 def solve_model(
@@ -1151,7 +1330,7 @@ def solve_model(
     ----------
     model : pyo.ConcreteModel
         The Pyomo model to be solved. Must have attribute `scales` with keys
-        'foreground' and 'characterization'.
+        'foreground', 'characterization' and, for the cost objective, 'cost'.
     solver_name : str, optional
         Name of the solver (default: "gurobi").
     solver_args : dict, optional
@@ -1170,7 +1349,8 @@ def solve_model(
     model : pyo.ConcreteModel
         The solved model (with original scaling preserved).
     true_obj : float
-        The denormalized objective value.
+        The denormalized objective value: the impact in the units of the objective
+        category, or the discounted cost in the currency of the input prices.
     results : SolverResults
         The raw Pyomo solver results object.
     """
@@ -1204,11 +1384,11 @@ def solve_model(
             and "unbounded" in str(results).lower()
         ):
             msg += (
-                " — the model is unbounded. Common cause: installation-dependent"
+                " — the model is unbounded. Common cause: installation-driven"
                 " flows (non-operation technosphere/biosphere exchanges) that produce"
                 " a net-negative impact allow var_installation to grow without bound."
                 " Fix by setting finite process_deployment_limits_max for affected"
-                " processes, or ensure installation-dependent flows do not create"
+                " processes, or ensure installation-driven flows do not create"
                 " a negative-impact incentive for over-installation."
             )
         elif termination == pyo.TerminationCondition.other:
@@ -1228,14 +1408,15 @@ def solve_model(
 
     # 4) Denormalize objective
     scaled_obj = pyo.value(model.OBJ)
-    fg_scale = getattr(model, "scales", {}).get("foreground", 1.0)
-    catscales = getattr(model, "scales", {}).get("characterization", {})
-    if model._objective_category and model._objective_category in catscales:
-        cat_scale = catscales[model._objective_category]
+    scales = getattr(model, "scales", {})
+    fg_scale = scales.get("foreground", 1.0)
+    catscales = scales.get("characterization", {})
+    if getattr(model, "_objective", "environmental") == "cost":
+        objective_scale = scales.get("cost", 1.0)
     else:
-        cat_scale = 1.0
+        objective_scale = catscales.get(model._objective_category, 1.0)
 
-    true_obj = scaled_obj * fg_scale * cat_scale
+    true_obj = scaled_obj * fg_scale * objective_scale
     logger.info(f"Objective (scaled): {scaled_obj:.6g}")
     logger.info(f"Objective (real):   {true_obj:.6g}")
 

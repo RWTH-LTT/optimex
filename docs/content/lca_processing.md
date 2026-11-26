@@ -1,23 +1,23 @@
 ---
-icon: lucide/sliders-horizontal
+icon: lucide/cpu
 tags:
-  - optimization
+  - lca processing
   - setup
 ---
 
-# Optimization Setup
+# LCA Processing
 
-Once your Brightway databases are configured, you need to set up the optimization problem: define the time-specific demand $\mathbf{f}_t$, configure characterization methods (static or [dynamic](theory.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and create and solve the optimization model.
+With the [background data](background_data.md) and [foreground](foreground_modeling.md) in place, the [optimization](optimization/index.md) starts by turning them into optimization inputs: define the demand over time, configure characterization methods (static or [dynamic](theory_scope_and_limits.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and convert them into `OptimizationModelInputs`.
 
 ---
 
 ## Overview
 
-The optimization setup follows this pipeline:
+```
+Demand + LCAConfig → LCADataProcessor → ModelInputManager → OptimizationModelInputs
+```
 
-```
-Demand + Config → LCADataProcessor → ModelInputManager → create_model → solve_model
-```
+This is the slowest step of the workflow, so the resulting inputs can be [saved](#saving-and-loading-model-inputs) and reused for any number of optimizations.
 
 ---
 
@@ -94,13 +94,26 @@ config = lca_processor.LCAConfig(
 )
 ```
 
+Further options:
+
+| Parameter | Description |
+|-----------|-------------|
+| `background_inventory` | How background inventories are calculated, see [Background Inventory](#background-inventory) |
+| `foreground_db_name` | Name of the foreground database (default `"foreground"`) |
+| `price_attribute` | Only for the [cost objective](minimizing_costs.md): node attribute holding market prices, see [Reading Prices](cost_modeling.md#reading-prices) (default `None`: no prices are read) |
+
 ### Temporal Settings
 
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `start_date` | Beginning of the optimization horizon | `datetime(2020, 1, 1)` |
-| `temporal_resolution` | Time step granularity | `"year"`, `"month"`, `"day"` |
-| `time_horizon` | Years for impact accumulation | `100` (for GWP100) |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `start_date` | required | First year of the study, e.g. `datetime(2020, 1, 1)` |
+| `temporal_resolution` | `"year"` | Time step; only `"year"` is supported |
+| `time_horizon` | `100` | Years over which dynamic metrics integrate impacts (not used by static methods) |
+| `fixed_time_horizon` | `True` | Dynamic GWP only: if `True`, the time horizon is counted from `start_date`, so later emissions are integrated over a shorter period; if `False`, every emission gets the full `time_horizon` |
+| `database_dates` | `None` | Dates of the background databases, instead of their `representative_time` metadata, see [Background Data](background_data.md) |
+
+!!! info "System time vs. time horizon"
+    The **system time** is the set of years in which processes can be installed and operated, and for which impacts and costs are counted: from the year of `start_date` to the last year with demand. Exchanges that fall outside it, e.g. the end-of-life of a unit installed near the end, are not counted. The **time horizon** is a different thing: the number of years over which a dynamic metric integrates the effect of an emission, from `start_date`. It can reach far beyond the system time.
 
 ### Characterization Methods
 
@@ -109,7 +122,7 @@ Each method requires:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `category_name` | Yes | Your name for this impact category |
-| `brightway_method` | Yes | Tuple identifying the Brightway method |
+| `brightway_method` | Yes | Tuple identifying the Brightway method, one of the keys in `bd.methods` (e.g. `("IPCC 2021", "climate change", "GWP 100a")` with ecoinvent) |
 | `metric` | No | Dynamic characterization: `"CRF"` or `"GWP"` |
 
 **Static characterization** (default):
@@ -130,10 +143,10 @@ Each method requires:
 ```
 
 !!! info "Dynamic Metrics"
-    - **CRF** (Cumulative Radiative Forcing): Integrates radiative forcing over time
-    - **GWP** (Global Warming Potential): Time-dependent GWP factors
+    - **CRF** (Cumulative Radiative Forcing): radiative forcing integrated until `start_date + time_horizon`, in W·m⁻²·yr. The values are tiny (around 1e-13 per kg CO2), so impact limits for a CRF category must be given in W·m⁻²·yr too, not in CO2-eq.
+    - **GWP** (dynamic Global Warming Potential): year-specific GWP factors, in kg CO2-eq.
 
-    Dynamic metrics account for when emissions occur, not just how much.
+    Static methods are in the unit of the Brightway method, e.g. kg CO2-eq for GWP100. Dynamic metrics account for when emissions occur, not just how much.
 
 ### Multiple Impact Categories
 
@@ -209,6 +222,9 @@ config = lca_processor.LCAConfig(
 
     Notebooks need no guard. Use `"sequential"` if a guard is not an option.
 
+??? cost "Cost objective: reading prices"
+    To [minimize costs](minimizing_costs.md), set `price_attribute="market_price"` so the processor reads the market prices from the background nodes and interpolates them to every system year. See [Reading Prices](cost_modeling.md#reading-prices).
+
 ---
 
 ## Processing LCA Data
@@ -256,6 +272,15 @@ manager = converter.ModelInputManager()
 model_inputs = manager.parse_from_lca_processor(lca_data)
 ```
 
+To change inputs afterwards, for example to add constraints, discounting, or prices set by hand, use `override()`. It validates the changed inputs and returns them:
+
+```python
+model_inputs = manager.override(
+    discount_rate=0.03,
+    cumulative_category_impact_limits={"climate_change": 1.0e6},
+)
+```
+
 ### Saving and Loading Model Inputs
 
 Avoid reprocessing by saving:
@@ -271,159 +296,12 @@ manager.load_inputs("model_inputs.json")
 model_inputs = manager.model_inputs
 ```
 
-### Adding Constraints
-
-Before creating the model, add any constraints:
-
-```python
-# See Constraints guide for all options
-model_inputs.cumulative_category_impact_limits = {"climate_change": 1000000}
-model_inputs.process_deployment_limits_max = {("coal_plant", 2025): 0}
-```
-
----
-
-## Creating the Optimization Model
-
-```python
-from optimex import optimizer
-
-model = optimizer.create_model(
-    inputs=model_inputs,
-    name="my_optimization",
-    objective_category="climate_change",
-)
-```
-
-| Parameter | Description |
-|-----------|-------------|
-| `inputs` | The `OptimizationModelInputs` object |
-| `name` | Identifier for the model |
-| `objective_category` | Impact category to minimize |
-
-### Debug Output
-
-To inspect the model formulation:
-
-```python
-model = optimizer.create_model(
-    inputs=model_inputs,
-    name="debug_model",
-    objective_category="climate_change",
-    debug_path="model_debug.lp",  # Write LP file
-)
-```
-
----
-
-## Solving the Model
-
-```python
-solved_model, objective_value, results = optimizer.solve_model(
-    model,
-    solver_name="glpk",  # or "gurobi", "cplex", "highs"
-    tee=False,           # Set True for solver output
-)
-```
-
-### Solver Options
-
-| Solver | License | Notes |
-|--------|---------|-------|
-| `glpk` | Open source | Good for small-medium problems |
-| `highs` | Open source | Fast, good for large problems |
-| `gurobi` | Commercial (free academic) | Very fast, robust |
-| `cplex` | Commercial | Enterprise-grade |
-
-### Handling Infeasibility
-
-If the problem is infeasible:
-
-```python
-solved_model, objective_value, results = optimizer.solve_model(
-    model,
-    solver_name="gurobi",
-    compute_iis=True,  # Generate Irreducible Infeasible Set
-)
-# Check model_iis.ilp for conflicting constraints
-```
-
----
-
-## Saving Solved Models
-
-```python
-# Save solved model for later analysis
-optimizer.save_solved_model(
-    solved_model,
-    "solved_model.pkl",
-    objective_value=objective_value,
-)
-
-# Load later
-loaded_model = optimizer.load_solved_model("solved_model.pkl")
-```
-
----
-
-## Complete Example
-
-```python
-from datetime import datetime
-import numpy as np
-import bw2data as bd
-from bw_temporalis import TemporalDistribution
-from optimex import lca_processor, converter, optimizer
-
-# 1. Define demand
-product = bd.get_node(database="foreground", name="hydrogen")
-years = range(2020, 2050)
-td_demand = TemporalDistribution(
-    date=np.array([datetime(y, 1, 1).isoformat() for y in years], dtype='datetime64[s]'),
-    amount=np.array([0]*5 + [1000]*25, dtype=float),
-)
-
-# 2. Configure LCA
-config = lca_processor.LCAConfig(
-    demand={product: td_demand},
-    temporal={
-        "start_date": datetime(2020, 1, 1),
-        "temporal_resolution": "year",
-        "time_horizon": 100,
-    },
-    characterization_methods=[
-        {
-            "category_name": "climate_change",
-            "brightway_method": ("IPCC 2021", "GWP 100a"),
-            "metric": "CRF",
-        },
-    ],
-)
-
-# 3. Process LCA data
-lca_data = lca_processor.LCADataProcessor(config)
-
-# 4. Convert to optimization inputs
-manager = converter.ModelInputManager()
-model_inputs = manager.parse_from_lca_processor(lca_data)
-
-# 5. Add constraints (optional)
-model_inputs.cumulative_category_impact_limits = {"climate_change": 500000}
-
-# 6. Create and solve
-model = optimizer.create_model(
-    model_inputs,
-    name="hydrogen_transition",
-    objective_category="climate_change",
-)
-solved, objective, results = optimizer.solve_model(model, solver_name="glpk")
-
-print(f"Optimal impact: {objective:.2f}")
-```
+The model inputs are the hand-over to the optimization: [constraints](constraints.md) are added to them, and the [objective](choosing_objective/index.md) is chosen when the model is built from them, see [Solving](solving.md).
 
 ---
 
 ## Next Steps
 
+- [Choosing an Objective](choosing_objective/index.md): Minimize impacts or costs
 - [Constraints](constraints.md): Add deployment limits, impact budgets, and more
-- [Postprocessing](postprocessing_guide.md): Analyze and visualize results
+- [Solving](solving.md): Build and solve the model

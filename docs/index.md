@@ -8,11 +8,11 @@ tags:
 
 # Time-Explicit Life Cycle Optimization with optimex
 
-`optimex` is an open-source Python package for **time-explicit Life Cycle Optimization (LCO)**. It finds optimal technology transition pathways while accounting for *when* emissions occur and *how* product systems evolve over time.
+`optimex` is an open-source Python package for **time-explicit Life Cycle Optimization (LCO)**. It finds optimal technology transition pathways while accounting for *when* emissions occur and *how* product systems evolve over time. You choose what to minimize, an environmental impact or economic costs, and constrain the rest.
 
 Standard LCA evaluates predefined product systems. But transition planning asks a different question: *which technologies should be deployed, when, and at what scale*? That is the domain of Life Cycle Optimization. In fast-changing energy and industrial systems, static formulations can be misleading because construction, operation, and end-of-life happen at different times, while background supply chains and technology performance evolve in parallel.
 
-`optimex` closes this gap by combining temporalized LCA with optimization in one workflow, so pathways can be assessed against both time-specific and cumulative environmental constraints.
+`optimex` closes this gap by combining temporalized LCA with optimization in one workflow.
 
 [:lucide-rocket: Get Started](content/quickstart.md){ .md-button .md-button--primary } [:fontawesome-brands-github: View on GitHub](https://github.com/RWTH-LTT/optimex){ .md-button }
 
@@ -58,6 +58,7 @@ Time-explicit LCO reveals transition strategies that are invisible to static app
 - **Resource bottleneck navigation** — Time-specific constraints on water use, critical minerals, or other resources force technology diversification, revealing realistic pathways through transient scarcity
 - **Strategic overcapacity** — Early investment in clean technologies can offset stranded fossil assets when the net emission savings outweigh the embodied impacts of idle infrastructure
 - **Cumulative budget compliance** — By tracking exact emission timing alongside dynamic characterization, pathways can be verified against carbon budgets and other absolute limits
+- **Cost-optimal pathways within budgets** — Minimizing economic costs instead of an impact, with impact limits as constraints, shows the cheapest transition that respects a carbon budget and how costs rise as the budget tightens ([Trade-offs](content/trade_offs.md))
 
 ---
 
