@@ -6,37 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.8.0] - 2026-11-26
 * Added a cost objective: `create_model(..., objective="cost")` minimizes the
-  discounted cost of the background products the foreground purchases directly.
-  Prices are written to background nodes with `optimex.economics.set_market_prices`,
-  read via `LCAConfig.price_attribute`, and carried as
-  `OptimizationModelInputs.intermediate_flow_prices` together with `discount_rate`
-  and `discount_reference_year`. Impact limits still apply, and
-  `PostProcessor.get_costs()` reports costs by installation/operation driver and
-  process for any solved model. `objective_category` is now optional
+  discounted economic cost of the background products the foreground buys, instead
+  of an impact category. Impact limits still apply, so the cheapest pathway within a
+  carbon budget, and how its cost rises as the budget tightens, can be traced.
+  Market prices are written to background nodes with
+  `optimex.economics.set_market_prices()`, read by setting
+  `LCAConfig.price_attribute`, and discounted with `discount_rate` and
+  `discount_reference_year`. `objective_category` is now optional
   ([#72](https://github.com/RWTH-LTT/optimex/pull/72), based on
-  [#71](https://github.com/RWTH-LTT/optimex/pull/71))
-* Restructured the user guide into a workflow overview and four steps (choosing
-  an objective, product system modeling, optimization, results), with new pages
-  on minimizing impacts, minimizing costs, cost modeling, trade-offs, and
-  solving. The guide is written for environmental studies; cost-specific content
-  lives on the Cost Modeling and Minimizing Costs pages and is only referenced
-  elsewhere in collapsed boxes. Old page URLs redirect to the new ones. Added a
-  basic cost example ending in a cost-climate Pareto frontier
+  [#71](https://github.com/RWTH-LTT/optimex/pull/71) by Luca Lange)
+* Added `PostProcessor.get_costs()`, which reports costs per year by process and by
+  installation- or operation-driven purchases for any solved model with prices, also
+  when it minimized an impact ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
+* Fixed the interpolation of vintage-dependent parameters. Each exchange is now
+  interpolated between its own vintage years; before, a vintage year defined only on
+  another exchange silently became an amount of 0 (`vintage_amounts`) or a factor of
+  1 (`vintage_improvements`). `vintage_amounts` now take precedence over
+  `vintage_improvements` per exchange instead of for all exchanges of the same kind.
+  Optimization results change for processes whose exchanges use different vintage
+  years, or that combine both kinds of parameters
   ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
-* **Changed results**: vintage-dependent parameters are interpolated between the
-  vintage years of each exchange. Before, all exchanges were interpolated
-  between the vintage years of every exchange, so a year missing on one exchange
-  silently became an amount of 0 (`vintage_amounts`) or a factor of 1
-  (`vintage_improvements`). `vintage_amounts` now take precedence over
-  `vintage_improvements` per exchange instead of for all exchanges of the same
-  kind ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
-* **Changed results**: a vintage-year key in `vintage_amounts` (e.g.
-  `{2020: 60}`) is now the exchange total for that vintage, distributed over
-  process time like `amount`, instead of the amount at every process time
+* A vintage-year key in `vintage_amounts` (e.g. `{2020: 60}`) is now the exchange
+  total for that vintage, distributed over process time like `amount`, instead of
+  the amount at every process time. Results change for such keys on exchanges that
+  span more than one process time; `(process_time, vintage_year)` keys are unchanged
   ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
 * Fixed `ModelInputManager.extend_demand()`, which failed with an `IndexError`
   ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
+* Fixed a race in the parallel background inventory calculation: the Brightway
+  database registry is cleaned once before the workers start, so they no longer
+  write it concurrently ([#69](https://github.com/RWTH-LTT/optimex/pull/69))
+* Restructured the documentation along the workflow (choosing an objective, product
+  system modeling, optimization, results), with new pages on minimizing impacts,
+  minimizing costs, cost modeling, trade-offs, and solving, a basic cost example,
+  and fixes across the guide found in a newcomer review. Old page URLs redirect to
+  the new ones ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
+* Updated the citation to the published paper in *Environmental Science &
+  Technology* ([#70](https://github.com/RWTH-LTT/optimex/pull/70))
 
 ## [0.7.0] - 2026-08-20
 * Fixed under-counting of installation impacts. One installed unit now delivers its
