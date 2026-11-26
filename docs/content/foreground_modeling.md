@@ -202,7 +202,7 @@ Exchanges marked with `"operation": True` **scale with the operational level** $
 - Operational inputs/emissions: `"operation": True`
 
 ??? cost "Cost objective: the flag also splits costs"
-    With the [cost objective](minimizing_costs.md), the same flag decides how a background purchase is costed: purchases on operation exchanges within the operation phase are **operation-driven** and scale with the units running; all others are **installation-driven** and scale with the installed units, wherever they fall in the lifecycle. `PostProcessor.get_costs()` reports the two separately.
+    With the [cost objective](minimizing_costs.md), the same flag decides how a background purchase is costed (see [Cost Modeling](cost_modeling.md#installation-and-operation-driven-costs)): purchases on operation exchanges within the operation phase are **operation-driven** and scale with the units running; all others are **installation-driven** and scale with the installed units, wherever they fall in the lifecycle. `PostProcessor.get_costs()` reports the two separately.
 
 ---
 

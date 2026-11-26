@@ -8,7 +8,8 @@ tags:
 # Product System Modeling
 
 The product system is modeled in [Brightway](https://docs.brightway.dev/), with
-a few `optimex`-specific additions that bring time into it. It has two parts:
+a few `optimex`-specific additions that bring time into it. It has two parts,
+plus an optional third one for the cost objective:
 
 <div class="grid cards" markdown>
 
@@ -26,6 +27,13 @@ a few `optimex`-specific additions that bring time into it. It has two parts:
     The candidate processes to optimize: when their exchanges occur, which ones
     scale with operation, and how they improve with the installation year.
 
+-   :lucide-coins:{ style="margin-right: 0.25rem;" } **[Cost Modeling](../cost_modeling.md)** (optional)
+
+    ---
+
+    Only for the cost objective: market prices of the background products the
+    foreground buys, and how the foreground structure decides when they are paid.
+
 </div>
 
 The `optimex` additions at a glance:
@@ -40,8 +48,3 @@ The `optimex` additions at a glance:
 If you already have a temporalized product system, e.g. from a time-explicit LCA
 with [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/), you
 can reuse it.
-
-??? cost "Cost objective: market prices"
-    To [minimize costs](../minimizing_costs.md), the background products bought
-    directly by the foreground also need market prices on their nodes. See
-    [Setting Market Prices](../minimizing_costs.md#setting-market-prices).

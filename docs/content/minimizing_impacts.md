@@ -109,7 +109,7 @@ category.
 ### Costs of the Impact Minimum
 
 You can minimize an impact and still carry the costs through. If the inputs
-contain market prices (see [Setting Market Prices](minimizing_costs.md#setting-market-prices)),
+contain market prices (see [Setting Market Prices](cost_modeling.md#setting-market-prices)),
 every model computes the costs of its pathway, whatever it minimizes. The
 prices then only enter the reporting, not the decision:
 

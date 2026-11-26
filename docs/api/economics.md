@@ -12,7 +12,7 @@ Helpers for the cost objective.
 This module writes market prices to the time-specific background databases. The
 `LCADataProcessor` reads them when `LCAConfig.price_attribute` is set, and the
 optimizer prices the background purchases with them. See
-[Minimizing Costs](../content/minimizing_costs.md) for the workflow.
+[Cost Modeling](../content/cost_modeling.md) for the workflow.
 
 ## Key Functions
 

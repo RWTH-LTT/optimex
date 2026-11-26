@@ -17,9 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#71](https://github.com/RWTH-LTT/optimex/pull/71))
 * Restructured the user guide into a workflow overview and four steps (choosing
   an objective, product system modeling, optimization, results), with new pages
-  on minimizing impacts, minimizing costs, trade-offs, and solving. The guide is
-  written for environmental studies; everything specific to costs is collected
-  on one page and only referenced elsewhere in collapsed boxes. Old page URLs
+  on minimizing impacts, minimizing costs, cost modeling, trade-offs, and
+  solving. The guide is written for environmental studies; cost-specific content
+  lives on the Cost Modeling and Minimizing Costs pages and is only referenced
+  elsewhere in collapsed boxes. Old page URLs
   redirect to the new ones. Added a basic cost example ending in a cost-climate Pareto
   frontier ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
 

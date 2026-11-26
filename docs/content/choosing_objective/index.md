@@ -18,8 +18,8 @@ is the **objective**:
 
 Most studies minimize impacts, and the rest of the guide is written for that case.
 If you are not interested in costs, read [Minimizing Impacts](../minimizing_impacts.md)
-and skip [Minimizing Costs](../minimizing_costs.md), which collects everything
-specific to the cost objective.
+and skip [Minimizing Costs](../minimizing_costs.md) and
+[Cost Modeling](../cost_modeling.md), the two pages specific to costs.
 
 The objective is chosen when the model is built, from the same inputs:
 
@@ -55,7 +55,7 @@ model.
 limits such as a carbon budget. This answers questions like "what does it cost to
 stay within the budget, and which technologies does that take?". It needs market
 prices for the directly purchased background products, see
-[Setting Market Prices](../minimizing_costs.md#setting-market-prices).
+[Setting Market Prices](../cost_modeling.md#setting-market-prices).
 
 Only one quantity is minimized at a time, but all impact categories, and the
 costs if prices are available, are computed for every solution: you can minimize

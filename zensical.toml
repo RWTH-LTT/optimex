@@ -32,6 +32,7 @@ nav = [
       "content/product_system/index.md",
       { "Background Data" = "content/background_data.md" },
       { "Foreground Modeling" = "content/foreground_modeling.md" },
+      { "Cost Modeling" = "content/cost_modeling.md" },
     ]},
     { "3 · Optimization" = [
       "content/optimization/index.md",

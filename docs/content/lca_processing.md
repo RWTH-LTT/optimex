@@ -100,7 +100,7 @@ Further options:
 |-----------|-------------|
 | `background_inventory` | How background inventories are calculated, see [Background Inventory](#background-inventory) |
 | `foreground_db_name` | Name of the foreground database (default `"foreground"`) |
-| `price_attribute` | Only for the [cost objective](minimizing_costs.md): node attribute holding market prices, see [Reading Prices](minimizing_costs.md#reading-prices) (default `None`: no prices are read) |
+| `price_attribute` | Only for the [cost objective](minimizing_costs.md): node attribute holding market prices, see [Reading Prices](cost_modeling.md#reading-prices) (default `None`: no prices are read) |
 
 ### Temporal Settings
 
@@ -218,7 +218,7 @@ config = lca_processor.LCAConfig(
     Notebooks need no guard. Use `"sequential"` if a guard is not an option.
 
 ??? cost "Cost objective: reading prices"
-    To [minimize costs](minimizing_costs.md), set `price_attribute="market_price"` so the processor reads the market prices from the background nodes and interpolates them to every system year. See [Reading Prices](minimizing_costs.md#reading-prices).
+    To [minimize costs](minimizing_costs.md), set `price_attribute="market_price"` so the processor reads the market prices from the background nodes and interpolates them to every system year. See [Reading Prices](cost_modeling.md#reading-prices).
 
 ---
 

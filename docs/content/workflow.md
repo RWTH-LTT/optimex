@@ -19,7 +19,7 @@ flowchart LR
 | Step | What you do | Pages |
 |---|---|---|
 | **1 · [Choosing an Objective](choosing_objective/index.md)** | Decide what to minimize: an impact category (the default) or costs | [Minimizing Impacts](minimizing_impacts.md), [Minimizing Costs](minimizing_costs.md), [Trade-offs](trade_offs.md) |
-| **2 · [Product System Modeling](product_system/index.md)** | Set up the Brightway project: time-specific background databases, LCIA methods, and the foreground processes with temporal information | [Background Data](background_data.md), [Foreground Modeling](foreground_modeling.md) |
+| **2 · [Product System Modeling](product_system/index.md)** | Set up the Brightway project: time-specific background databases, LCIA methods, and the foreground processes with temporal information | [Background Data](background_data.md), [Foreground Modeling](foreground_modeling.md), optionally [Cost Modeling](cost_modeling.md) |
 | **3 · [Optimization](optimization/index.md)** | Turn the product system into optimization inputs, add constraints, build and solve the model | [LCA Processing](lca_processing.md), [Constraints](constraints.md), [Solving](solving.md) |
 | **4 · [Results](postprocessing.md)** | Extract and plot installations, operation, impacts, and costs | [Postprocessing](postprocessing.md) |
 
@@ -38,10 +38,11 @@ written for that case.
 
 Minimizing costs builds on exactly the same workflow and adds three pieces:
 market prices on the background nodes, one setting to read them, and
-`objective="cost"` when building the model. Everything about costs is collected
-on one page, [Minimizing Costs](minimizing_costs.md). Elsewhere, the guide
-only points to it in collapsed boxes like this one, which you can skip if you are
-not interested in costs:
+`objective="cost"` when building the model. Costs have two pages of their own:
+[Cost Modeling](cost_modeling.md) for the price data (step 2) and
+[Minimizing Costs](minimizing_costs.md) for the objective (step 1). Elsewhere,
+the guide only points to them in collapsed boxes like this one, which you can
+skip if you are not interested in costs:
 
 ??? cost "Cost objective"
     Boxes like this only matter for the cost objective.
@@ -51,8 +52,8 @@ not interested in costs:
 | Background databases with `representative_time` | Required | Required |
 | LCIA method per impact category | Required | Required if impacts are limited or reported |
 | Foreground processes with temporal distributions | Required | Required |
-| Market prices on background nodes | — | [Required](minimizing_costs.md#setting-market-prices) |
-| `LCAConfig` | `characterization_methods` | plus [`price_attribute`](minimizing_costs.md#reading-prices) |
+| Market prices on background nodes | — | [Required](cost_modeling.md#setting-market-prices) |
+| `LCAConfig` | `characterization_methods` | plus [`price_attribute`](cost_modeling.md#reading-prices) |
 | `create_model()` | `objective_category="..."` | `objective="cost"` |
 
 Inputs with prices serve both objectives: an impact-minimal model still

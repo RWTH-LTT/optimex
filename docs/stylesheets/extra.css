@@ -128,16 +128,15 @@
 }
 .md-typeset .admonition.cost,
 .md-typeset details.cost {
-  border-color: #d4932e;
-  background-color: #d4932e14;
-}
-.md-typeset .cost > .admonition-title,
-.md-typeset .cost > summary {
-  background-color: #d4932e1f;
+  background-color: #d4932e1a;
 }
 .md-typeset .cost > .admonition-title::before,
 .md-typeset .cost > summary::before {
   background-color: #d4932e;
   -webkit-mask-image: var(--md-admonition-icon--cost);
   mask-image: var(--md-admonition-icon--cost);
+}
+.md-typeset .cost > .admonition-title::after,
+.md-typeset .cost > summary::after {
+  color: #d4932e;
 }

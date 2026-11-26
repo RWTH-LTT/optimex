@@ -160,7 +160,7 @@ bd.Method(("Water use", "m3")).write([
     If you import ecoinvent with `bw2io`, standard methods like IPCC GWP and ReCiPe are available automatically.
 
 ??? cost "Cost objective: market prices"
-    If you want to [minimize costs](minimizing_costs.md), the background products the foreground buys directly also need market prices, stored on their nodes in every background database. See [Setting Market Prices](minimizing_costs.md#setting-market-prices). Impact-only studies need no prices.
+    If you want to [minimize costs](minimizing_costs.md), the background products the foreground buys directly also need market prices, stored on their nodes in every background database. See [Setting Market Prices](cost_modeling.md#setting-market-prices). Impact-only studies need no prices.
 
 ---
 
