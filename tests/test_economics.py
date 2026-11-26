@@ -1,5 +1,6 @@
 """
-Tests for economic helper utilities.
+Tests for the cost objective: writing market prices to background nodes, reading
+them in the LCA processor, and the cost components of the optimization model.
 """
 
 from datetime import datetime
@@ -12,73 +13,66 @@ import pytest
 from bw2data.tests import bw2test
 from bw_temporalis import TemporalDistribution
 
-from optimex import converter, lca_processor, optimizer
+from optimex import converter, lca_processor, optimizer, postprocessing
 from optimex.economics import set_market_prices
+
+SOLVER = "glpk"
+
+
+def _td(years, amounts=None):
+    amounts = np.ones(len(years)) if amounts is None else np.asarray(amounts)
+    return TemporalDistribution(
+        date=np.array(years, dtype="timedelta64[Y]"), amount=amounts
+    )
+
+
+# --------------------------------------------------------------------------
+# Brightway pipeline fixture
+# --------------------------------------------------------------------------
 
 
 @pytest.fixture
 @bw2test
-def setup_economic_pipeline_databases():
-    """Set up a small system with cap- and op-relevant background inputs."""
+def economic_pipeline_databases():
+    """
+    One process buying I1 at installation and I2 during operation.
+
+    The 2030 database uses different codes than the 2020 one, like premise does,
+    so prices must be resolved by node identity rather than by code.
+    """
     bd.projects.set_current("__test_economic_pipeline__")
 
     bio_db = bd.Database("biosphere3")
     bio_db.write(
-        {
-            ("biosphere3", "CO2"): {
-                "type": "emission",
-                "name": "carbon dioxide",
-            },
-        }
+        {("biosphere3", "CO2"): {"type": "emission", "name": "carbon dioxide"}}
     )
     bio_db.register()
 
-    for db_name, representative_year, co2_factor in (
-        ("db_2020", 2020, 1.0),
-        ("db_2030", 2030, 0.5),
-    ):
+    for db_name, year, suffix in (("db_2020", 2020, ""), ("db_2030", 2030, "_2030")):
         db = bd.Database(db_name)
         db.write(
             {
-                (db_name, "I1"): {
-                    "name": "node I1",
+                (db_name, f"{flow}{suffix}"): {
+                    "name": f"node {flow}",
                     "location": "somewhere",
-                    "reference product": "I1",
+                    "reference product": flow,
                     "exchanges": [
                         {
                             "amount": 1,
                             "type": "production",
-                            "input": (db_name, "I1"),
+                            "input": (db_name, f"{flow}{suffix}"),
                         },
-                        {
-                            "amount": co2_factor,
-                            "type": "biosphere",
-                            "input": ("biosphere3", "CO2"),
-                        },
-                    ],
-                },
-                (db_name, "I2"): {
-                    "name": "node I2",
-                    "location": "somewhere",
-                    "reference product": "I2",
-                    "exchanges": [
                         {
                             "amount": 1,
-                            "type": "production",
-                            "input": (db_name, "I2"),
-                        },
-                        {
-                            "amount": co2_factor,
                             "type": "biosphere",
                             "input": ("biosphere3", "CO2"),
                         },
                     ],
-                },
+                }
+                for flow in ("I1", "I2")
             }
         )
-        db.metadata["representative_time"] = datetime(
-            representative_year, 1, 1
-        ).isoformat()
+        db.metadata["representative_time"] = datetime(year, 1, 1).isoformat()
         db.register()
 
     foreground = bd.Database("foreground")
@@ -99,29 +93,20 @@ def setup_economic_pipeline_databases():
                         "amount": 1,
                         "type": bd.labels.production_edge_default,
                         "input": ("foreground", "R1"),
-                        "temporal_distribution": TemporalDistribution(
-                            date=np.array([0], dtype="timedelta64[Y]"),
-                            amount=np.array([1]),
-                        ),
+                        "temporal_distribution": _td([0]),
                         "operation": True,
                     },
                     {
                         "amount": 1,
                         "type": bd.labels.consumption_edge_default,
                         "input": ("db_2020", "I1"),
-                        "temporal_distribution": TemporalDistribution(
-                            date=np.array([0], dtype="timedelta64[Y]"),
-                            amount=np.array([1]),
-                        ),
+                        "temporal_distribution": _td([0]),
                     },
                     {
                         "amount": 1,
                         "type": bd.labels.consumption_edge_default,
                         "input": ("db_2020", "I2"),
-                        "temporal_distribution": TemporalDistribution(
-                            date=np.array([0], dtype="timedelta64[Y]"),
-                            amount=np.array([1]),
-                        ),
+                        "temporal_distribution": _td([0]),
                         "operation": True,
                     },
                 ],
@@ -133,7 +118,14 @@ def setup_economic_pipeline_databases():
     bd.Method(("GWP", "example")).write([(("biosphere3", "CO2"), 1)])
 
 
-def _build_economic_pipeline_processor():
+def _price_rows(name, prices_by_year):
+    return [
+        {"name": name, "location": "somewhere", "year": year, "price": price}
+        for year, price in prices_by_year.items()
+    ]
+
+
+def _build_processor(price_attribute="market_price"):
     years = range(2020, 2030)
     demand = TemporalDistribution(
         date=np.array(
@@ -142,69 +134,27 @@ def _build_economic_pipeline_processor():
         ),
         amount=np.ones(len(years)),
     )
-    product = bd.get_node(database="foreground", code="R1")
     config = lca_processor.LCAConfig(
-        demand={product: demand},
-        temporal={
-            "start_date": datetime(2020, 1, 1),
-            "temporal_resolution": "year",
-            "time_horizon": 100,
-        },
+        demand={bd.get_node(database="foreground", code="R1"): demand},
+        temporal={"start_date": datetime(2020, 1, 1), "temporal_resolution": "year"},
         characterization_methods=[
-            {
-                "category_name": "climate_change",
-                "brightway_method": ("GWP", "example"),
-            }
+            {"category_name": "climate_change", "brightway_method": ("GWP", "example")}
         ],
         background_inventory={
-            "cutoff": 1e4,
             "calculation_method": "sequential",
+            "use_disk_cache": False,
         },
+        price_attribute=price_attribute,
     )
     return lca_processor.LCADataProcessor(config)
 
 
-def _build_cost_expression_inputs(discount_rate=None, discount_reference_year=None):
-    return converter.OptimizationModelInputs(
-        PROCESS=["P"],
-        PRODUCT=["R"],
-        INTERMEDIATE_FLOW=["Icap", "Iop"],
-        ELEMENTARY_FLOW=["CO2"],
-        BACKGROUND_ID=["db_2020"],
-        PROCESS_TIME=[0],
-        SYSTEM_TIME=[2020, 2021],
-        CATEGORY=["climate_change"],
-        demand={("R", 2020): 0.0, ("R", 2021): 0.0},
-        operation_flow={("P", "R"): True, ("P", "Iop"): True},
-        foreground_technosphere={
-            ("P", "Icap", 0): 2.0,
-            ("P", "Iop", 0): 3.0,
-        },
-        internal_demand_technosphere={},
-        foreground_biosphere={},
-        foreground_production={("P", "R", 0): 1.0},
-        background_inventory={},
-        mapping={("db_2020", 2020): 1.0, ("db_2020", 2021): 1.0},
-        characterization={("climate_change", "CO2", 2020): 1.0},
-        operation_time_limits={"P": (0, 0)},
-        intermediate_costs_cap={
-            ("Icap", 2020): 10.0,
-            ("Icap", 2021): 10.0,
-        },
-        intermediate_costs_op={
-            ("Iop", 2020): 2.0,
-            ("Iop", 2021): 2.0,
-        },
-        discount_rate=discount_rate,
-        discount_reference_year=discount_reference_year,
-    )
+BACKGROUND_DATABASES = {2020: "db_2020", 2030: "db_2030"}
 
 
-def _set_cost_expression_variables(model):
-    model.var_installation["P", 2020].set_value(5.0)
-    model.var_installation["P", 2021].set_value(0.0)
-    model.var_operation["P", 2020, 2020].set_value(4.0)
-    model.var_operation["P", 2021, 2021].set_value(0.0)
+# --------------------------------------------------------------------------
+# set_market_prices
+# --------------------------------------------------------------------------
 
 
 def test_set_market_prices_from_list_of_dicts(setup_brightway_databases):
@@ -353,7 +303,7 @@ def test_set_market_prices_respects_overwrite_false(setup_brightway_databases):
 
 def test_set_market_prices_strict_missing_year_raises(setup_brightway_databases):
     """Missing background database years fail in strict mode."""
-    with pytest.raises(ValueError, match="No background database configured"):
+    with pytest.raises(ValueError, match="no background database configured"):
         set_market_prices(
             price_data=[
                 {
@@ -369,7 +319,7 @@ def test_set_market_prices_strict_missing_year_raises(setup_brightway_databases)
 
 def test_set_market_prices_strict_missing_node_raises(setup_brightway_databases):
     """Missing background nodes fail in strict mode."""
-    with pytest.raises(ValueError, match="Could not find background node"):
+    with pytest.raises(ValueError, match="could not find background node"):
         set_market_prices(
             price_data=[
                 {
@@ -383,266 +333,254 @@ def test_set_market_prices_strict_missing_node_raises(setup_brightway_databases)
         )
 
 
-def test_market_prices_flow_to_model_inputs_with_mapping(
-    setup_economic_pipeline_databases,
+def test_set_market_prices_rejects_non_numeric_prices(setup_brightway_databases):
+    """Missing prices in a DataFrame (NaN) are not written to the node."""
+    prices = pd.DataFrame(
+        [{"name": "node I1", "location": "somewhere", "year": 2020, "price": None}]
+    )
+    with pytest.raises(ValueError, match="not a finite number"):
+        set_market_prices(prices, background_databases={2020: "db_2020"})
+
+
+# --------------------------------------------------------------------------
+# Reading prices in the LCA processor
+# --------------------------------------------------------------------------
+
+
+def test_prices_are_interpolated_and_passed_to_model_inputs(
+    economic_pipeline_databases,
 ):
-    """Node prices are read, interpolated, and passed to OptimizationModelInputs."""
+    """Prices are resolved across databases by identity and interpolated in time."""
     set_market_prices(
-        price_data=[
-            {
-                "name": "node I1",
-                "location": "somewhere",
-                "year": 2020,
-                "price": 100.0,
-            },
-            {
-                "name": "node I1",
-                "location": "somewhere",
-                "year": 2030,
-                "price": 50.0,
-            },
-        ],
-        background_databases={2020: "db_2020", 2030: "db_2030"},
+        _price_rows("node I1", {2020: 100.0, 2030: 50.0})
+        + _price_rows("node I2", {2020: 20.0, 2030: 10.0}),
+        background_databases=BACKGROUND_DATABASES,
     )
 
-    processor = _build_economic_pipeline_processor()
+    processor = _build_processor()
+    prices = processor.intermediate_flow_prices
+    # Installation- and operation-driven flows are priced the same way.
+    assert prices[("I1", 2020)] == pytest.approx(100.0)
+    assert prices[("I1", 2025)] == pytest.approx(75.0)
+    assert prices[("I1", 2029)] == pytest.approx(55.0)
+    assert prices[("I2", 2025)] == pytest.approx(15.0)
 
-    assert processor.background_costs[("db_2020", "I1")] == 100.0
-    assert processor.background_costs[("db_2030", "I1")] == 50.0
-    assert processor.intermediate_costs_cap[("I1", 2020)] == 100.0
-    assert processor.intermediate_costs_cap[("I1", 2025)] == 75.0
-    assert processor.intermediate_costs_cap[("I1", 2029)] == 55.0
-    assert ("I1", 2025) not in processor.intermediate_costs_op
-
-    manager = converter.ModelInputManager()
-    model_inputs = manager.parse_from_lca_processor(processor)
-    assert model_inputs.intermediate_costs_cap[("I1", 2025)] == 75.0
+    model_inputs = converter.ModelInputManager().parse_from_lca_processor(processor)
+    assert model_inputs.intermediate_flow_prices == prices
 
 
-def test_operation_edge_prices_flow_to_operation_costs(
-    setup_economic_pipeline_databases,
-):
-    """Prices for operation-edge inputs are written to op costs, not cap costs."""
+def test_prices_are_not_read_without_price_attribute(economic_pipeline_databases):
+    """Reading prices is opt-in, so impact-only users get no warnings or lookups."""
     set_market_prices(
-        price_data=[
-            {
-                "name": "node I2",
-                "location": "somewhere",
-                "year": 2020,
-                "price": 20.0,
-            },
-            {
-                "name": "node I2",
-                "location": "somewhere",
-                "year": 2030,
-                "price": 10.0,
-            },
-        ],
-        background_databases={2020: "db_2020", 2030: "db_2030"},
+        _price_rows("node I1", {2020: 100.0, 2030: 50.0}),
+        background_databases=BACKGROUND_DATABASES,
     )
 
-    processor = _build_economic_pipeline_processor()
+    processor = _build_processor(price_attribute=None)
 
-    assert processor.intermediate_costs_op[("I2", 2025)] == 15.0
-    assert ("I2", 2025) not in processor.intermediate_costs_cap
-
-    manager = converter.ModelInputManager()
-    model_inputs = manager.parse_from_lca_processor(processor)
-    assert model_inputs.intermediate_costs_op[("I2", 2025)] == 15.0
+    assert processor.intermediate_flow_prices == {}
+    model_inputs = converter.ModelInputManager().parse_from_lca_processor(processor)
+    assert model_inputs.intermediate_flow_prices is None
 
 
-@bw2test
-def test_background_cost_lookup_falls_back_to_metadata_when_codes_differ():
-    """Cost lookup can find equivalent premise nodes with different codes."""
-    bd.projects.set_current("__test_economic_cost_metadata_lookup__")
-
-    db_2020 = bd.Database("db_2020")
-    db_2020.write(
-        {
-            ("db_2020", "I1"): {
-                "name": "node I1",
-                "location": "somewhere",
-                "reference product": "I1",
-                "unit": "kg",
-                "exchanges": [
-                    {
-                        "amount": 1,
-                        "type": "production",
-                        "input": ("db_2020", "I1"),
-                    },
-                ],
-            },
-        }
-    )
-    db_2020.register()
-
-    db_2030 = bd.Database("db_2030")
-    db_2030.write(
-        {
-            ("db_2030", "I1_2030"): {
-                "name": "node I1",
-                "location": "somewhere",
-                "reference product": "I1",
-                "unit": "kg",
-                "market_price": 50.0,
-                "exchanges": [
-                    {
-                        "amount": 1,
-                        "type": "production",
-                        "input": ("db_2030", "I1_2030"),
-                    },
-                ],
-            },
-        }
-    )
-    db_2030.register()
-
-    processor = object.__new__(lca_processor.LCADataProcessor)
-    processor.background_dbs = {"db_2030": datetime(2030, 1, 1)}
-    processor._intermediate_flows = {
-        "I1": {
-            "name": "node I1",
-            "reference product": "I1",
-            "location": "somewhere",
-            "product": "I1",
-            "unit": "kg",
-        }
-    }
-    processor._cost_relevant_cap_flows = {"I1"}
-    processor._cost_relevant_op_flows = set()
-    processor._background_costs = {}
-
-    processor._construct_background_costs()
-
-    assert processor.background_costs[("db_2030", "I1")] == 50.0
-
-
-def test_missing_market_price_logs_warning(
-    setup_economic_pipeline_databases,
-    monkeypatch,
-):
-    """Missing market prices for cost-relevant flows are warned about."""
+def test_unpriced_flows_are_reported_once(economic_pipeline_databases, monkeypatch):
+    """Flows without any price are left out and reported in a single warning."""
     messages = []
-
-    def collect_warning(message, *args, **kwargs):
-        messages.append(message.format(*args, **kwargs))
-
-    monkeypatch.setattr(lca_processor.logger, "warning", collect_warning)
+    monkeypatch.setattr(lca_processor.logger, "warning", messages.append)
     set_market_prices(
-        price_data=[
-            {
-                "name": "node I1",
-                "location": "somewhere",
-                "year": 2020,
-                "price": 100.0,
-            },
-        ],
-        background_databases={2020: "db_2020"},
+        _price_rows("node I1", {2020: 100.0, 2030: 50.0}),
+        background_databases=BACKGROUND_DATABASES,
     )
 
-    processor = _build_economic_pipeline_processor()
+    processor = _build_processor()
 
-    assert any(
-        "Missing market_price" in message
-        and "db_2030" in message
-        and "I1" in message
-        and "cap" in message
-        for message in messages
+    assert {flow for flow, _ in processor.intermediate_flow_prices} == {"I1"}
+    price_warnings = [m for m in messages if "market_price" in m]
+    assert len(price_warnings) == 1
+    assert "node I2" in price_warnings[0]
+
+
+def test_partially_priced_flow_raises(economic_pipeline_databases):
+    """A price missing in one database would bias the interpolation, so it fails."""
+    set_market_prices(
+        _price_rows("node I1", {2020: 100.0}),
+        background_databases=BACKGROUND_DATABASES,
     )
-    assert processor.intermediate_costs_cap[("I1", 2025)] == 50.0
+
+    with pytest.raises(ValueError, match=r"node I1.*db_2030"):
+        _build_processor()
 
 
-def test_cost_expressions_without_discounting():
-    """Cost expressions combine real background purchases with market prices."""
+# --------------------------------------------------------------------------
+# Cost components of the optimization model
+# --------------------------------------------------------------------------
+
+
+def _single_process_inputs(**overrides):
+    """
+    Process P, operating at tau 1 only. Icap is bought at installation (tau 0);
+    Iop is an operation flow that is also bought at tau 0, outside the operation
+    phase, so part of it is installation-driven.
+    """
+    data = dict(
+        PROCESS=["P"],
+        PRODUCT=["R"],
+        INTERMEDIATE_FLOW=["Icap", "Iop"],
+        ELEMENTARY_FLOW=["CO2"],
+        BACKGROUND_ID=["db"],
+        PROCESS_TIME=[0, 1],
+        SYSTEM_TIME=[2020, 2021, 2022],
+        CATEGORY=["climate_change"],
+        demand={("R", 2021): 1.0},
+        operation_flow={("P", "R"): True, ("P", "Iop"): True},
+        foreground_technosphere={
+            ("P", "Icap", 0): 2.0,
+            ("P", "Iop", 0): 3.0,
+            ("P", "Iop", 1): 3.0,
+        },
+        internal_demand_technosphere={},
+        foreground_biosphere={},
+        foreground_production={("P", "R", 1): 1.0},
+        background_inventory={("db", "Icap", "CO2"): 1.0, ("db", "Iop", "CO2"): 1.0},
+        mapping={("db", t): 1.0 for t in (2020, 2021, 2022)},
+        characterization={
+            ("climate_change", "CO2", t): 1.0 for t in (2020, 2021, 2022)
+        },
+        operation_time_limits={"P": (1, 1)},
+        intermediate_flow_prices={
+            **{("Icap", t): 10.0 for t in (2020, 2021, 2022)},
+            **{("Iop", t): 2.0 for t in (2020, 2021, 2022)},
+        },
+    )
+    data.update(overrides)
+    return converter.OptimizationModelInputs(**data)
+
+
+def _set_variables(model, installed=1.0, running=1.0):
+    for t in model.SYSTEM_TIME:
+        model.var_installation["P", t].set_value(installed if t == 2020 else 0.0)
+    for idx in model.var_operation:
+        model.var_operation[idx].set_value(running if idx == ("P", 2020, 2021) else 0.0)
+
+
+def _real(model, value):
+    return value * model.scales["foreground"] * model.scales["cost"]
+
+
+def test_cost_components_split_by_driver():
+    """Purchases are priced by driver, including operation flows outside the window."""
     model = optimizer.create_model(
-        _build_cost_expression_inputs(),
-        name="cost_expression_test",
-        objective_category="climate_change",
+        _single_process_inputs(), name="split", objective="cost"
     )
-    _set_cost_expression_variables(model)
+    _set_variables(model, installed=4.0, running=1.0)
 
-    assert pyo.value(model.background_purchase_cap["Icap", 2020]) == 10.0
-    assert pyo.value(model.background_purchase_op["Iop", 2020]) == 12.0
-    assert pyo.value(model.cost_cap[2020]) == 100.0
-    assert pyo.value(model.cost_op[2020]) == 24.0
-    assert pyo.value(model.discount_factor[2020]) == 1.0
-    assert pyo.value(model.total_cost) == 124.0
+    # 2020: 4 units installed -> 4 * (2 Icap * 10 + 3 Iop * 2) = 104
+    assert _real(model, pyo.value(model.installation_cost["P", 2020])) == pytest.approx(
+        104.0
+    )
+    assert _real(model, pyo.value(model.operation_cost["P", 2020])) == pytest.approx(
+        0.0
+    )
+    # 2021: 1 unit running -> 3 Iop * 2 = 6
+    assert _real(model, pyo.value(model.operation_cost["P", 2021])) == pytest.approx(
+        6.0
+    )
+    assert _real(model, pyo.value(model.installation_cost["P", 2021])) == pytest.approx(
+        0.0
+    )
+    assert _real(model, pyo.value(model.total_cost)) == pytest.approx(110.0)
 
 
-def test_cost_expressions_with_discounting():
-    """Discount factors are applied to total costs by system year."""
+def test_discounting_applies_in_purchase_year():
+    """Purchases are discounted from the year they occur, not the installation year."""
     model = optimizer.create_model(
-        _build_cost_expression_inputs(
-            discount_rate=0.1,
-            discount_reference_year=2020,
-        ),
-        name="discounted_cost_expression_test",
-        objective_category="climate_change",
+        _single_process_inputs(discount_rate=0.1, discount_reference_year=2020),
+        name="discounted",
+        objective="cost",
     )
-    _set_cost_expression_variables(model)
+    _set_variables(model, installed=4.0, running=1.0)
 
     assert pyo.value(model.discount_factor[2020]) == pytest.approx(1.0)
     assert pyo.value(model.discount_factor[2021]) == pytest.approx(1 / 1.1)
-    assert pyo.value(model.total_cost) == pytest.approx(124.0)
+    assert _real(model, pyo.value(model.total_cost)) == pytest.approx(104.0 + 6.0 / 1.1)
 
 
-def _require_highs():
-    """Skip solver-based economics tests when HiGHS is not available."""
-    try:
-        available = pyo.SolverFactory("highs").available(exception_flag=False)
-    except Exception as exc:
-        pytest.skip(f"HiGHS solver not available: {exc}")
-    if not available:
-        pytest.skip("HiGHS solver not available")
-    return "highs"
+def test_objective_validation():
+    inputs = _single_process_inputs()
+    with pytest.raises(ValueError, match="Unknown objective"):
+        optimizer.create_model(inputs, name="bad", objective="profit")
+    with pytest.raises(ValueError, match="objective_category"):
+        optimizer.create_model(inputs, name="no_category")
+    with pytest.raises(ValueError, match="intermediate_flow_prices"):
+        optimizer.create_model(
+            _single_process_inputs(intermediate_flow_prices=None),
+            name="no_prices",
+            objective="cost",
+        )
 
 
-def _build_two_route_cost_inputs(cumulative_impact_limit=None):
-    data = {
-        "PROCESS": ["cheap_dirty", "expensive_clean"],
-        "PRODUCT": ["product"],
-        "INTERMEDIATE_FLOW": ["dirty_input", "clean_input"],
-        "ELEMENTARY_FLOW": ["CO2"],
-        "BACKGROUND_ID": ["db_2020"],
-        "PROCESS_TIME": [0],
-        "SYSTEM_TIME": [2020],
-        "CATEGORY": ["climate_change"],
-        "operation_time_limits": {
-            "cheap_dirty": (0, 0),
-            "expensive_clean": (0, 0),
-        },
-        "demand": {("product", 2020): 1.0},
-        "foreground_technosphere": {
+def test_inputs_reject_negative_discount_rate_and_unknown_flows():
+    with pytest.raises(ValueError):
+        _single_process_inputs(discount_rate=-0.01)
+    with pytest.raises(ValueError, match="intermediate_flow_prices"):
+        _single_process_inputs(intermediate_flow_prices={("unknown", 2020): 1.0})
+
+
+def test_prices_are_scaled_for_the_solver():
+    """Large prices are normalized; scaled prices stay within [-1, 1]."""
+    inputs = _single_process_inputs(
+        intermediate_flow_prices={("Icap", 2020): 4e6, ("Iop", 2021): 1e3}
+    )
+    scaled, scales = inputs.get_scaled_copy()
+    assert scales["cost"] == 4e6
+    assert max(scaled.intermediate_flow_prices.values()) == pytest.approx(1.0)
+
+
+# --------------------------------------------------------------------------
+# Solving with the cost objective
+# --------------------------------------------------------------------------
+
+
+def _two_route_inputs(**overrides):
+    data = dict(
+        PROCESS=["cheap_dirty", "expensive_clean"],
+        PRODUCT=["product"],
+        INTERMEDIATE_FLOW=["dirty_input", "clean_input"],
+        ELEMENTARY_FLOW=["CO2"],
+        BACKGROUND_ID=["db"],
+        PROCESS_TIME=[0],
+        SYSTEM_TIME=[2020],
+        CATEGORY=["climate_change"],
+        operation_time_limits={"cheap_dirty": (0, 0), "expensive_clean": (0, 0)},
+        demand={("product", 2020): 1.0},
+        foreground_technosphere={
             ("cheap_dirty", "dirty_input", 0): 1.0,
             ("expensive_clean", "clean_input", 0): 1.0,
         },
-        "internal_demand_technosphere": {},
-        "foreground_biosphere": {},
-        "foreground_production": {
+        internal_demand_technosphere={},
+        foreground_biosphere={},
+        foreground_production={
             ("cheap_dirty", "product", 0): 1.0,
             ("expensive_clean", "product", 0): 1.0,
         },
-        "operation_flow": {
+        operation_flow={
             ("cheap_dirty", "product"): True,
             ("cheap_dirty", "dirty_input"): True,
             ("expensive_clean", "product"): True,
             ("expensive_clean", "clean_input"): True,
         },
-        "background_inventory": {
-            ("db_2020", "dirty_input", "CO2"): 10.0,
-            ("db_2020", "clean_input", "CO2"): 1.0,
+        background_inventory={
+            ("db", "dirty_input", "CO2"): 10.0,
+            ("db", "clean_input", "CO2"): 1.0,
         },
-        "mapping": {("db_2020", 2020): 1.0},
-        "characterization": {("climate_change", "CO2", 2020): 1.0},
-        "intermediate_costs_op": {
-            ("dirty_input", 2020): 1.0,
-            ("clean_input", 2020): 10.0,
+        mapping={("db", 2020): 1.0},
+        characterization={("climate_change", "CO2", 2020): 1.0},
+        intermediate_flow_prices={
+            ("dirty_input", 2020): 1e5,
+            ("clean_input", 2020): 1e6,
         },
-    }
-    if cumulative_impact_limit is not None:
-        data["cumulative_category_impact_limits"] = {
-            "climate_change": cumulative_impact_limit
-        }
+    )
+    data.update(overrides)
     return converter.OptimizationModelInputs(**data)
 
 
@@ -654,112 +592,54 @@ def _total_operation(model, process):
     )
 
 
-def test_cost_objective_switch_and_invalid_objective():
-    """Objective selection stays backward-compatible and validates bad input."""
-    inputs = _build_cost_expression_inputs()
-    environmental_model = optimizer.create_model(
-        inputs,
-        name="default_environmental_objective_test",
-        objective_category="climate_change",
-    )
-    cost_model = optimizer.create_model(
-        inputs,
-        name="cost_objective_switch_test",
-        objective_category="climate_change",
-        objective="cost",
-    )
-    _set_cost_expression_variables(cost_model)
-
-    assert environmental_model._objective == "environmental"
-    assert cost_model._objective == "cost"
-    assert pyo.value(cost_model.OBJ) == pytest.approx(
-        pyo.value(cost_model.total_cost)
-    )
-
-    with pytest.raises(ValueError, match="Unknown objective"):
-        optimizer.create_model(
-            inputs,
-            name="invalid_objective_test",
-            objective_category="climate_change",
-            objective="not_a_real_objective",
-        )
-
-
 def test_cost_objective_chooses_cheaper_route():
-    """Cost optimization selects the lower-price direct background purchase."""
-    solver_name = _require_highs()
     model = optimizer.create_model(
-        _build_two_route_cost_inputs(),
-        name="least_cost_two_route_test",
-        objective_category="climate_change",
+        _two_route_inputs(), name="least_cost", objective="cost"
+    )
+    model, objective, _ = optimizer.solve_model(model, solver_name=SOLVER, tee=False)
+
+    assert _total_operation(model, "cheap_dirty") == pytest.approx(1.0)
+    assert _total_operation(model, "expensive_clean") == pytest.approx(0.0)
+    assert objective == pytest.approx(1e5)
+
+    costs = postprocessing.PostProcessor(model).get_costs(discounted=True)
+    assert costs.to_numpy().sum() == pytest.approx(objective)
+    assert costs[("operation", "cheap_dirty")].loc[2020] == pytest.approx(1e5)
+
+
+def test_cost_objective_respects_impact_limit():
+    model = optimizer.create_model(
+        _two_route_inputs(cumulative_category_impact_limits={"climate_change": 1.0}),
+        name="least_cost_with_budget",
         objective="cost",
     )
+    model, objective, _ = optimizer.solve_model(model, solver_name=SOLVER, tee=False)
 
-    solved_model, objective, results = optimizer.solve_model(
-        model,
-        solver_name=solver_name,
-        tee=False,
+    assert _total_operation(model, "expensive_clean") == pytest.approx(1.0)
+    assert objective == pytest.approx(1e6)
+    impacts = postprocessing.PostProcessor(model).get_impacts()
+    assert impacts["climate_change"].to_numpy().sum() == pytest.approx(1.0)
+
+
+def test_costs_of_environmental_optimum_are_reported():
+    """The cost of an impact-minimal pathway can be read from the same model."""
+    model = optimizer.create_model(
+        _two_route_inputs(), name="impact_minimum", objective_category="climate_change"
     )
+    model, objective, _ = optimizer.solve_model(model, solver_name=SOLVER, tee=False)
 
-    assert results.solver.termination_condition == pyo.TerminationCondition.optimal
-    assert _total_operation(solved_model, "cheap_dirty") == pytest.approx(1.0)
-    assert _total_operation(solved_model, "expensive_clean") == pytest.approx(0.0)
     assert objective == pytest.approx(1.0)
-    assert pyo.value(solved_model.total_cost) == pytest.approx(1.0)
+    costs = postprocessing.PostProcessor(model).get_costs()
+    assert costs.to_numpy().sum() == pytest.approx(1e6)
 
 
-def test_cost_objective_respects_cumulative_environmental_budget():
-    """Environmental constraints remain active when minimizing total cost."""
-    solver_name = _require_highs()
+def test_get_costs_without_prices_is_empty():
     model = optimizer.create_model(
-        _build_two_route_cost_inputs(cumulative_impact_limit=1.0),
-        name="least_cost_with_environmental_budget_test",
-        objective_category="climate_change",
-        objective="cost",
-    )
-
-    solved_model, objective, results = optimizer.solve_model(
-        model,
-        solver_name=solver_name,
-        tee=False,
-    )
-
-    assert results.solver.termination_condition == pyo.TerminationCondition.optimal
-    assert _total_operation(solved_model, "cheap_dirty") == pytest.approx(0.0)
-    assert _total_operation(solved_model, "expensive_clean") == pytest.approx(1.0)
-    assert objective == pytest.approx(10.0)
-    assert pyo.value(solved_model.total_impact["climate_change"]) == pytest.approx(1.0)
-
-
-def test_solve_model_denormalizes_environmental_but_not_cost_objective():
-    """Cost objectives stay real while environmental objectives are denormalized."""
-    solver_name = _require_highs()
-    cost_model = optimizer.create_model(
-        _build_two_route_cost_inputs(),
-        name="cost_denormalization_test",
-        objective_category="climate_change",
-        objective="cost",
-    )
-    solved_cost_model, cost_objective, _ = optimizer.solve_model(
-        cost_model,
-        solver_name=solver_name,
-        tee=False,
-    )
-
-    environmental_model = optimizer.create_model(
-        _build_two_route_cost_inputs(),
-        name="environmental_denormalization_test",
+        _two_route_inputs(intermediate_flow_prices=None),
+        name="no_prices",
         objective_category="climate_change",
     )
-    solved_environmental_model, environmental_objective, _ = optimizer.solve_model(
-        environmental_model,
-        solver_name=solver_name,
-        tee=False,
-    )
-
-    assert cost_objective == pytest.approx(pyo.value(solved_cost_model.total_cost))
-    assert cost_objective == pytest.approx(1.0)
-    assert environmental_objective == pytest.approx(1.0)
-    assert pyo.value(
-        solved_environmental_model.total_impact["climate_change"]
-    ) == pytest.approx(1.0)
+    model, _, _ = optimizer.solve_model(model, solver_name=SOLVER, tee=False)
+    costs = postprocessing.PostProcessor(model).get_costs()
+    assert costs.empty
+    assert list(costs.index) == [2020]

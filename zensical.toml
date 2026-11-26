@@ -24,13 +24,18 @@ nav = [
     { "Brightway Setup" = "content/brightway_setup.md" },
     { "Foreground Modeling" = "content/foreground_modeling.md" },
     { "Optimization Setup" = "content/optimization_setup.md" },
-    { "Economic Optimization" = "content/economic_optimization.md" },
+    { Objectives = [
+      { Overview = "content/objectives.md" },
+      { "Minimizing Impacts" = "content/objective_impact.md" },
+      { "Minimizing Costs" = "content/objective_cost.md" },
+    ]},
     { Constraints = "content/constraints.md" },
     { Postprocessing = "content/postprocessing_guide.md" },
   ]},
   { Examples = [
     { Overview = "content/examples/index.md" },
     { "Basic Example" = "content/examples/basic_example.md" },
+    { "Basic Cost Example" = "content/examples/basic_example_econ.md" },
     { "Methanol & Pig Iron Case Study" = "content/examples/methanol_and_iron.md" },
   ]},
   { Theory = [
@@ -43,6 +48,7 @@ nav = [
     { "LCA Processor" = "api/lca_processor.md" },
     { Converter = "api/converter.md" },
     { Optimizer = "api/optimizer.md" },
+    { Economics = "api/economics.md" },
     { Postprocessing = "api/postprocessing.md" },
   ]},
 ]

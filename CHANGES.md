@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+* Added a cost objective: `create_model(..., objective="cost")` minimizes the
+  discounted cost of the background products the foreground purchases directly.
+  Prices are written to background nodes with `optimex.economics.set_market_prices`,
+  read via `LCAConfig.price_attribute`, and carried as
+  `OptimizationModelInputs.intermediate_flow_prices` together with `discount_rate`
+  and `discount_reference_year`. Impact limits still apply, and
+  `PostProcessor.get_costs()` reports costs by installation/operation driver and
+  process for any solved model. `objective_category` is now optional
+  ([#71](https://github.com/RWTH-LTT/optimex/pull/71))
+* New docs section "Objectives" with an overview of the objectives and how to trace
+  cost-impact trade-offs, and one guide each for minimizing impacts and costs, plus
+  a basic cost example ([#71](https://github.com/RWTH-LTT/optimex/pull/71))
 
 ## [0.7.0] - 2026-08-20
 * Fixed under-counting of installation impacts. One installed unit now delivers its

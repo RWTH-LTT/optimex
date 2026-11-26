@@ -22,7 +22,7 @@ If you already do Life Cycle Assessment (LCA) with [Brightway](https://brightway
 
 ## Why LCA users need this
 
-Standard LCA tells you the environmental impact of a predefined product system. But what if you want to choose *between* competing technologies, or find the best deployment schedule for a set of processes over a 25-year horizon? That's the domain of **Life Cycle Optimization**. LCO extends LCA by treating technology selection and capacity planning as decision variables, and minimizes an environmental objective subject to system constraints.
+Standard LCA tells you the environmental impact of a predefined product system. But what if you want to choose *between* competing technologies, or find the best deployment schedule for a set of processes over a 25-year horizon? That's the domain of **Life Cycle Optimization**. LCO extends LCA by treating technology selection and capacity planning as decision variables, and minimizes an environmental objective subject to system constraints. `optimex` can also minimize costs, keeping environmental limits as constraints.
 
 However, both LCA and LCO are traditionally *static*: all flows are collapsed to a single point in time, background supply chains are fixed, and the timing of real-world activities — construction, multi-year operation, end-of-life — is ignored. This matters enormously in a rapidly decarbonizing world where the same technology installed in 2025 versus 2035 carries very different lifecycle impacts.
 

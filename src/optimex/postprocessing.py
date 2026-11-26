@@ -436,6 +436,53 @@ class PostProcessor:
         self.df_impacts = df_pivot
         return self.df_impacts
 
+    def get_costs(self, discounted: bool = False) -> pd.DataFrame:
+        """
+        Extract the cost of the background purchases by driver, process, and time.
+
+        Costs are the purchased amounts of intermediate flows times their market
+        prices (`OptimizationModelInputs.intermediate_flow_prices`), split by the
+        decision driving the purchase:
+
+        - "installation": flows outside the operation phase (e.g. construction,
+          end-of-life), scaling with installed units,
+        - "operation": operation flows within the operation phase, scaling with the
+          units running.
+
+        The split follows the model's installation/operation semantics and is not a
+        complete CAPEX/OPEX account. Costs are available for any solved model with
+        prices, also when it minimized an environmental impact.
+
+        Parameters
+        ----------
+        discounted : bool, optional
+            If True, multiply each year's costs by its discount factor, so the
+            values sum to the model's discounted total cost. Default False.
+
+        Returns
+        -------
+        pd.DataFrame
+            'Time' as index and MultiIndex columns (Driver, Process), in the
+            currency of the input prices. Without priced flows, no columns.
+        """
+        scales = getattr(self.m, "scales", {})
+        cost_scale = scales.get("foreground", 1.0) * scales.get("cost", 1.0)
+        costs = {}
+        for driver, expression in (
+            ("installation", self.m.installation_cost),
+            ("operation", self.m.operation_cost),
+        ):
+            for p, t in expression:
+                factor = pyo.value(self.m.discount_factor[t]) if discounted else 1.0
+                value = pyo.value(expression[p, t])
+                costs[(t, driver, p)] = value * cost_scale * factor
+
+        if not costs:
+            return pd.DataFrame(index=pd.Index(list(self.m.SYSTEM_TIME), name="Time"))
+        series = pd.Series(costs, dtype=float)
+        series.index.names = ["Time", "Driver", "Process"]
+        return series.unstack(["Driver", "Process"]).sort_index(axis=1)
+
     def get_dynamic_inventory(self, biosphere_database: str = "ecoinvent-3.12-biosphere") -> pd.DataFrame:
         """
         Extract the dynamic inventory from the solved model.

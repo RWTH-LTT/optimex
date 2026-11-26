@@ -20,6 +20,7 @@ This module provides tools to extract, process, and visualize results from solve
 ### Data Extraction
 
 - `get_impacts()`: Extract impact results as DataFrame
+- `get_costs()`: Extract costs by driver (installation/operation) and process
 - `get_installation()`: Extract installation schedules
 - `get_operation()`: Extract operation profiles
 - `get_production()`: Extract production quantities

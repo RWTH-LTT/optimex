@@ -58,6 +58,7 @@ Time-explicit LCO reveals transition strategies that are invisible to static app
 - **Resource bottleneck navigation** — Time-specific constraints on water use, critical minerals, or other resources force technology diversification, revealing realistic pathways through transient scarcity
 - **Strategic overcapacity** — Early investment in clean technologies can offset stranded fossil assets when the net emission savings outweigh the embodied impacts of idle infrastructure
 - **Cumulative budget compliance** — By tracking exact emission timing alongside dynamic characterization, pathways can be verified against carbon budgets and other absolute limits
+- **Cost-optimal pathways within budgets** — Minimizing costs instead of impacts, with impact limits as constraints, shows the cheapest transition that respects a carbon budget and how costs rise as the budget tightens ([Objectives](content/objectives.md))
 
 ---
 

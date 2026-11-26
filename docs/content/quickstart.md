@@ -7,7 +7,7 @@ tags:
 
 # Quick Start
 
-A condensed reference for using `optimex`. For the underlying framework, see the [Theory](theory.md) page. For detailed explanations, see the [User Guide](brightway_setup.md), [Examples](examples/index.md), or the [API Reference](../api/index.md).
+A condensed reference for using `optimex`. For the underlying framework, see the [Theory](theory_how_it_works.md) page. For detailed explanations, see the [User Guide](brightway_setup.md), [Examples](examples/index.md), or the [API Reference](../api/index.md).
 
 ---
 
@@ -61,7 +61,7 @@ lca_data = lca_processor.LCADataProcessor(config)
 manager = converter.ModelInputManager()
 model_inputs = manager.parse_from_lca_processor(lca_data)
 
-# 6. Create and solve model
+# 6. Create and solve model (minimizing an impact category; see "Objectives" for costs)
 model = optimizer.create_model(model_inputs, name="my_model", objective_category="climate_change")
 solved, objective, results = optimizer.solve_model(model, solver_name="glpk")
 
@@ -185,11 +185,21 @@ model_inputs.existing_capacity = {("old_plant", 2010): 500.0}
 
 ---
 
+## Objectives
+
+| Minimize | Call | Guide |
+|----------|------|-------|
+| Impact in one category | `create_model(inputs, name, objective_category="climate_change")` | [Minimizing Impacts](objective_impact.md) |
+| Discounted cost | `create_model(inputs, name, objective="cost")` | [Minimizing Costs](objective_cost.md) |
+
+---
+
 ## PostProcessor Methods
 
 | Method | Returns | Description |
 |--------|---------|-------------|
 | `get_impacts()` | DataFrame | Impact by process, category, time |
+| `get_costs()` | DataFrame | Cost by driver (installation/operation), process, time |
 | `get_installation()` | DataFrame | Process units installed per time (a lifetime quantity, not an annual capacity) |
 | `get_production_capacity()` | DataFrame | Maximum annual production available per time |
 | `get_operation()` | DataFrame | Units running per time |

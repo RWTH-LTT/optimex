@@ -7,7 +7,7 @@ tags:
 
 # Optimization Constraints
 
-By default, `optimex` minimizes the environmental impact of a specified category while meeting the time-specific demand $\mathbf{f}_t$ (see [Theory: Complete Formulation](theory.md#complete-formulation)). Real-world optimization problems often require additional constraints to reflect practical limitations, policy requirements, or scenario-specific conditions — such as existing brownfield capacities, resource bottlenecks, or cumulative environmental budgets.
+`optimex` minimizes the [objective](objectives.md) of your choice, an impact category or costs, while meeting the time-specific demand $\mathbf{f}_t$ (see [Theory: Complete Formulation](theory_how_it_works.md)). Real-world optimization problems often require additional constraints to reflect practical limitations, policy requirements, or scenario-specific conditions — such as existing brownfield capacities, resource bottlenecks, or cumulative environmental budgets.
 
 This page documents all available constraint options in `optimex`.
 
@@ -125,6 +125,8 @@ model_inputs.process_operation_limits_min = {
 ---
 
 ## Category Impact Limits
+
+Impact limits apply with either objective. Combined with the [cost objective](objective_cost.md), they give the cheapest pathway within an environmental budget; sweeping the limit traces the [trade-off between costs and impacts](objectives.md#trade-offs-between-objectives).
 
 Constrain the environmental impact in specific categories, either at specific times or cumulatively.
 

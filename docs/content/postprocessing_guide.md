@@ -23,6 +23,8 @@ solved_model, objective, results = optimizer.solve_model(model, solver_name="glp
 pp = postprocessing.PostProcessor(solved_model)
 ```
 
+The `PostProcessor` works the same for every [objective](objectives.md): impacts in all categories, and costs if prices are available, are reported for any solved model.
+
 ---
 
 ## Extracting Data
@@ -61,6 +63,30 @@ process_total = df_impacts.sum(axis=0)
 # Total impact in one category
 climate_impacts = df_impacts["climate_change"].sum().sum()
 ```
+
+### Costs
+
+If the model inputs carry market prices (see [Minimizing Costs](objective_cost.md)), get the cost of the background purchases by driver, process, and time:
+
+```python
+df_costs = pp.get_costs()                    # undiscounted
+df_costs_pv = pp.get_costs(discounted=True)  # discounted to the reference year
+```
+
+Returns a DataFrame with:
+- **Index**: System time (years)
+- **Columns**: MultiIndex of (Driver, Process), with driver `"installation"` (purchases scaling with installed units, e.g. construction) or `"operation"` (purchases scaling with the units running)
+- **Values**: Cost in the currency of the input prices
+
+```python
+# Discounted total cost, equal to the objective of a cost-minimal model
+total_cost = df_costs_pv.sum().sum()
+
+# Operation-driven cost per year
+operation_costs = df_costs["operation"].sum(axis=1)
+```
+
+Costs are also available for an impact-minimal model, so you can report what the environmentally optimal pathway costs. Without prices, the DataFrame has no columns.
 
 ---
 
@@ -284,6 +310,9 @@ cat_scales = solved_model.scales["characterization"]
 # Denormalize a scaled value
 scaled_value = pyo.value(solved_model.some_expression)
 real_value = scaled_value * fg_scale * cat_scales["climate_change"]
+
+# Cost expressions use the cost scale instead of a category scale
+real_cost = pyo.value(solved_model.total_cost) * fg_scale * solved_model.scales["cost"]
 ```
 
 ---
@@ -398,5 +427,5 @@ for name, data in results.items():
 
 ## Next Steps
 
-- [Examples](../examples/index.md): See complete worked examples
+- [Examples](examples/index.md): See complete worked examples
 - [API Reference](../api/postprocessing.md): Full PostProcessor API documentation

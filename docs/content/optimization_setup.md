@@ -7,7 +7,7 @@ tags:
 
 # Optimization Setup
 
-Once your Brightway databases are configured, you need to set up the optimization problem: define the time-specific demand $\mathbf{f}_t$, configure characterization methods (static or [dynamic](theory.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and create and solve the optimization model.
+Once your Brightway databases are configured, you need to set up the optimization problem: define the time-specific demand $\mathbf{f}_t$, configure characterization methods (static or [dynamic](theory_scope_and_limits.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and create and solve the optimization model for the [objective](objectives.md) of your choice: an impact category or costs.
 
 ---
 
@@ -93,6 +93,14 @@ config = lca_processor.LCAConfig(
     ],
 )
 ```
+
+Further options:
+
+| Parameter | Description |
+|-----------|-------------|
+| `background_inventory` | How background inventories are calculated, see [Background Inventory](#background-inventory) |
+| `foreground_db_name` | Name of the foreground database (default `"foreground"`) |
+| `price_attribute` | Background node attribute holding market prices, needed for the [cost objective](objective_cost.md#reading-prices) (default `None`: no prices are read) |
 
 ### Temporal Settings
 
@@ -299,7 +307,17 @@ model = optimizer.create_model(
 |-----------|-------------|
 | `inputs` | The `OptimizationModelInputs` object |
 | `name` | Identifier for the model |
-| `objective_category` | Impact category to minimize |
+| `objective` | What to minimize: `"environmental"` (default) or `"cost"`, see [Objectives](objectives.md) |
+| `objective_category` | Impact category to minimize; required for `objective="environmental"` |
+| `debug_path` | Optional path of an LP file to write the model to |
+
+To minimize costs instead, pass `objective="cost"` and leave out the category:
+
+```python
+model = optimizer.create_model(model_inputs, name="cost_minimum", objective="cost")
+```
+
+This needs market prices in the model inputs; see [Minimizing Costs](objective_cost.md).
 
 ### Debug Output
 
@@ -425,5 +443,6 @@ print(f"Optimal impact: {objective:.2f}")
 
 ## Next Steps
 
+- [Objectives](objectives.md): Minimize impacts or costs, and trace trade-offs between them
 - [Constraints](constraints.md): Add deployment limits, impact budgets, and more
 - [Postprocessing](postprocessing_guide.md): Analyze and visualize results

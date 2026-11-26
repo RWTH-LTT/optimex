@@ -33,7 +33,7 @@ This section contains the API documentation automatically generated from the `op
 
     ---
 
-    Constructs and solves Pyomo optimization models. Minimizes environmental impacts while respecting demand and process constraints.
+    Constructs and solves Pyomo optimization models. Minimizes environmental impacts or costs while respecting demand and process constraints.
 
     [:lucide-arrow-right: `optimizer`](optimizer.md)
 

@@ -217,32 +217,28 @@ class OptimizationModelInputs(BaseModel):
     )
 
     # ==================== Economic Parameters ====================
-    # Prices for first-level background purchases. These are applied only to direct
-    # foreground demands for background products and are not recursively propagated
-    # through the background inventory.
+    # Only used by the cost objective. Prices apply to the background products the
+    # foreground purchases directly (intermediate flows); they are not propagated
+    # through the background supply chains.
     # ========================================================================
 
-    intermediate_costs_cap: Optional[Dict[Tuple[str, int], float]] = Field(
+    intermediate_flow_prices: Optional[Dict[Tuple[str, int], float]] = Field(
         None,
         description=(
-            "Time-specific prices for installation-related first-level background "
-            "purchases. Maps (intermediate_flow, system_time) to price per real unit."
+            "Market price per unit of an intermediate flow. Maps (intermediate_flow, "
+            "system_time) to price. Missing entries are treated as free."
         ),
     )
-    intermediate_costs_op: Optional[Dict[Tuple[str, int], float]] = Field(
-        None,
-        description=(
-            "Time-specific prices for operation-related first-level background "
-            "purchases. Maps (intermediate_flow, system_time) to price per real unit."
-        ),
-    )
-    discount_rate: Optional[float] = Field(
-        None,
-        description="Discount rate for cost objective, e.g. 0.05 for 5%.",
+    discount_rate: float = Field(
+        0.0,
+        ge=0.0,
+        description="Annual discount rate of the cost objective, e.g. 0.05 for 5%.",
     )
     discount_reference_year: Optional[int] = Field(
         None,
-        description="Reference year for discounting. Defaults to min(SYSTEM_TIME).",
+        description=(
+            "Year to which costs are discounted. Defaults to the first system time."
+        ),
     )
 
     category_impact_limits: Optional[Dict[Tuple[str, int], float]] = Field(
@@ -497,21 +493,11 @@ class OptimizationModelInputs(BaseModel):
             )
             validate_keys([key[2]], system_times, "characterization system times")
 
-        if data.get("intermediate_costs_cap") is not None:
-            for key in data["intermediate_costs_cap"].keys():
-                validate_keys([key[0]], intermediate_flows, "intermediate_costs_cap intermediate flows")
-                validate_keys([key[1]], system_times, "intermediate_costs_cap system times")
-
-        if data.get("intermediate_costs_op") is not None:
-            for key in data["intermediate_costs_op"].keys():
-                validate_keys([key[0]], intermediate_flows, "intermediate_costs_op intermediate flows")
-                validate_keys([key[1]], system_times, "intermediate_costs_op system times")
-
-        if data.get("discount_rate") is not None:
-            if data["discount_rate"] < 0:
-                raise ValueError(
-                    f"discount_rate must be non-negative, got {data['discount_rate']}"
-                )
+        if data.get("intermediate_flow_prices") is not None:
+            for flow, time in data["intermediate_flow_prices"].keys():
+                context = "intermediate_flow_prices"
+                validate_keys([flow], intermediate_flows, f"{context} flows")
+                validate_keys([time], system_times, f"{context} system times")
 
         if data.get("category_impact_limits") is not None:
             for key in data["category_impact_limits"].keys():
@@ -1012,6 +998,7 @@ class OptimizationModelInputs(BaseModel):
             - Dictionary of scaling factors used:
                 - "foreground": Scale factor for all foreground tensors and demand
                 - "characterization": Dict mapping each category to its scale factor
+                - "cost": Scale factor for intermediate flow prices
         """
         # Deep copy to preserve raw data
         scaled = copy.deepcopy(self)
@@ -1096,6 +1083,17 @@ class OptimizationModelInputs(BaseModel):
             scaled.cumulative_category_impact_limits = {
                 cat: lim / (fg_scale * cat_scales.get(cat, 1.0))
                 for cat, lim in self.cumulative_category_impact_limits.items()
+            }
+
+        # 5. Scale prices. A cost is price * purchased amount, and purchased amounts
+        # carry the foreground scale:
+        # real_cost = scaled_cost * fg_scale * cost_scale.
+        prices = self.intermediate_flow_prices or {}
+        cost_scale = max((abs(v) for v in prices.values()), default=1.0) or 1.0
+        scaling_factors["cost"] = cost_scale
+        if self.intermediate_flow_prices is not None:
+            scaled.intermediate_flow_prices = {
+                k: v / cost_scale for k, v in prices.items()
             }
 
         # NOTE: Process limits are NOT scaled because var_installation is in real units
@@ -1191,18 +1189,7 @@ class ModelInputManager:
             "mapping": lca_processor.mapping,
             "characterization": lca_processor.characterization,
             "operation_time_limits": lca_processor.operation_time_limits,
-            "intermediate_costs_cap": (
-                lca_processor.intermediate_costs_cap
-                if lca_processor.intermediate_costs_cap
-                else None
-            ),
-            "intermediate_costs_op": (
-                lca_processor.intermediate_costs_op
-                if lca_processor.intermediate_costs_op
-                else None
-            ),
-            "discount_rate": None,
-            "discount_reference_year": None,
+            "intermediate_flow_prices": lca_processor.intermediate_flow_prices or None,
             # Vintage parameters from database (if any)
             "foreground_technosphere_vintages": lca_processor.foreground_technosphere_vintages,
             "foreground_biosphere_vintages": lca_processor.foreground_biosphere_vintages,
@@ -1389,8 +1376,7 @@ class ModelInputManager:
                 "flow_limits_max",
                 "flow_limits_min",
                 "category_impact_limits",
-                "intermediate_costs_cap",
-                "intermediate_costs_op",
+                "intermediate_flow_prices",
                 "foreground_technosphere_vintages",
                 "foreground_biosphere_vintages",
                 "foreground_production_vintages",
@@ -1465,8 +1451,7 @@ class ModelInputManager:
                 "flow_limits_max",
                 "flow_limits_min",
                 "category_impact_limits",
-                "intermediate_costs_cap",
-                "intermediate_costs_op",
+                "intermediate_flow_prices",
                 "foreground_technosphere_vintages",
                 "foreground_biosphere_vintages",
                 "foreground_production_vintages",

@@ -577,6 +577,8 @@ class LCAConfig(BaseModel):
         characterization_methods: List of characterization method configurations.
         background_inventory: Configuration for background inventory data calculation.
         foreground_db_name: Name of the foreground Brightway database.
+        price_attribute: Name of the background node attribute that holds market
+            prices (e.g. "market_price"). `None` (default) reads no prices.
     """
 
     demand: Dict[bd.backends.proxies.Activity, TemporalDistribution]
@@ -588,6 +590,14 @@ class LCAConfig(BaseModel):
     foreground_db_name: str = Field(
         "foreground",
         description="Name of the foreground Brightway database.",
+    )
+    price_attribute: Optional[str] = Field(
+        None,
+        description="Name of the background node attribute holding the market "
+        "price per unit of the node's reference product, e.g. 'market_price' as "
+        "written by `optimex.economics.set_market_prices`. Prices are read for "
+        "every background product the foreground purchases directly and are "
+        "needed for the cost objective. `None` (default) reads no prices.",
     )
 
     class Config:
@@ -660,12 +670,8 @@ class LCADataProcessor:
         self._foreground_biosphere = {}
         self._foreground_production = {}
         self._background_inventory = {}
-        self._background_costs = {}
-        self._intermediate_costs_cap = {}
-        self._intermediate_costs_op = {}
-        self._cost_relevant_cap_flows = set()
-        self._cost_relevant_op_flows = set()
         self._mapping = {}
+        self._intermediate_flow_prices = {}  # (intermediate flow, year) -> price
         self._characterization = {}
         self._operation_flow = {}
         self._operation_time_limits = {}
@@ -679,12 +685,12 @@ class LCADataProcessor:
 
         self._parse_demand()
         self._construct_foreground_tensors()
-        self._construct_background_costs()
         self._prepare_background_inventory()
         self._construct_characterization_tensor()
         self._prune_uncharacterized_flows()
         self._construct_mapping_matrix()
-        self._construct_intermediate_costs()
+        if config.price_attribute is not None:
+            self._construct_intermediate_flow_prices(config.price_attribute)
 
     @property
     def processes(self) -> dict:
@@ -742,34 +748,14 @@ class LCADataProcessor:
         return self._background_inventory
 
     @property
-    def background_costs(self) -> dict:
-        """Read-only access to background market prices by database and flow."""
-        return self._background_costs
-
-    @property
-    def intermediate_costs_cap(self) -> dict:
-        """Read-only access to installation-related intermediate flow prices."""
-        return self._intermediate_costs_cap
-
-    @property
-    def intermediate_costs_op(self) -> dict:
-        """Read-only access to operation-related intermediate flow prices."""
-        return self._intermediate_costs_op
-
-    @property
-    def cost_relevant_cap_flows(self) -> set:
-        """Read-only access to intermediate flows used by installation edges."""
-        return self._cost_relevant_cap_flows
-
-    @property
-    def cost_relevant_op_flows(self) -> set:
-        """Read-only access to intermediate flows used by operation edges."""
-        return self._cost_relevant_op_flows
-
-    @property
     def mapping(self) -> dict:
         """Read-only access to the mapping matrix."""
         return self._mapping
+
+    @property
+    def intermediate_flow_prices(self) -> dict:
+        """Read-only access to the market prices of intermediate flows per year."""
+        return self._intermediate_flow_prices
 
     @property
     def characterization(self) -> dict:
@@ -921,7 +907,7 @@ class LCADataProcessor:
               to amount for product production.
             - self._products: dict mapping product codes to their names.
             - self._intermediate_flows: dict mapping background intermediate flow codes
-              to identity metadata used for lookup in background databases.
+              to their names.
             - self._elementary_flows: dict mapping elementary flow codes to their names.
             - self._processes: dict mapping process codes to their names.
             - self._operation_flow: dict mapping (process_code, flow_code) to boolean
@@ -1101,10 +1087,9 @@ class LCADataProcessor:
                             }
                         )
                         if exc.get("operation"):
-                            self._operation_flow.update({(act["code"], input_code): True})
-                            self._cost_relevant_op_flows.add(input_code)
-                        else:
-                            self._cost_relevant_cap_flows.add(input_code)
+                            self._operation_flow.update(
+                                {(act["code"], input_code): True}
+                            )
                         # Store identity attributes, not just the code: premise assigns a
                         # different code to the same activity in each scenario database, so
                         # background activities are resolved across databases by
@@ -1114,10 +1099,7 @@ class LCADataProcessor:
                             {
                                 "name": input_name,
                                 "reference product": exc.input.get("reference product"),
-                                "product": exc.input.get("product")
-                                or exc.input.get("reference product"),
                                 "location": exc.input.get("location"),
-                                "unit": exc.input.get("unit"),
                             },
                         )
 
@@ -1249,126 +1231,6 @@ class LCADataProcessor:
             logger.info(f"Reused cached inventory for database: {db_name}")
 
         return _assemble_inventory_tensor(db_name, intermediate_flows, cutoff)
-
-    def _resolve_background_activity(self, db_name: str, flow_code: str):
-        """
-        Resolve an intermediate flow to the equivalent activity in a background DB.
-
-        The model stays keyed by the foreground reference code. Activities in each
-        background database are resolved by their ecoinvent identity attributes
-        when available, with code lookup kept as a backward-compatible fallback.
-        """
-        db = bd.Database(name=db_name)
-        meta = self._intermediate_flows.get(flow_code)
-
-        if isinstance(meta, dict):
-            lookup = {"database": db_name, "name": meta["name"]}
-            product = meta.get("reference product") or meta.get("product")
-            if product is not None:
-                lookup["product"] = product
-            if meta.get("location") is not None:
-                lookup["location"] = meta["location"]
-            if meta.get("unit") is not None:
-                lookup["unit"] = meta["unit"]
-
-            try:
-                return bd.get_node(**lookup)
-            except Exception as metadata_error:
-                try:
-                    return db.get(code=flow_code)
-                except Exception as code_error:
-                    raise ValueError(
-                        "Could not resolve background activity: "
-                        f"database='{db_name}', flow_code='{flow_code}', "
-                        f"metadata_lookup={lookup}. Metadata error: "
-                        f"{metadata_error}; code error: {code_error}"
-                    ) from metadata_error
-
-        # Backward compatibility (e.g. legacy pickled inputs): code lookup.
-        return db.get(code=flow_code)
-
-    def _get_background_activity_for_cost(self, db: bd.Database, flow_code: str):
-        """Resolve the activity used to read a cost-relevant market price."""
-        try:
-            return self._resolve_background_activity(db.name, flow_code)
-        except Exception as error:
-            raise ValueError(
-                "Could not resolve background activity for market price lookup: "
-                f"database='{db.name}', flow_code='{flow_code}'. Error: {error}"
-            ) from error
-
-    def _cost_relevance_label(self, flow_code: str) -> str:
-        """Return a human-readable cap/op relevance label for a background flow."""
-        is_cap = flow_code in self._cost_relevant_cap_flows
-        is_op = flow_code in self._cost_relevant_op_flows
-        if is_cap and is_op:
-            return "cap and op"
-        if is_cap:
-            return "cap"
-        if is_op:
-            return "op"
-        return "not cost-relevant"
-
-    def _construct_background_costs(self) -> None:
-        """
-        Read market prices for cost-relevant intermediate flows from background databases.
-
-        Market prices are stored as attributes of time-specific background nodes.
-        For each direct background product used by the foreground system, this method
-        resolves the corresponding node in every configured background database and
-        reads its ``market_price`` attribute. The same background activity resolver
-        is used as for inventory calculation, so equivalent premise activities can
-        be matched across databases by their identity metadata.
-
-        Missing prices are logged as warnings because an omitted price would otherwise
-        make a cost-relevant input appear cost-free in the optimization.
-        """
-        cost_relevant_flows = (
-            self._cost_relevant_cap_flows | self._cost_relevant_op_flows
-        )
-        if not cost_relevant_flows:
-            return
-
-        for db_name in self.background_dbs:
-            db = bd.Database(name=db_name)
-            for flow_code in cost_relevant_flows:
-                flow_meta = self._intermediate_flows.get(flow_code, "<unknown>")
-                flow_name = (
-                    flow_meta.get("name", "<unknown>")
-                    if isinstance(flow_meta, dict)
-                    else flow_meta
-                )
-                relevance = self._cost_relevance_label(flow_code)
-
-                try:
-                    activity = self._get_background_activity_for_cost(db, flow_code)
-                except Exception as e:
-                    logger.warning(
-                        "Missing background node for market price lookup: "
-                        "database='{}', flow_code='{}', flow_name='{}', "
-                        "relevance='{}'. Error: {}",
-                        db_name,
-                        flow_code,
-                        flow_name,
-                        relevance,
-                        e,
-                    )
-                    continue
-
-                price = activity.get("market_price")
-                if price is None:
-                    logger.warning(
-                        "Missing market_price for cost-relevant background flow: "
-                        "database='{}', flow_code='{}', flow_name='{}', "
-                        "relevance='{}'.",
-                        db_name,
-                        flow_code,
-                        flow_name,
-                        relevance,
-                    )
-                    continue
-
-                self._background_costs[(db_name, flow_code)] = price
 
     def parallel_inventory_tensor_calculation(
         self, n_jobs: Optional[int] = None
@@ -1670,39 +1532,95 @@ class LCADataProcessor:
             "based on linear interpolation."
         )
 
-    def _construct_intermediate_costs(self) -> None:
+    def _construct_intermediate_flow_prices(self, price_attribute: str) -> None:
         """
-        Interpolate background market prices to system time points.
+        Read market prices of the intermediate flows and map them to system time.
 
-        Background prices are read per time-specific background database as
-        ``background_costs[(db_name, flow_code)]``. This method uses the same
-        mapping matrix as background inventories to calculate system-time prices
-        and writes them to the cap/op cost dictionaries according to the foreground
-        edge roles identified during foreground tensor construction.
+        Each intermediate flow is a background product purchased directly by the
+        foreground. Its price is read from the `price_attribute` of the equivalent
+        node in every background database, resolved the same way as for the
+        background inventory, and interpolated to system time with the mapping
+        matrix, exactly like the inventories.
+
+        A flow without a price in any database is reported once and left out, so
+        the optimizer treats it as free. A flow priced in some databases but not in
+        others raises an error: interpolating with a missing price would silently
+        pull the price towards zero.
+
+        Side Effects
+        ------------
+        Updates
+            - `self._intermediate_flow_prices`: dict with keys
+              (intermediate flow code, year) and price values.
+
+        Raises
+        ------
+        ValueError
+            If a flow is priced in some, but not all, relevant background databases.
         """
-        cost_relevant_flows = (
-            self._cost_relevant_cap_flows | self._cost_relevant_op_flows
+        # Only databases that carry weight in some system year affect the prices.
+        relevant_dbs = sorted(
+            {db for (db, _), weight in self._mapping.items() if weight}
         )
-        if not cost_relevant_flows:
-            return
 
-        for flow_code in cost_relevant_flows:
-            for year in self._system_time:
-                interpolated_price = sum(
-                    self._background_costs.get((db_name, flow_code), 0)
-                    * self._mapping.get((db_name, year), 0)
-                    for db_name in self.background_dbs
-                )
+        unpriced, incomplete = [], {}
+        for flow_code, meta in self._intermediate_flows.items():
+            prices = {}
+            for db_name in relevant_dbs:
+                try:
+                    if isinstance(meta, dict):
+                        node = _resolve_node(db_name, meta)
+                    else:
+                        node = bd.Database(db_name).get(code=flow_code)
+                except Exception:
+                    continue
+                if (price := node.get(price_attribute)) is not None:
+                    prices[db_name] = float(price)
 
-                if flow_code in self._cost_relevant_cap_flows:
-                    self._intermediate_costs_cap[(flow_code, year)] = (
-                        interpolated_price
+            if not prices:
+                unpriced.append(flow_code)
+                continue
+            if len(prices) < len(relevant_dbs):
+                incomplete[flow_code] = sorted(set(relevant_dbs) - set(prices))
+                continue
+
+            for (db_name, year), weight in self._mapping.items():
+                if weight:
+                    key = (flow_code, year)
+                    self._intermediate_flow_prices[key] = (
+                        self._intermediate_flow_prices.get(key, 0.0)
+                        + weight * prices[db_name]
                     )
 
-                if flow_code in self._cost_relevant_op_flows:
-                    self._intermediate_costs_op[(flow_code, year)] = (
-                        interpolated_price
-                    )
+        if incomplete:
+            details = "; ".join(
+                f"{self._flow_label(code)} missing in {dbs}"
+                for code, dbs in incomplete.items()
+            )
+            raise ValueError(
+                f"Background products are priced ('{price_attribute}') in some "
+                f"background databases but not in others: {details}. Set a price in "
+                "every background database, e.g. with "
+                "`optimex.economics.set_market_prices`."
+            )
+        if unpriced:
+            logger.warning(
+                f"{len(unpriced)} of {len(self._intermediate_flows)} directly "
+                f"purchased background products have no '{price_attribute}' and are "
+                f"treated as free in the cost objective: "
+                f"{', '.join(self._flow_label(code) for code in unpriced)}"
+            )
+        logger.info(
+            f"Read market prices of {len(self._intermediate_flows) - len(unpriced)} "
+            "intermediate flows."
+        )
+
+    def _flow_label(self, flow_code: str) -> str:
+        """Human-readable label of an intermediate flow for messages."""
+        meta = self._intermediate_flows.get(flow_code)
+        if isinstance(meta, dict):
+            return f"'{meta['name']}' ({meta.get('location')}, code '{flow_code}')"
+        return f"'{flow_code}'"
 
     def _characterization_functions(self, method: tuple) -> dict:
         """

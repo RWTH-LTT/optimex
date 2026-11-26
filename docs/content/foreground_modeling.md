@@ -7,7 +7,7 @@ tags:
 
 # Foreground Modeling
 
-The foreground database contains the candidate processes that `optimex` will optimize — these are the processes whose capacity installation and operational dispatch are the decision variables. This guide explains the `optimex`-specific attributes you need to add to standard Brightway processes. For the underlying concepts (temporal distribution, process time vs system time, convolution), see the [Theory](theory.md) page.
+The foreground database contains the candidate processes that `optimex` will optimize — these are the processes whose capacity installation and operational dispatch are the decision variables. This guide explains the `optimex`-specific attributes you need to add to standard Brightway processes. For the underlying concepts (temporal distribution, process time vs system time, convolution), see the [Theory](theory_how_it_works.md) page.
 
 ---
 
@@ -162,7 +162,7 @@ This is what makes optimex agree with a standard LCA of the delivered amount whe
 
 ## The Operation Flag
 
-Exchanges marked with `"operation": True` **scale with the operational level** $\mathbf{o}_{t,v}$, the number of units running. This enables flexible operation where a process can run below its installed capacity $\mathbf{s}_v$ (see [Theory: Flexible Operation](theory.md#step-5-flexible-operation)).
+Exchanges marked with `"operation": True` **scale with the operational level** $\mathbf{o}_{t,v}$, the number of units running. This enables flexible operation where a process can run below its installed capacity $\mathbf{s}_v$ (see [Theory: Flexible Operation](theory_how_it_works.md#step-5-flexible-operation)).
 
 ```python
 "exchanges": [
@@ -306,7 +306,7 @@ The optimizer will choose the mix of processes that minimizes environmental impa
 
 ## Vintage-Dependent Parameters
 
-Real-world technologies improve over time. An EV manufactured in 2025 will have different characteristics than one manufactured in 2040. `optimex` supports **vintage-dependent parameters** to model how foreground exchanges change based on when a process is installed (see [Theory: Foreground Evolution](theory.md#foreground-evolution-vintage-dependent-parameters)).
+Real-world technologies improve over time. An EV manufactured in 2025 will have different characteristics than one manufactured in 2040. `optimex` supports **vintage-dependent parameters** to model how foreground exchanges change based on when a process is installed (see [Theory: Foreground Evolution](theory_how_it_works.md#step-4-modeling-temporal-evolution)).
 
 ### The Concept
 

@@ -19,6 +19,14 @@ Here are some examples on how you can use the `optimex` package.
 
     [:lucide-arrow-right: View Example](./basic_example.md)
 
+-   :lucide-badge-euro:{ style="color: #ffa94d; margin-right: 0.25rem;" } **Basic Cost Example**
+
+    ---
+
+    A self-contained example of the cost objective. Prices background purchases, minimizes discounted costs, and compares the cost minimum with the climate minimum and a cost minimum under a carbon budget.
+
+    [:lucide-arrow-right: View Example](./basic_example_econ.md)
+
 -   :lucide-flask-conical:{ style="color: #69db7c; margin-right: 0.25rem;" } **Methanol & Pig Iron Case Study**
 
     ---

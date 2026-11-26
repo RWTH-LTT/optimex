@@ -9,56 +9,31 @@ tags:
 
 Optimization model construction and solving for temporal LCA-based pathway optimization.
 
-This module creates and solves Pyomo optimization models that minimize
-environmental impacts or economic costs over time while meeting demand
-constraints and respecting process limits.
+This module creates and solves Pyomo optimization models that minimize either an environmental impact category or the discounted cost of background purchases over time, while meeting demand constraints and respecting process limits.
 
 ## Key Functions
 
 - **`create_model()`**: Constructs a Pyomo ConcreteModel from optimization inputs
-- **`solve_model()`**: Returns the solved model, objective value in original units, and solver results
+- **`solve_model()`**: Solves the model and returns denormalized results
 
 ## Objectives
 
-`create_model()` supports two objective modes:
+| Objective | Minimizes |
+|-----------|-----------|
+| `objective="environmental"` (default) | `total_impact[objective_category]` |
+| `objective="cost"` | `total_cost`, the discounted cost of the background purchases priced with `intermediate_flow_prices` |
 
-| Objective | Description |
-|-----------|-------------|
-| `objective="environmental"` | Default. Minimize `total_impact[objective_category]` |
-| `objective="cost"` | Minimize `total_cost` from first-level background purchases |
-
-For cost optimization, `objective_category` is required by the current function
-signature but does not determine the cost objective or impose environmental
-limits. Configure those limits separately in the model inputs.
-
-```python
-model = optimizer.create_model(
-    inputs=model_inputs,
-    name="cost_model",
-    objective_category="climate_change",
-    objective="cost",
-)
-```
-
-Cost-related expressions include:
-
-| Expression | Description |
-|------------|-------------|
-| `background_purchase_cap[i, t]` | Installation-related first-level background purchase |
-| `background_purchase_op[i, t]` | Operation-related first-level background purchase |
-| `cost_cap[t]` | Undiscounted installation-related cost in year `t` |
-| `cost_op[t]` | Undiscounted operation-related cost in year `t` |
-| `discount_factor[t]` | Discount factor for year `t` |
-| `total_cost` | Discounted total cost |
+Impact limits apply with either objective. See
+[Objectives](../content/objectives.md).
 
 ## Scaling Convention
 
 The optimization uses a two-tier scaling system for numerical stability:
 
-### Decision Variables (Unscaled Process Units)
+### Decision Variables (Real Units)
 
-- `var_installation[p, v]`: Continuous number of process units installed in vintage `v`
-- `var_operation[p, v, t]`: Operation level of process `p`, vintage `v`, at system time `t`, constrained by available installed capacity
+- `var_installation[p, t]`: Number of process units installed (dimensionless)
+- `var_operation[p, t]`: Operation level (dimensionless, 0 to capacity)
 
 ### Parameters (Scaled Units)
 
@@ -71,23 +46,15 @@ The optimization uses a two-tier scaling system for numerical stability:
 **Characterization parameters** (scaled by `cat_scales[category]`):
 
 - `characterization[c, e, t]`: impact per kg emission
-- `category_impact_limits[(c, t)]` (input field): maximum impact allowed at system time `t`
+- `category_impact_limit[c]`: maximum impact allowed
 
-**Economic parameters** include unscaled prices per product unit:
+**Price parameters** (scaled by `cost_scale`):
 
-- `intermediate_costs_cap[i, t]`: price for installation-related purchases
-- `intermediate_costs_op[i, t]`: price for operation-related purchases
-- `discount_rate`: nonnegative annual discount rate; defaults to zero
-- `discount_reference_year`: reference year for discounting; defaults to the first system time
+- `intermediate_flow_prices[i, t]`: price per unit of intermediate flow
 
-Direct background purchases are converted back to original product units before costs are
-calculated, so the cost objective returned by `solve_model()` is already in the
-monetary unit used by the input prices.
-
-Installation-related purchases need not occur in the installation year.
-Prices and discount factors apply at the system time of each purchase.
-See [Economic Optimization](../content/economic_optimization.md) for the cost
-boundary, price coverage, discounting, and modeling assumptions.
+Cost expressions (`installation_cost`, `operation_cost`, `total_cost`) are in units
+of `fg_scale * cost_scale`. `solve_model()` and `PostProcessor.get_costs()` return
+them in the currency of the input prices.
 
 ## Module Reference
 
