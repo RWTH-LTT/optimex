@@ -6,6 +6,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+* Added a choice of modeling backend: `create_model(..., backend="pyomo")`
+  (default) builds a Pyomo `ConcreteModel` as before, `backend="linopy"` builds
+  the same model from arrays with [linopy](https://linopy.readthedocs.io)
+  (`pip install optimex[linopy]`), which is faster for large systems. Both are
+  built from one backend-independent formulation (`optimex.formulation`) and
+  live in their own modules (`optimex.pyomo_backend`,
+  `optimex.linopy_backend`). `solve_model()` solves either and stores the
+  solution under the same names, so the `PostProcessor` and
+  `save_solved_model()` work with both
+  ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
+* Added `create_model(..., aggregate_vintages=True)`: processes whose vintages
+  operate identically get one operation variable per year
+  (`var_operation_total`) and a capacity stock carried forward year by year
+  (`var_capacity_total`) instead of one operation variable per vintage and year.
+  The optimum is the same with far fewer variables and constraints. These
+  processes have no `var_operation[p, v, t]`; read per-vintage operation with
+  the new `optimizer.operation_value()`. Off by default
+  ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
+* Model construction no longer slows down disproportionately for large systems:
+  coupling constraints are only built for coupled pairs, product balances only
+  visit the processes that produce or consume the product, and all expressions
+  are flat linear expressions instead of nested ones. Building a hydrogen trade
+  system with 816 processes went from 195 s to 11 s at the same optimum
+  ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
+* `PostProcessor.get_production()`, `get_operation()`,
+  `get_production_capacity()`, `plot_capacity_balance()` and
+  `plot_utilization_heatmap()` no longer scan all active vintages for every
+  process and year, which was quadratic in the model size (`get_production()`
+  for 216 processes: 71 s to 0.1 s). Their results are unchanged
+  ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
+* The objective is normalized by its largest coefficient, which kept impact
+  coefficients from falling below the solvers' optimality tolerances.
+  `solve_model()` still returns the objective in real units, and the factor is
+  stored as `model.scales["objective"]`
+  ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
+* Changed model components ([#74](https://github.com/RWTH-LTT/optimex/pull/74)):
+  * Deployment limits are bounds of `var_installation` instead of the
+    `ProcessDeploymentLimitMax`/`Min` constraints, which are removed.
+    Operation, cumulative and cumulative impact limits that cannot bind (infinite
+    maximum, non-positive minimum) no longer get a constraint. This also fixes
+    `appsi_gurobi`, which rejected constraints against infinite limits
+  * `ProcessCouplingConstraint`, `FlowLimitMax`/`Min`,
+    `CumulativeFlowLimitMax`/`Min` and `CategoryImpactLimits` are indexed only
+    over the limited or coupled entries
+  * `scaled_technosphere_flow`, `scaled_biosphere_flow`,
+    `scaled_internal_demand_flow` and `specific_impact` are stored as
+    coefficients and only become Pyomo expressions when indexed, and
+    `scaled_inventory`, `total_elementary_flow` and `total_intermediate_flow` are
+    built on access. Indexing them and `pyo.value()` work as before; they are no
+    longer Pyomo `Expression` components. `optimizer.expression_value()` reads
+    their solved values
+  * Variables that appear in no constraint get their lower bound (or 0) after
+    solving instead of no value
+* `OptimizationModelInputs.get_scaled_copy()` copies the inputs one level deep
+  instead of deep-copying them ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
 
 ## [0.8.0] - 2026-11-26
 * Added a cost objective: `create_model(..., objective="cost")` minimizes the

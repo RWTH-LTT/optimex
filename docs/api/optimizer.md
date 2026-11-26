@@ -13,7 +13,9 @@ This module creates and solves Pyomo optimization models that minimize either an
 
 ## Key Functions
 
-- **`create_model()`**: Constructs a Pyomo ConcreteModel from optimization inputs
+- **`create_model()`**: Constructs the model from optimization inputs with the
+  chosen backend: a [Pyomo](pyomo_backend.md) `ConcreteModel` (default) or, with
+  `backend="linopy"`, a [linopy model](linopy_backend.md)
 - **`solve_model()`**: Solves the model and returns denormalized results
 
 ## Objectives

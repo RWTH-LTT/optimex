@@ -56,6 +56,7 @@ tracker = "https://github.com/TimoDiepers/optimex/issues"
 # seems to work, at least for now
 testing = [
     "optimex",
+    "linopy",
     "pytest",
     "pytest-cov",
     "python-coveralls"
@@ -83,6 +84,11 @@ umfpack = [
 ]
 gurobi = [
     "gurobipy"
+]
+# Array-based model building (`create_model(..., backend="linopy")`), much faster
+# than Pyomo for large systems
+linopy = [
+    "linopy"
 ]
 
 [tool.setuptools]

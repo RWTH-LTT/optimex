@@ -32,6 +32,8 @@ model = optimizer.create_model(
 | `objective` | What to minimize: `"environmental"` (default) or `"cost"`, see [Choosing an Objective](choosing_objective/index.md) |
 | `objective_category` | Impact category to minimize; required for `objective="environmental"`, ignored for `"cost"` |
 | `debug_path` | Optional path of an LP file to write the model to |
+| `backend` | `"pyomo"` (default) or `"linopy"`, see [Choosing a Backend](#choosing-a-backend) |
+| `aggregate_vintages` | Share one operation variable between identical vintages, see [Large Models](#large-models) |
 
 ??? cost "Cost objective: building the model"
     To minimize costs instead, pass `objective="cost"` and leave out the category. This needs market prices in the inputs, see [Minimizing Costs](minimizing_costs.md).
@@ -45,8 +47,28 @@ that is not in the inputs, or the cost objective without prices raise a
 `ValueError` before anything is built.
 
 !!! note "Rebuild after changing inputs"
-    `create_model()` copies the inputs into the Pyomo model. Build a new model for
+    `create_model()` copies the inputs into the model. Build a new model for
     every set of inputs instead of changing the inputs of an existing one.
+
+### Choosing a Backend
+
+The problem is formulated once and built by one of two backends. Both give the
+same optimum, and `solve_model()` and the [PostProcessor](postprocessing.md)
+work with either.
+
+| Backend | Builds | Use it for |
+|---------|--------|------------|
+| `"pyomo"` (default) | A Pyomo `ConcreteModel` | Working on the model itself: fixing variables, adding constraints, IIS files, Pyomo's solver interfaces |
+| `"linopy"` | A linopy model, from arrays | Large systems (thousands of processes), where it builds several times faster. Needs `pip install optimex[linopy]` |
+
+```python
+model = optimizer.create_model(
+    inputs=model_inputs,
+    name="my_optimization",
+    objective_category="climate_change",
+    backend="linopy",
+)
+```
 
 ### Inspecting the Formulation
 
@@ -94,6 +116,80 @@ optimizer.solve_model(model, solver_name="gurobi", solver_options={"TimeLimit": 
 ```
 
 See [Installation](installation.md#solver-requirements) for installing a solver.
+
+### Large Models
+
+For systems with thousands of processes, build the model with
+[linopy](https://linopy.readthedocs.io) instead of Pyomo (`pip install
+optimex[linopy]`). The formulation is the same; linopy receives every constraint
+block as arrays, which builds and hands over large models several times faster:
+
+```python
+model = optimizer.create_model(
+    inputs,
+    name="large",
+    objective_category="climate_change",
+    aggregate_vintages=True,
+    backend="linopy",
+)
+solved_model, objective_value, results = optimizer.solve_model(
+    model, solver_name="gurobi"  # or "highs", "glpk", "cplex", ...
+)
+```
+
+`solve_model()` stores the solution on the model under the same names as on a
+Pyomo model (`var_installation`, `total_impact`, `specific_impact`, ...), as
+plain numbers, so the [PostProcessor](postprocessing.md),
+`optimizer.operation_value()` and `save_solved_model()` work unchanged.
+`results.solver.termination_condition` holds Pyomo's termination condition.
+What needs Pyomo are its own tools: fixing variables, adding constraints to the
+model, IIS files, and Pyomo solver interfaces. The linopy model itself is
+`model.model`. Gurobi and HiGHS are called in memory, other solvers through an
+LP file.
+
+With many processes and long horizons, most of the model is the per-vintage
+operation: one variable per process, vintage and year. If the vintages of a
+process all run identically (no vintage-dependent operation flows, operation
+flows constant over the operation window), they can share one operation
+variable per year:
+
+```python
+model = optimizer.create_model(
+    inputs,
+    name="large",
+    objective_category="climate_change",
+    aggregate_vintages=True,
+)
+```
+
+The optimum is the same. Processes whose vintages differ keep per-vintage
+dispatch. Aggregated processes have `var_operation_total[p, t]` instead of
+`var_operation[p, v, t]`, and their capacity is carried forward year by year
+rather than summed over all active vintages, which keeps the constraint matrix
+sparse. The [PostProcessor](postprocessing.md) works as usual: it splits the
+operation onto the vintages in proportion to their capacity. To read the
+per-vintage operation yourself, use `optimizer.operation_value(model, p, v, t)`,
+which works with and without aggregation. To fix per-vintage operation (e.g. to
+evaluate a given design), build without aggregation.
+
+Pyomo's default `gurobi` interface writes the model to an LP file and reads the
+solution back from disk. With `gurobipy` installed, `gurobi_direct_v2` passes
+the model to Gurobi in memory instead, which saves several seconds on large
+models:
+
+```python
+optimizer.solve_model(model, solver_name="gurobi_direct_v2")
+```
+
+For large LPs, the barrier method without crossover is often faster than
+Gurobi's default. The solution is optimal, but it may not be a vertex of the
+feasible region:
+
+```python
+optimizer.solve_model(
+    model, solver_name="gurobi", solver_options={"Method": 2, "Crossover": 0}
+)
+```
 
 ---
 
