@@ -8,8 +8,10 @@ tags:
 
 # Minimizing Costs
 
-The cost objective minimizes the discounted cost of the background products the
-foreground buys directly. It needs market prices, described in
+The cost objective minimizes the discounted economic cost, i.e. money, of the
+background products the foreground buys directly. It does not mean environmental
+costs or damages; environmental impacts stay separate and can be limited by
+[constraints](constraints.md). It needs market prices, described in
 [Cost Modeling](cost_modeling.md); everything else is the same as for
 [minimizing impacts](minimizing_impacts.md).
 

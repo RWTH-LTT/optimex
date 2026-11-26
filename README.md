@@ -10,23 +10,38 @@
 [![codecov](https://codecov.io/gh/RWTH-LTT/optimex/graph/badge.svg)](https://codecov.io/gh/RWTH-LTT/optimex)
 [![PyPI - Version](https://img.shields.io/pypi/v/optimex?color=%2300549f)](https://pypi.org/project/optimex/)
 [![Conda Version](https://img.shields.io/conda/v/diepers/optimex?label=conda)](https://anaconda.org/diepers/optimex)
-[![Conda - License](https://img.shields.io/conda/l/diepers/optimex)](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
+[![Conda - License](https://img.shields.io/conda/l/diepers/optimex)](https://github.com/RWTH-LTT/optimex/blob/main/LICENSE)
 [![paper](https://img.shields.io/badge/ES%26T-10.1021%2Facs.est.6c06868-blue)](https://doi.org/10.1021/acs.est.6c06868)
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/TimoDiepers/optimex/main?urlpath=%2Fdoc%2Ftree%2Fnotebooks%2Fbasic_optimex_example.ipynb)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/RWTH-LTT/optimex/main?urlpath=%2Fdoc%2Ftree%2Fnotebooks%2Fbasic_example.ipynb)
 
 ## What is optimex?
 
-`optimex` is an open-source Python package for **time-explicit Life Cycle Optimization (LCO)** — a framework that finds optimal technology transition pathways while fully accounting for *when* emissions occur and *how* the product systems and technologies evolve over time.
+`optimex` is an open-source Python package for **time-explicit Life Cycle Optimization (LCO)** — a framework that finds optimal technology transition pathways while fully accounting for *when* emissions occur and *how* the product systems and technologies evolve over time. You choose what to minimize, an environmental impact or economic costs, and constrain the rest.
 
 If you already do Life Cycle Assessment (LCA) with [Brightway](https://brightway.dev), `optimex` lets you take your existing product system models, temporalize them, and turn them into fully-fledged optimization problems — without having to rebuild anything from scratch.
 
 ## Why LCA users need this
 
-Standard LCA tells you the environmental impact of a predefined product system. But what if you want to choose *between* competing technologies, or find the best deployment schedule for a set of processes over a 25-year horizon? That's the domain of **Life Cycle Optimization**. LCO extends LCA by treating technology selection and capacity planning as decision variables, and minimizes an environmental objective subject to system constraints. `optimex` can also minimize costs, keeping environmental limits as constraints.
+Standard LCA tells you the environmental impact of a predefined product system. But what if you want to choose *between* competing technologies, or find the best deployment schedule for a set of processes over a 25-year horizon? That's the domain of **Life Cycle Optimization**. LCO extends LCA by treating technology selection and capacity planning as decision variables, and minimizes an objective subject to system constraints.
 
 However, both LCA and LCO are traditionally *static*: all flows are collapsed to a single point in time, background supply chains are fixed, and the timing of real-world activities — construction, multi-year operation, end-of-life — is ignored. This matters enormously in a rapidly decarbonizing world where the same technology installed in 2025 versus 2035 carries very different lifecycle impacts.
 
 `optimex` solves this by making both the assessment and the optimization **time-explicit**.
+
+## What can you optimize?
+
+`optimex` minimizes **one objective** and lets you **constrain the others**. The objective is either:
+
+- **An environmental impact** (the default): any impact category of your LCA, e.g. climate change, assessed statically or dynamically (e.g. cumulative radiative forcing), water use, or land use.
+- **Economic costs**: the money spent on the background products your processes buy, e.g. electricity, steel, or natural gas, based on market prices you provide and optionally discounted. These are monetary costs, not environmental costs or damages.
+
+Whatever you minimize, you can limit everything else: annual or cumulative budgets for any impact category, limits on resource and emission flows, and limits on deploying and operating processes. This lets you ask, for example:
+
+- What is the lowest-climate-impact pathway that stays within a water budget?
+- What is the cheapest pathway that stays within a carbon budget?
+- How do costs rise as the carbon budget tightens? Sweeping a limit traces the trade-off between two objectives.
+
+Most studies only need the environmental objective; the cost objective is an optional addition. See [Choosing an Objective](https://optimex.readthedocs.io/en/latest/content/choosing_objective/) in the documentation.
 
 ## Why go time-explicit?
 
@@ -36,7 +51,7 @@ Making your optimization time-explicit unlocks insights that static approaches s
 - **Temporal evolution of technologies** — A process installed in 2030 will be more efficient than one installed today. `optimex` locks in technology parameters at the time of installation (the *vintage*), so improving technologies are correctly credited when they are actually deployed.
 - **Time-varying background systems** — Upstream supply chains decarbonize. `optimex` links foreground demands to time-specific background databases (e.g., generated with [premise](https://premise.readthedocs.io)), so that future electricity, hydrogen, or steel inputs are assessed against future grid mixes rather than today's.
 - **Flexible process operation** - Because `optimex` can differentiate process installation from operation, it can also scale their operation independent of installation. Together with the vintage-tracking abilities, this enables vintage-specific dispatch preferring more efficient vintages.
-- **Dynamic impact assessment** — Characterization factors can vary over time. For climate change, `optimex` directly integrates dynamic LCIA methods from [dynamic_characterization](https://dynamic-characterization.readthedocs.io), enabling radiative forcing, AGWP, or AGTP as objective metrics.
+- **Dynamic impact assessment** — Characterization factors can vary over time. For climate change, `optimex` directly integrates dynamic LCIA methods from [dynamic_characterization](https://dynamic-characterization.readthedocs.io), enabling cumulative radiative forcing or dynamic GWP as metrics, both for the objective and for climate budgets.
 - **Novel transition strategies** — Time-explicit LCO reveals strategies invisible to static models: strategic overcapacity that accepts stranded fossil assets to accelerate clean deployment, preferential dispatch of cleaner vintages, and technology diversification to navigate transient resource bottlenecks.
 
 ## Use Cases
@@ -66,17 +81,19 @@ For optimization, `optimex` uses [Pyomo](https://www.pyomo.org), a powerful open
 
 ```bash
 pip install optimex
+pip install highspy  # an open-source solver, see the docs for others
 ```
 
-More complete installation instructions are available [here](https://optimex.readthedocs.io/en/latest/content/installation/).
+More complete installation instructions, including solvers, are available [here](https://optimex.readthedocs.io/en/latest/content/installation/).
 
 ## Documentation
 
 Full documentation, tutorials, and examples are available at **[optimex.readthedocs.io](https://optimex.readthedocs.io/)**.
 
 - [Getting Started](https://optimex.readthedocs.io/en/latest/content/quickstart/)
+- [User Guide](https://optimex.readthedocs.io/en/latest/content/workflow/)
 - [Examples](https://optimex.readthedocs.io/en/latest/content/examples/)
-- [API Reference](https://optimex.readthedocs.io/en/latest/api/overview/)
+- [API Reference](https://optimex.readthedocs.io/en/latest/api/)
 
 `optimex` builds on [Pyomo](https://github.com/Pyomo/pyomo) and [Brightway](https://docs.brightway.dev/en/latest). For time-explicit LCA without optimization, see [`bw_timex`](https://docs.brightway.dev/projects/bw-timex/en/latest/).
 
@@ -93,8 +110,8 @@ If you use `optimex` in your research, please consider citing our paper:
 
 ## Contributing
 
-[Open an Issue](https://github.com/TimoDiepers/optimex/issues) or [Send a Pull Request](https://github.com/TimoDiepers/optimex/pulls) — contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor setup and workflow.
+[Open an Issue](https://github.com/RWTH-LTT/optimex/issues) or [Send a Pull Request](https://github.com/RWTH-LTT/optimex/pulls) — contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor setup and workflow.
 
 ## License
 
-[BSD 3-Clause License](https://github.com/TimoDiepers/optimex/blob/main/LICENSE)
+[BSD 3-Clause License](https://github.com/RWTH-LTT/optimex/blob/main/LICENSE)

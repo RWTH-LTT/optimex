@@ -8,11 +8,22 @@ tags:
 
 # Time-Explicit Life Cycle Optimization with optimex
 
-`optimex` is an open-source Python package for **time-explicit Life Cycle Optimization (LCO)**. It finds optimal technology transition pathways, minimizing environmental impacts or costs, while accounting for *when* emissions occur and *how* product systems evolve over time.
+`optimex` is an open-source Python package for **time-explicit Life Cycle Optimization (LCO)**. It finds optimal technology transition pathways while accounting for *when* emissions occur and *how* product systems evolve over time. You choose what to minimize, an environmental impact or economic costs, and constrain the rest.
 
 Standard LCA evaluates predefined product systems. But transition planning asks a different question: *which technologies should be deployed, when, and at what scale*? That is the domain of Life Cycle Optimization. In fast-changing energy and industrial systems, static formulations can be misleading because construction, operation, and end-of-life happen at different times, while background supply chains and technology performance evolve in parallel.
 
-`optimex` closes this gap by combining temporalized LCA with optimization in one workflow. It finds the pathway with the lowest impact in a chosen category, or the cheapest pathway that stays within time-specific and cumulative environmental limits, such as a carbon budget. Comparing both shows what environmental targets cost.
+`optimex` closes this gap by combining temporalized LCA with optimization in one workflow.
+
+---
+
+## What Can You Optimize?
+
+`optimex` minimizes **one objective** and lets you **constrain the others**. The objective is either:
+
+- **An environmental impact** (the default): any impact category of your LCA, e.g. climate change, assessed statically or dynamically, water use, or land use.
+- **Economic costs**: the money spent on the background products your processes buy, e.g. electricity or steel, based on market prices you provide and optionally discounted. These are monetary costs, not environmental costs or damages.
+
+Whatever you minimize, you can limit everything else: annual or cumulative budgets for any impact category, limits on resource and emission flows, and limits on deploying and operating processes. For example, find the lowest-climate-impact pathway within a water budget, or the cheapest pathway within a carbon budget, and sweep the budget to see what each tightening costs. Most studies only need the environmental objective; see [Choosing an Objective](content/choosing_objective/index.md).
 
 [:lucide-rocket: Get Started](content/quickstart.md){ .md-button .md-button--primary } [:fontawesome-brands-github: View on GitHub](https://github.com/RWTH-LTT/optimex){ .md-button }
 
@@ -58,7 +69,7 @@ Time-explicit LCO reveals transition strategies that are invisible to static app
 - **Resource bottleneck navigation** — Time-specific constraints on water use, critical minerals, or other resources force technology diversification, revealing realistic pathways through transient scarcity
 - **Strategic overcapacity** — Early investment in clean technologies can offset stranded fossil assets when the net emission savings outweigh the embodied impacts of idle infrastructure
 - **Cumulative budget compliance** — By tracking exact emission timing alongside dynamic characterization, pathways can be verified against carbon budgets and other absolute limits
-- **Cost-optimal pathways within budgets** — Minimizing costs instead of impacts, with impact limits as constraints, shows the cheapest transition that respects a carbon budget and how costs rise as the budget tightens ([Trade-offs](content/trade_offs.md))
+- **Cost-optimal pathways within budgets** — Minimizing economic costs instead of an impact, with impact limits as constraints, shows the cheapest transition that respects a carbon budget and how costs rise as the budget tightens ([Trade-offs](content/trade_offs.md))
 
 ---
 

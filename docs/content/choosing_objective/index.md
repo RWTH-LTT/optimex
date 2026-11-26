@@ -13,8 +13,13 @@ is the **objective**:
 
 | Objective | Minimizes | Needs | Guide |
 |---|---|---|---|
-| Impacts (default) | Cumulative impact in one impact category over the time horizon | An LCIA method for the category | [Minimizing Impacts](../minimizing_impacts.md) |
-| Costs | Discounted cost of the background products the foreground buys directly | Market prices on the background nodes | [Minimizing Costs](../minimizing_costs.md) |
+| Environmental impact (default) | Cumulative impact in one impact category over the time horizon | An LCIA method for the category | [Minimizing Impacts](../minimizing_impacts.md) |
+| Economic costs | Discounted monetary cost of the background products the foreground buys directly | Market prices on the background nodes | [Minimizing Costs](../minimizing_costs.md) |
+
+"Costs" always means money here, not environmental costs or damages. Whichever
+objective you minimize, the other can be limited by
+[constraints](../constraints.md): impact budgets when minimizing costs, or
+budgets on other impact categories when minimizing one.
 
 Most studies minimize impacts, and the rest of the guide is written for that case.
 If you are not interested in costs, read [Minimizing Impacts](../minimizing_impacts.md)
