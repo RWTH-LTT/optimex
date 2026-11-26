@@ -23,8 +23,9 @@ flowchart LR
 | **3 · [Optimization](optimization/index.md)** | Turn the product system into optimization inputs, add constraints, build and solve the model | [LCA Processing](lca_processing.md), [Constraints](constraints.md), [Solving](solving.md) |
 | **4 · [Results](postprocessing.md)** | Extract and plot installations, operation, impacts, and costs | [Postprocessing](postprocessing.md) |
 
-Step 2 and the LCA processing in step 3 are the expensive ones: building the
-inventories of large background databases takes time. Once the optimization
+The modeling in step 2 is where most of the work goes, and the LCA processing at
+the start of step 3 is where most of the computing time goes: building the
+inventories of large background databases takes a while. Once the optimization
 inputs exist, constraints, solving, and results are fast, so you can save the
 inputs and solve many variants from them.
 
@@ -36,28 +37,24 @@ The guide describes the environmental workflow: minimizing impacts, possibly
 under limits on other impacts. Most studies need nothing more, and all pages are
 written for that case.
 
-Minimizing costs builds on exactly the same workflow and adds three pieces:
-market prices on the background nodes, one setting to read them, and
-`objective="cost"` when building the model. Costs have two pages of their own:
-[Cost Modeling](cost_modeling.md) for the price data (step 2) and
+Minimizing costs builds on exactly the same workflow. Costs have two pages of
+their own, [Cost Modeling](cost_modeling.md) for the price data (step 2) and
 [Minimizing Costs](minimizing_costs.md) for the objective (step 1). Elsewhere,
-the guide only points to them in collapsed boxes like this one, which you can
-skip if you are not interested in costs:
+the guide only points to them in collapsed boxes like the one below, which you
+can skip if you are not interested in costs.
 
-??? cost "Cost objective"
-    Boxes like this only matter for the cost objective.
+??? cost "Cost objective: what costs add to the workflow"
+    | | Impacts only | With costs |
+    |---|---|---|
+    | Background databases with `representative_time` | Required | Required |
+    | LCIA method per impact category | Required | Required if impacts are limited or reported |
+    | Foreground processes with temporal distributions | Required | Required |
+    | Market prices on background nodes | — | [Required](cost_modeling.md#setting-market-prices) |
+    | `LCAConfig` | `characterization_methods` | plus [`price_attribute`](cost_modeling.md#reading-prices) |
+    | `create_model()` | `objective_category="..."` | `objective="cost"` |
 
-| | Impacts only | With costs |
-|---|---|---|
-| Background databases with `representative_time` | Required | Required |
-| LCIA method per impact category | Required | Required if impacts are limited or reported |
-| Foreground processes with temporal distributions | Required | Required |
-| Market prices on background nodes | — | [Required](cost_modeling.md#setting-market-prices) |
-| `LCAConfig` | `characterization_methods` | plus [`price_attribute`](cost_modeling.md#reading-prices) |
-| `create_model()` | `objective_category="..."` | `objective="cost"` |
-
-Inputs with prices serve both objectives: an impact-minimal model still
-[reports its costs](minimizing_impacts.md#costs-of-the-impact-minimum).
+    Inputs with prices serve both objectives: an impact-minimal model still
+    [reports its costs](minimizing_impacts.md#costs-of-the-impact-minimum).
 
 ---
 

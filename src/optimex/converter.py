@@ -1212,25 +1212,27 @@ class ModelInputManager:
 
     def extend_demand(self, years: int) -> OptimizationModelInputs:
         """
-        Extend demand beyond the current horizon by repeating last known values.
+        Extend the time horizon beyond the last demand year.
 
-        This addresses the "end-of-horizon" effect where the optimizer doesn't
-        build capacity near the end because there's no future demand. By extending
-        demand, the model accounts for ongoing production requirements.
+        Counters the end-of-horizon effect: flows after the last system year are not
+        counted, so units installed near the end look cheaper and cleaner than they
+        are. Extending the horizon repeats the last year's demand for `years` more
+        years, so these flows fall inside the horizon.
 
-        Also extends all time-indexed tensors (foreground_technosphere,
-        foreground_biosphere, background_inventory, characterization) by copying
-        the last year's values to the extended years.
+        All year-indexed inputs are extended by repeating their values of the last
+        year: demand, the background database mapping, characterization factors, and
+        intermediate flow prices. Foreground and background tensors are indexed by
+        process time and need no extension. Time-specific limits are not extended.
 
         Parameters
         ----------
         years : int
-            Number of additional years to extend beyond current SYSTEM_TIME.
+            Number of additional years to add after the last system year.
 
         Returns
         -------
         OptimizationModelInputs
-            Updated model inputs with extended time horizon and demand.
+            Updated model inputs with the extended time horizon and demand.
         """
         if self.model_inputs is None:
             raise ValueError("No OptimizationModelInputs to extend.")
@@ -1238,55 +1240,29 @@ class ModelInputManager:
         if years <= 0:
             return self.model_inputs
 
-        # Determine time extension
-        current_times = list(self.model_inputs.SYSTEM_TIME)
-        last_year = max(current_times)
+        inputs = self.model_inputs
+        last_year = max(inputs.SYSTEM_TIME)
         extended_times = list(range(last_year + 1, last_year + 1 + years))
-        new_system_time = current_times + extended_times
 
-        # Extend demand: repeat last value per product
-        extended_demand = dict(self.model_inputs.demand)
-        for product in self.model_inputs.PRODUCT:
-            last_demand = self.model_inputs.demand.get((product, last_year), 0)
-            for t in extended_times:
-                extended_demand[(product, t)] = last_demand
+        def extend(tensor: Optional[Dict], time_position: int) -> Optional[Dict]:
+            """Repeat the entries of the last year for every extended year."""
+            if tensor is None:
+                return None
+            extended = dict(tensor)
+            for key, value in tensor.items():
+                if key[time_position] == last_year:
+                    for t in extended_times:
+                        new_key = list(key)
+                        new_key[time_position] = t
+                        extended[tuple(new_key)] = value
+            return extended
 
-        # Extend foreground_technosphere: (process, flow, tau, system_time)
-        extended_fg_tech = dict(self.model_inputs.foreground_technosphere)
-        for key, value in self.model_inputs.foreground_technosphere.items():
-            if key[3] == last_year:  # key = (p, f, tau, t)
-                for t in extended_times:
-                    extended_fg_tech[(key[0], key[1], key[2], t)] = value
-
-        # Extend foreground_biosphere: (process, elem_flow, tau, system_time)
-        extended_fg_bio = dict(self.model_inputs.foreground_biosphere)
-        for key, value in self.model_inputs.foreground_biosphere.items():
-            if key[3] == last_year:  # key = (p, e, tau, t)
-                for t in extended_times:
-                    extended_fg_bio[(key[0], key[1], key[2], t)] = value
-
-        # Extend background_inventory: (process, elem_flow, tau, system_time)
-        extended_bg_inv = dict(self.model_inputs.background_inventory)
-        for key, value in self.model_inputs.background_inventory.items():
-            if key[3] == last_year:  # key = (p, e, tau, t)
-                for t in extended_times:
-                    extended_bg_inv[(key[0], key[1], key[2], t)] = value
-
-        # Extend characterization: (category, elem_flow, system_time)
-        extended_char = dict(self.model_inputs.characterization)
-        for key, value in self.model_inputs.characterization.items():
-            if key[2] == last_year:  # key = (c, e, t)
-                for t in extended_times:
-                    extended_char[(key[0], key[1], t)] = value
-
-        # Use override to create new model inputs with extended data
         return self.override(
-            SYSTEM_TIME=new_system_time,
-            demand=extended_demand,
-            foreground_technosphere=extended_fg_tech,
-            foreground_biosphere=extended_fg_bio,
-            background_inventory=extended_bg_inv,
-            characterization=extended_char,
+            SYSTEM_TIME=list(inputs.SYSTEM_TIME) + extended_times,
+            demand=extend(inputs.demand, 1),
+            mapping=extend(inputs.mapping, 1),
+            characterization=extend(inputs.characterization, 2),
+            intermediate_flow_prices=extend(inputs.intermediate_flow_prices, 1),
         )
 
     @staticmethod

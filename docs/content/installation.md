@@ -61,7 +61,7 @@ If you just want to get started quickly:
     uv run --with jupyter jupyter lab
     ```
 
-    By default, `juypter lab` will start the server at [http://localhost:8888/lab](http://localhost:8888/lab).
+    By default, `jupyter lab` will start the server at [http://localhost:8888/lab](http://localhost:8888/lab).
 
     !!! tip "One-line `optimex` setup"
         For your convenience, we've prepared a [setup script](https://raw.githubusercontent.com/RWTH-LTT/optimex/refs/heads/main/scripts/uv_setup.py) that initiates a new uv project and fetches our `optimex` example notebook, so you can directly get started. Just run:
@@ -160,7 +160,7 @@ The standard Python package manager.
 
 ### Apple Silicon (M1/M2/M3/M4)
 
-Brightway and `optimex` run natively on Apple Silicon. However, the standard `pypardiso` solver used on Windows and Linux is not compatible with ARM processors. To achieve fast linear algebra calculations, you must use `scikit-umfpack`.
+Brightway and `optimex` run natively on Apple Silicon. However, the `pypardiso` sparse solver used on Windows and Linux is not available for ARM processors. Without it, Brightway falls back to SciPy's slower SuperLU solver. For fast linear algebra, install `scikit-umfpack` (available as `pip install "optimex[umfpack]"`), as described below.
 
 === "uv"
 
@@ -242,7 +242,7 @@ For interactive notebooks:
 To install from source for development:
 
 ```bash
-git clone https://github.com/TimoDiepers/optimex.git
+git clone https://github.com/RWTH-LTT/optimex.git
 cd optimex
 pip install -e ".[dev,docs]"
 ```
@@ -260,7 +260,34 @@ print(optimex.__version__)
 
 ## Solver Requirements
 
-`optimex` uses [Pyomo](https://www.pyomo.org/) for optimization, which requires a solver. By default, it uses [Gurobi](https://www.gurobi.com/), but you can configure other solvers like GLPK, CBC, or HiGHS.
+`optimex` builds its models with [Pyomo](https://www.pyomo.org/), which needs a separate linear programming solver. **No solver is installed with `optimex`**, so install one of these:
+
+| Solver | Install | `solver_name` |
+|---|---|---|
+| [HiGHS](https://highs.dev/) (open source) | `pip install highspy` | `"highs"` |
+| [GLPK](https://www.gnu.org/software/glpk/) (open source) | `conda install -c conda-forge glpk`, or `brew install glpk` (macOS), or `apt install glpk-utils` (Debian/Ubuntu) | `"glpk"` |
+| [Gurobi](https://www.gurobi.com/) (commercial, free for academics) | `pip install "optimex[gurobi]"`, plus a license | `"gurobi"` |
+
+The examples in this documentation use GLPK. Pass the solver to every solve:
+
+```python
+optimizer.solve_model(model, solver_name="glpk")
+```
+
+`solve_model()` uses Gurobi when no `solver_name` is given. To check that a solver is found:
+
+```python
+import pyomo.environ as pyo
+print(pyo.SolverFactory("glpk").available())  # True if GLPK is installed
+```
 
 !!! info "Gurobi License"
     Gurobi offers free academic licenses. Visit [gurobi.com](https://www.gurobi.com/academia/academic-program-and-licenses/) to obtain one.
+
+---
+
+## Next Steps
+
+- [Basic Example](examples/basic_example.md): A complete example that runs from scratch, without ecoinvent
+- [Quick Start](quickstart.md): A condensed reference of the workflow
+- [Workflow Overview](workflow.md): How the user guide is organized

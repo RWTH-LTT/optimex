@@ -7,7 +7,7 @@ tags:
 
 # LCA Processing
 
-With the [background data](background_data.md) and [foreground](foreground_modeling.md) in place, the [optimization](optimization/index.md) starts by turning them into optimization inputs: define the time-specific demand $\mathbf{f}_t$, configure characterization methods (static or [dynamic](theory_scope_and_limits.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and convert them into `OptimizationModelInputs`.
+With the [background data](background_data.md) and [foreground](foreground_modeling.md) in place, the [optimization](optimization/index.md) starts by turning them into optimization inputs: define the demand over time, configure characterization methods (static or [dynamic](theory_scope_and_limits.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and convert them into `OptimizationModelInputs`.
 
 ---
 
@@ -104,11 +104,16 @@ Further options:
 
 ### Temporal Settings
 
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `start_date` | Beginning of the optimization horizon | `datetime(2020, 1, 1)` |
-| `temporal_resolution` | Time step granularity | `"year"`, `"month"`, `"day"` |
-| `time_horizon` | Years for impact accumulation | `100` (for GWP100) |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `start_date` | required | First year of the study, e.g. `datetime(2020, 1, 1)` |
+| `temporal_resolution` | `"year"` | Time step; only `"year"` is supported |
+| `time_horizon` | `100` | Years over which dynamic metrics integrate impacts (not used by static methods) |
+| `fixed_time_horizon` | `True` | Dynamic GWP only: if `True`, the time horizon is counted from `start_date`, so later emissions are integrated over a shorter period; if `False`, every emission gets the full `time_horizon` |
+| `database_dates` | `None` | Dates of the background databases, instead of their `representative_time` metadata, see [Background Data](background_data.md) |
+
+!!! info "System time vs. time horizon"
+    The **system time** is the set of years in which processes can be installed and operated, and for which impacts and costs are counted: from the year of `start_date` to the last year with demand. Exchanges that fall outside it, e.g. the end-of-life of a unit installed near the end, are not counted. The **time horizon** is a different thing: the number of years over which a dynamic metric integrates the effect of an emission, from `start_date`. It can reach far beyond the system time.
 
 ### Characterization Methods
 
@@ -117,7 +122,7 @@ Each method requires:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `category_name` | Yes | Your name for this impact category |
-| `brightway_method` | Yes | Tuple identifying the Brightway method |
+| `brightway_method` | Yes | Tuple identifying the Brightway method, one of the keys in `bd.methods` (e.g. `("IPCC 2021", "climate change", "GWP 100a")` with ecoinvent) |
 | `metric` | No | Dynamic characterization: `"CRF"` or `"GWP"` |
 
 **Static characterization** (default):
@@ -138,10 +143,10 @@ Each method requires:
 ```
 
 !!! info "Dynamic Metrics"
-    - **CRF** (Cumulative Radiative Forcing): Integrates radiative forcing over time
-    - **GWP** (Global Warming Potential): Time-dependent GWP factors
+    - **CRF** (Cumulative Radiative Forcing): radiative forcing integrated until `start_date + time_horizon`, in W·m⁻²·yr. The values are tiny (around 1e-13 per kg CO2), so impact limits for a CRF category must be given in W·m⁻²·yr too, not in CO2-eq.
+    - **GWP** (dynamic Global Warming Potential): year-specific GWP factors, in kg CO2-eq.
 
-    Dynamic metrics account for when emissions occur, not just how much.
+    Static methods are in the unit of the Brightway method, e.g. kg CO2-eq for GWP100. Dynamic metrics account for when emissions occur, not just how much.
 
 ### Multiple Impact Categories
 

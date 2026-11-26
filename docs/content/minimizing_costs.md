@@ -21,7 +21,8 @@ solved_model, total_cost, results = optimizer.solve_model(model, solver_name="gl
 ```
 
 `objective_category` is not needed. If the inputs carry no prices,
-`create_model()` raises a `ValueError`.
+`create_model()` raises a `ValueError`. As on the other pages, `model_inputs` and
+`manager` come from [LCA Processing](lca_processing.md).
 
 ---
 
@@ -127,7 +128,8 @@ The model components behind it are, like the impact expressions, in scaled units
   lists unpriced products, see [Reading Prices](cost_modeling.md#reading-prices).
 - **End of the horizon**: only purchases within the system years count, so late
   installations look cheap because their operating costs after the horizon are
-  missing. Extend the horizon or judge late investments with that in mind.
+  missing. Extend the horizon with `manager.extend_demand(years)` or judge late
+  investments with that in mind.
 - **Ties**: several pathways can reach the same minimal cost. The solver returns
   one of them, which is not necessarily the one with the lowest impact; limit the
   impact to break the tie.

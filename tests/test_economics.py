@@ -643,3 +643,18 @@ def test_get_costs_without_prices_is_empty():
     costs = postprocessing.PostProcessor(model).get_costs()
     assert costs.empty
     assert list(costs.index) == [2020]
+
+
+def test_extend_demand_extends_year_indexed_inputs():
+    manager = converter.ModelInputManager()
+    manager.model_inputs = _single_process_inputs()
+
+    extended = manager.extend_demand(2)
+
+    assert list(extended.SYSTEM_TIME) == [2020, 2021, 2022, 2023, 2024]
+    # Demand of the last year (none in this fixture) is repeated
+    assert extended.demand.get(("R", 2024), 0) == extended.demand.get(("R", 2022), 0)
+    assert extended.mapping[("db", 2024)] == 1.0
+    assert extended.characterization[("climate_change", "CO2", 2024)] == 1.0
+    assert extended.intermediate_flow_prices[("Iop", 2024)] == 2.0
+    optimizer.create_model(extended, name="extended", objective="cost")

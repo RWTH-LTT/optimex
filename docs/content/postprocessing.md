@@ -7,7 +7,7 @@ tags:
 
 # Postprocessing Results
 
-After solving an optimization model, `optimex` provides tools to extract, analyze, and visualize the results through the `PostProcessor` class. Results include capacity installations $\mathbf{s}_v$, operational levels $\mathbf{o}_{t,v}$, production volumes, time-resolved environmental impacts across all defined categories, and costs if prices are available.
+After solving an optimization model, `optimex` provides tools to extract, analyze, and visualize the results through the `PostProcessor` class. Results include installed process units per vintage, the units running per year, production volumes, time-resolved environmental impacts across all defined categories, and costs if prices are available.
 
 ---
 
@@ -64,9 +64,9 @@ process_total = df_impacts.sum(axis=0)
 climate_impacts = df_impacts["climate_change"].sum().sum()
 ```
 
-### Costs
+<a id="costs"></a>
 
-??? cost "Cost objective: only with market prices"
+??? cost "Cost objective: costs, only with market prices"
     If the inputs carry market prices (see [Minimizing Costs](minimizing_costs.md)), get the cost of the background purchases by driver, process, and time:
 
     ```python
@@ -124,8 +124,9 @@ total_units = df_installation.sum()
 # Cumulative units installed over time
 cumulative = df_installation.cumsum()
 
-# When each process was first deployed
-first_deployment = df_installation[df_installation > 0].idxmax()
+# First year each process is installed (ignoring solver noise around zero);
+# processes that are never installed show the first year, so check total_units
+first_deployment = (df_installation > 1e-9).idxmax()
 ```
 
 ---
@@ -157,7 +158,8 @@ Time
 # Units running vs. units available: compare production against annual capacity
 df_capacity = pp.get_production_capacity()   # per year
 df_production = pp.get_production()          # per year
-utilization = df_production.groupby(level="Product", axis=1).sum() / df_capacity
+production_per_product = df_production.T.groupby(level="Product").sum().T
+utilization = production_per_product / df_capacity
 ```
 
 Do not divide `df_operation` by the cumulative sum of `df_installation`: units only run within their operation window, so a cumulative sum counts units that were never or are no longer available. `plot_utilization_heatmap()` does this correctly.
@@ -191,7 +193,7 @@ df_production = pp.get_production()
 
 Returns a DataFrame with:
 - **Index**: System time (years)
-- **Columns**: MultiIndex of (Product, Process)
+- **Columns**: MultiIndex of (Process, Product)
 - **Values**: Production amount
 
 ---
@@ -211,8 +213,8 @@ Returns a DataFrame with:
 
 **Verify demand is met:**
 ```python
-total_production = df_production.groupby(level=0, axis=1).sum()
-demand_met = (total_production >= df_demand).all().all()
+total_production = df_production.T.groupby(level="Product").sum().T
+demand_met = (total_production[df_demand.columns] >= df_demand - 1e-6).all().all()
 ```
 
 ---
@@ -314,6 +316,20 @@ for c in solved_model.CATEGORY:
     print(f"{c}: {total}")
 ```
 
+### Dynamic Inventory
+
+The time-resolved inventory of the optimal pathway, i.e. every elementary flow in every year, can be passed on to [dynamic_characterization](https://dynamic-characterization.readthedocs.io), e.g. to plot the radiative forcing over time:
+
+```python
+df_inventory = pp.get_dynamic_inventory(biosphere_database="biosphere3")
+pp.plot_characterized_dynamic_inventory(
+    base_lcia_method=("GWP", "100 years"),  # a method from bd.methods
+    biosphere_database="biosphere3",
+)
+```
+
+Pass the name of your biosphere database as `biosphere_database`; the default is `"ecoinvent-3.12-biosphere"`.
+
 ### Denormalization
 
 `optimex` internally scales values for numerical stability. The `PostProcessor` automatically denormalizes, but for manual access:
@@ -346,7 +362,11 @@ df_operation.to_csv("operation.csv")
 
 ### To Excel
 
+Writing Excel files needs the `openpyxl` package (`pip install openpyxl`).
+
 ```python
+import pandas as pd
+
 with pd.ExcelWriter("results.xlsx") as writer:
     df_impacts.to_excel(writer, sheet_name="Impacts")
     df_installation.to_excel(writer, sheet_name="Installation")
@@ -423,16 +443,23 @@ with pd.ExcelWriter("optimization_results.xlsx") as writer:
 Run multiple scenarios and compare:
 
 ```python
+from optimex import converter, optimizer, postprocessing
+
+scenarios = {
+    "baseline": {},
+    "carbon_budget": {"cumulative_category_impact_limits": {"climate_change": 5.0e5}},
+}
+base = model_inputs.model_dump()
 results = {}
 
 for scenario_name, constraints in scenarios.items():
-    # Apply scenario-specific constraints
-    model_inputs_copy = model_inputs.model_copy(deep=True)
-    for key, value in constraints.items():
-        setattr(model_inputs_copy, key, value)
+    # Validated copy of the inputs with the scenario-specific constraints
+    scenario_inputs = converter.OptimizationModelInputs(**{**base, **constraints})
 
     # Solve
-    model = optimizer.create_model(model_inputs_copy, name=scenario_name, ...)
+    model = optimizer.create_model(
+        scenario_inputs, name=scenario_name, objective_category="climate_change"
+    )
     solved, obj, _ = optimizer.solve_model(model, solver_name="glpk")
 
     # Store results

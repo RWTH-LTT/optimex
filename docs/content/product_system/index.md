@@ -41,6 +41,7 @@ The `optimex` additions at a glance:
 | Where | Field | Meaning |
 |---|---|---|
 | Background database | `representative_time` (metadata) | The year the database represents |
+| Foreground | separate product and process nodes | Demand is defined on products; processes produce them |
 | Foreground process | `operation_time_limits` | Process-time window in which the process operates |
 | Foreground exchange | `temporal_distribution` | When the exchange occurs, relative to installation |
 | Foreground exchange | `operation` | `True` if the exchange scales with the units running |

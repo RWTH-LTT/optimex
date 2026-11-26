@@ -14,7 +14,7 @@ operation window. The per-tau entry is therefore the unit's output *per year of
 operation*, and the sum over the window is its *lifetime* output.
 
 Consequences:
-- `var_installation[p, v]` counts units of vintage v; its installation-dependent
+- `var_installation[p, v]` counts units of vintage v; its installation-driven
   flows (construction, end-of-life) are incurred once per unit.
 - `var_operation[p, v, t]` counts how many of those units are running in year t,
   so the capacity bound is `var_operation[p, v, t] <= var_installation[p, v]`.
@@ -1384,11 +1384,11 @@ def solve_model(
             and "unbounded" in str(results).lower()
         ):
             msg += (
-                " — the model is unbounded. Common cause: installation-dependent"
+                " — the model is unbounded. Common cause: installation-driven"
                 " flows (non-operation technosphere/biosphere exchanges) that produce"
                 " a net-negative impact allow var_installation to grow without bound."
                 " Fix by setting finite process_deployment_limits_max for affected"
-                " processes, or ensure installation-dependent flows do not create"
+                " processes, or ensure installation-driven flows do not create"
                 " a negative-impact incentive for over-installation."
             )
         elif termination == pyo.TerminationCondition.other:

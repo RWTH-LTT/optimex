@@ -45,4 +45,12 @@ This section contains the API documentation automatically generated from the `op
 
     [:lucide-arrow-right: `postprocessing`](postprocessing.md)
 
+-   :lucide-badge-euro:{ style="color: #d4932e; margin-right: 0.25rem;" } **Economics** (cost objective)
+
+    ---
+
+    Writes market prices to the background databases, for the optional cost objective.
+
+    [:lucide-arrow-right: `economics`](economics.md)
+
 </div>

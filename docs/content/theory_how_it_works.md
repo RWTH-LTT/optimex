@@ -1,11 +1,11 @@
 ---
-icon: lucide/workflow
+icon: lucide/cog
 tags:
   - background
   - methodology
 ---
 
-# How it Works
+# How It Works
 
 `optimex` extends static LCO to a time-explicit formulation through five conceptual steps.
 
@@ -22,7 +22,7 @@ Real-world life cycles span multiple time periods: a facility built in 2030 may 
 
 Process exchanges are defined in process time — specifying *when* within the lifecycle they occur (construction, each year of operation, end-of-life). Convolution then translates these relative timings into absolute system times based on when a process is actually installed. This is what enables exchanges from a single process to span multiple years in the optimization.
 
-**Example:** A process installed in 2030 with construction at process time -2 generates construction exchanges in 2028. Operational inputs spread from process time 0 to 10 translate to 2030–2040. End-of-life at process time 11 maps to 2041.
+**Example:** A process installed in 2030 with construction at process time 0 generates construction exchanges in 2030. Operational inputs spread from process time 1 to 10 translate to 2031–2040. End-of-life at process time 11 maps to 2041.
 
 ## Step 3: Separating Foreground and Background
 
@@ -48,8 +48,8 @@ Traditional LCO assumes processes always run at full capacity. `optimex` separat
 - **Capacity installation**: How many process units are built at a given time (vintage)
 - **Operational level**: How many of those units are actually running at each point in time
 
-One installed unit corresponds to one reference-flow unit of the underlying LCA process: it delivers the production stated by its production exchange over its **whole lifetime**, so the per-time-step entry of that exchange is what one running unit yields **per year**. Installation-dependent exchanges are charged once per unit, which means the construction burden of a unit is amortized over its lifetime output — no more and no less. A demand profile that leaves part of a unit's lifetime unused therefore shows up as idle capacity and a correspondingly higher impact.
+One installed unit corresponds to one reference-flow unit of the underlying LCA process: it delivers the production stated by its production exchange over its **whole lifetime**, so the per-time-step entry of that exchange is what one running unit yields **per year**. Installation-driven exchanges are charged once per unit, which means the construction burden of a unit is amortized over its lifetime output — no more and no less. A demand profile that leaves part of a unit's lifetime unused therefore shows up as idle capacity and a correspondingly higher impact.
 
 This separation is important because it enables **vintage-specific dispatch**: when multiple cohorts of the same technology coexist, the optimizer can preferentially utilize cleaner vintages — creating an emissions-aware merit order. It also allows the model to identify strategic overcapacities, where early investment in clean technologies offsets the stranded cost of idled fossil infrastructure.
 
-To make this work, each exchange in a process is classified as either installation-dependent (construction materials, end-of-life treatment) or operation-dependent (production output, fuel consumption, operational emissions). Installation-dependent exchanges are fixed to the installed capacity, while operation-dependent exchanges scale with how much the process is actually operated.
+To make this work, each exchange in a process is classified as either installation-driven (construction materials, end-of-life treatment) or operation-driven (production output, fuel consumption, operational emissions). Installation-driven exchanges are fixed to the installed capacity, while operation-driven exchanges scale with how much the process is actually operated.

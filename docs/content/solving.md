@@ -169,20 +169,17 @@ config = lca_processor.LCAConfig(
         "time_horizon": 100,
     },
     characterization_methods=[
-        {
-            "category_name": "climate_change",
-            "brightway_method": ("IPCC 2021", "GWP 100a"),
-            "metric": "CRF",
-        },
+        # Static GWP100, so impacts and limits are in kg CO2-eq
+        {"category_name": "climate_change", "brightway_method": ("IPCC 2021", "GWP 100a")},
     ],
 )
 lca_data = lca_processor.LCADataProcessor(config)
 manager = converter.ModelInputManager()
 model_inputs = manager.parse_from_lca_processor(lca_data)
 
-# Constraints (optional)
+# Constraints (optional): at most 500 t CO2-eq in total
 model_inputs = manager.override(
-    cumulative_category_impact_limits={"climate_change": 500000}
+    cumulative_category_impact_limits={"climate_change": 5.0e5}
 )
 
 # Build and solve

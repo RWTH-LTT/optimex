@@ -35,6 +35,8 @@ model = optimizer.create_model(
 model = optimizer.create_model(model_inputs, name="cost_minimum", objective="cost")
 ```
 
+Here, `model_inputs` are the optimization inputs built in
+[LCA Processing](../lca_processing.md), the same for both objectives.
 `objective` selects the kind of objective (`"environmental"`, the default, or
 `"cost"`); `objective_category` selects which impact category, and is only used
 for the environmental objective. Everything else is shared: the demand, the

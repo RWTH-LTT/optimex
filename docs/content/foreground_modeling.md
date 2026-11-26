@@ -11,36 +11,39 @@ The foreground database contains the candidate processes that `optimex` will opt
 
 ---
 
-## Standard vs optimex Processes
+## Products and Processes
 
-A standard Brightway process becomes an `optimex` process by adding:
+The foreground has two kinds of nodes:
+
+- **Product nodes** (`"type": "product"`): what is demanded and produced, e.g. hydrogen. Demand is always defined on a product.
+- **Process nodes** (`"type": "process"`, the default): the candidate technologies that produce the products. Each has a production exchange pointing to its product.
+
+A product can be produced by several processes, which is what the optimizer chooses between. A process that produces itself, as in Brightway's combined "process with reference product" style, is not picked up by `optimex`: model the product as its own node.
+
+A Brightway process becomes an `optimex` process by adding:
 
 1. **`operation_time_limits`** on the process
 2. **`temporal_distribution`** on exchanges
 3. **`operation`** flag on operation-phase exchanges
 
 ```python
-# Standard Brightway process
-{
+foreground_data = {
+    # Product node
+    ("foreground", "my_product"): {
+        "name": "My Product",
+        "type": "product",
+        "unit": "kg",
+    },
+    # Process node producing it
     ("foreground", "my_process"): {
         "name": "My Process",
-        "exchanges": [
-            {"amount": 1, "type": "production", "input": ("foreground", "my_process")},
-            {"amount": 10, "type": "technosphere", "input": ("db_2020", "electricity")},
-        ],
-    }
-}
-
-# optimex process (with temporal information)
-{
-    ("foreground", "my_process"): {
-        "name": "My Process",
+        "type": "process",
         "operation_time_limits": (1, 2),  # NEW: operation phase timing
         "exchanges": [
             {
                 "amount": 1,
                 "type": "production",
-                "input": ("foreground", "my_process"),
+                "input": ("foreground", "my_product"),
                 "temporal_distribution": TemporalDistribution(...),  # NEW
                 "operation": True,  # NEW
             },
@@ -51,15 +54,17 @@ A standard Brightway process becomes an `optimex` process by adding:
                 "temporal_distribution": TemporalDistribution(...),  # NEW
             },
         ],
-    }
+    },
 }
 ```
+
+Exchanges without a `temporal_distribution` occur entirely at τ = 0, the installation year.
 
 ---
 
 ## Process Lifecycle Phases
 
-`optimex` models processes with distinct lifecycle phases using **process time** ($\delta$, also referred to as τ in code):
+`optimex` models processes with distinct lifecycle phases using **process time** τ: the number of years after the installation year of a unit. τ = 0 is the installation year itself. A unit installed in 2030 (its *vintage*) is at τ = 3 in 2033.
 
 ```
 τ=0          τ=1          τ=2          τ=3
@@ -67,6 +72,8 @@ A standard Brightway process becomes an `optimex` process by adding:
  v            v            v            v
 [Construction][  Operation  ][Decommission]
 ```
+
+This guide uses the convention above: construction at τ = 0, operation from τ = 1, end-of-life after the operation phase. Operation can also start at τ = 0, e.g. for processes without a construction delay.
 
 - **Construction (pre-operation)**: Initial investment, equipment manufacturing
 - **Operation**: Active production phase where output scales with utilization
@@ -87,6 +94,8 @@ The `operation_time_limits` attribute defines when the operation phase occurs:
 | `(1, 2)` | Operation at τ=1 and τ=2 |
 | `(0, 0)` | Immediate production (no construction delay) |
 | `(2, 5)` | Operation from τ=2 through τ=5 |
+
+Without `operation_time_limits`, the operation phase is `(0, 0)`: the unit operates only in its installation year. Production and other operation exchanges only count inside the operation phase, so make sure the window covers their temporal distributions.
 
 ```python
 {
@@ -127,8 +136,8 @@ TemporalDistribution(
 )
 ```
 
-!!! warning "Amounts must sum correctly"
-    For production exchanges, the amounts in the temporal distribution should sum to the total production per unit. For a process producing 1 unit total over its lifetime with `amount=1`, use fractions that sum to 1.
+!!! warning "Amounts are fractions that sum to 1"
+    The exchange occurs as `amount × fraction` at each process time, so the temporal distribution amounts are fractions of the exchange `amount` and should sum to 1. A production exchange with `amount=10` and fractions `[0.5, 0.5]` produces 5 in each of the two years.
 
 ---
 
@@ -138,7 +147,7 @@ This convention decides how installation impacts are amortized, so it is worth s
 
 **One unit of a process delivers the production stated by its production exchange — over its entire lifetime, not per year.**
 
-For the example above (`amount=1`, spread as `[0, 0.5, 0.5, 0]` over a two-year operation window):
+Take a production exchange with `amount=1`, spread as `[0, 0.5, 0.5, 0]` over τ = 0 to 3, and a two-year operation window `(1, 2)`:
 
 | Quantity | Value |
 |----------|-------|
@@ -149,7 +158,7 @@ For the example above (`amount=1`, spread as `[0, 0.5, 0.5, 0]` over a two-year 
 
 Consequences for the optimization:
 
-- `var_installation[p, v]` counts **units**, and installation-dependent exchanges (construction, end-of-life) are incurred once per unit.
+- `var_installation[p, v]` counts **units**, and installation-driven exchanges (construction, end-of-life) are incurred once per unit.
 - `var_operation[p, v, t]` counts how many of those units **run in year t**, bounded by the units installed: `var_operation[p, v, t] ≤ var_installation[p, v]`.
 - Annual output is `production[τ = t - v] × var_operation[p, v, t]`.
 
@@ -162,7 +171,7 @@ This is what makes optimex agree with a standard LCA of the delivered amount whe
 
 ## The Operation Flag
 
-Exchanges marked with `"operation": True` **scale with the operational level** $\mathbf{o}_{t,v}$, the number of units running. This enables flexible operation where a process can run below its installed capacity $\mathbf{s}_v$ (see [Theory: Flexible Operation](theory_how_it_works.md#step-5-flexible-operation)).
+Exchanges marked with `"operation": True` **scale with the operational level**, the number of units running in a year (`var_operation`). This enables flexible operation where a process can run below its installed capacity (`var_installation`; see [Theory: Flexible Operation](theory_how_it_works.md#step-5-flexible-operation)).
 
 ```python
 "exchanges": [
@@ -201,6 +210,9 @@ Exchanges marked with `"operation": True` **scale with the operational level** $
 - Production outputs: `"operation": True`
 - Operational inputs/emissions: `"operation": True`
 
+!!! warning "Operation exchanges must be constant over process time"
+    A running unit uses the same amount in every year it runs, so an exchange with `"operation": True` must have the same amount in every process-time step it occurs in, e.g. `[0.5, 0.5]`, not `[0.7, 0.3]`. Inputs whose amount changes over the lifetime (e.g. degradation) need to be split into a constant operation part and a non-operation part. `OptimizationModelInputs` raises a `ValueError` otherwise.
+
 ??? cost "Cost objective: the flag also splits costs"
     With the [cost objective](minimizing_costs.md), the same flag decides how a background purchase is costed (see [Cost Modeling](cost_modeling.md#installation-and-operation-driven-costs)): purchases on operation exchanges within the operation phase are **operation-driven** and scale with the units running; all others are **installation-driven** and scale with the installed units, wherever they fall in the lifecycle. `PostProcessor.get_costs()` reports the two separately.
 
@@ -215,9 +227,15 @@ from bw_temporalis import TemporalDistribution
 import numpy as np
 
 solar_pv = {
+    ("foreground", "electricity_solar"): {
+        "name": "Electricity from solar PV",
+        "type": "product",
+        "unit": "megawatt hour",
+    },
     ("foreground", "solar_pv"): {
         "name": "Solar PV Installation",
         "location": "DE",
+        "type": "process",
         "operation_time_limits": (1, 2),  # Operation at τ=1 and τ=2
         "exchanges": [
             # Production: 1 MWh total, split across operation years
@@ -285,6 +303,7 @@ foreground_data = {
     # Process 1: Green hydrogen (electrolysis)
     ("foreground", "electrolysis"): {
         "name": "PEM Electrolysis",
+        "type": "process",
         "operation_time_limits": (1, 10),
         "exchanges": [
             {"type": "production", "input": ("foreground", "hydrogen"), ...},
@@ -294,6 +313,7 @@ foreground_data = {
     # Process 2: Grey hydrogen (SMR)
     ("foreground", "smr"): {
         "name": "Steam Methane Reforming",
+        "type": "process",
         "operation_time_limits": (2, 15),
         "exchanges": [
             {"type": "production", "input": ("foreground", "hydrogen"), ...},
@@ -400,12 +420,11 @@ For explicit values at specific process times and vintages:
 ```
 
 **Key points:**
-- Values are linearly interpolated for years between specified vintages
-- Works for production, technosphere, and biosphere exchanges
-- Extracted automatically by `LCADataProcessor`
-- `vintage_improvements`: More compact when all exchanges scale uniformly
-- `vintage_amounts`: More flexible when different process times need different values
-- If both are specified, `vintage_amounts` takes precedence
+- Each exchange is interpolated linearly between the vintage years it defines itself. Installation years before the first or after the last of them use the nearest defined value. Different exchanges can use different vintage years.
+- `vintage_improvements` scales the exchange `amount` by a factor per vintage.
+- `vintage_amounts` replaces the amount. A vintage-year key (`{2020: 60}`) gives the exchange total for that vintage, distributed over process time by the temporal distribution, like `amount`. A `(process_time, vintage_year)` key gives the amount at that process time directly, as in the example above (30 at τ = 1 plus 30 at τ = 2 is 60 in total).
+- If an exchange has both, `vintage_amounts` takes precedence for that exchange.
+- Works for production, technosphere, and biosphere exchanges, and is extracted automatically by `LCADataProcessor`.
 
 ### Optimizer Behavior
 

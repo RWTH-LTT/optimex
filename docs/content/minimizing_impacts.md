@@ -23,7 +23,9 @@ model = optimizer.create_model(
 solved_model, total_impact, results = optimizer.solve_model(model, solver_name="glpk")
 ```
 
-`objective="environmental"` is the default and can be left out.
+The snippets on this page continue from [LCA Processing](lca_processing.md):
+`model_inputs` are the optimization inputs and `manager` the `ModelInputManager`
+that created them. `objective="environmental"` is the default and can be left out.
 `objective_category` must be one of the `category_name`s configured in
 `LCAConfig.characterization_methods`; any other value raises a `ValueError`.
 
@@ -55,14 +57,15 @@ emissions counts:
 
 | `metric` in the method config | Characterization | Typical use |
 |---|---|---|
-| none | Static factors, equal in every year (e.g. GWP100) | Categories where timing does not matter, e.g. land or water use |
-| `"GWP"` | Dynamic Global Warming Potential, in CO~2~-equivalents, integrated over the time horizon | Climate change, comparable to GWP-based budgets |
-| `"CRF"` | Cumulative Radiative Forcing, integrated over the time horizon | Climate change, physically accumulated warming effect |
+| none | Static factors, equal in every year, in the unit of the Brightway method | Categories where timing does not matter, e.g. land or water use, or static GWP100 |
+| `"GWP"` | Dynamic Global Warming Potential, integrated over the time horizon, in kg CO~2~-eq | Climate change, comparable to GWP-based budgets |
+| `"CRF"` | Cumulative Radiative Forcing until the end of the time horizon, in W·m⁻²·yr | Climate change, physically accumulated warming effect |
 
-With `TemporalConfig.fixed_time_horizon=True` (the default), the time horizon ends
-at a fixed date counted from the demand, so an emission late in the transition is
-integrated over a shorter period than an early one and weighs less. The optimizer
-thus sees an incentive to defer emissions or to remove CO~2~ early. See
+Both dynamic metrics count the time horizon from `start_date`: CRF always, dynamic
+GWP with `fixed_time_horizon=True` (the default). An emission late in the
+transition is then integrated over a shorter period than an early one and weighs
+less, so the optimizer sees an incentive to defer emissions or to remove CO~2~
+early. See
 [Characterization Methods](lca_processing.md#characterization-methods) for the
 configuration and `time_horizon`.
 
@@ -106,27 +109,28 @@ pp.plot_impacts()
 All configured categories are evaluated for the solution, not only the objective
 category.
 
-### Costs of the Impact Minimum
+<a id="costs-of-the-impact-minimum"></a>
 
-You can minimize an impact and still carry the costs through. If the inputs
-contain market prices (see [Setting Market Prices](cost_modeling.md#setting-market-prices)),
-every model computes the costs of its pathway, whatever it minimizes. The
-prices then only enter the reporting, not the decision:
+??? cost "Cost objective: costs of the impact minimum"
+    You can minimize an impact and still carry the costs through. If the inputs
+    contain market prices (see [Setting Market Prices](cost_modeling.md#setting-market-prices)),
+    every model computes the costs of its pathway, whatever it minimizes. The
+    prices then only enter the reporting, not the decision:
 
-```python
-model = optimizer.create_model(
-    model_inputs, name="impact_minimum", objective_category="climate_change"
-)
-solved_model, total_impact, _ = optimizer.solve_model(model, solver_name="glpk")
+    ```python
+    model = optimizer.create_model(
+        model_inputs, name="impact_minimum", objective_category="climate_change"
+    )
+    solved_model, total_impact, _ = optimizer.solve_model(model, solver_name="glpk")
 
-pp = PostProcessor(solved_model)
-pp.get_costs()                             # costs per year, driver, and process
-pp.get_costs(discounted=True).sum().sum()  # discounted total cost of this pathway
-```
+    pp = PostProcessor(solved_model)
+    pp.get_costs()                             # costs per year, driver, and process
+    pp.get_costs(discounted=True).sum().sum()  # discounted total cost of this pathway
+    ```
 
-This tells you what the environmentally optimal pathway costs, for example to
-compare it with the cost minimum or to place it on a
-[trade-off frontier](trade_offs.md).
+    This tells you what the environmentally optimal pathway costs, for example to
+    compare it with the cost minimum or to place it on a
+    [trade-off frontier](trade_offs.md).
 
 ---
 
@@ -140,4 +144,10 @@ compare it with the cost minimum or to place it on a
   process has no impact in the objective category. The solver returns one of them,
   which is not necessarily the cheapest or otherwise preferable one.
 - **Units**: impact limits are given in the unit of the category, the same unit in
-  which the objective is reported.
+  which the objective is reported. For CRF, that is W·m⁻²·yr, not CO~2~-eq.
+- **End of the horizon**: only flows within the system time count, i.e. up to the
+  last year with demand. The end-of-life of units installed near the end, and
+  their operation after the last demand year, fall outside it, so late
+  installations look cleaner than they are. Extend the horizon with
+  `manager.extend_demand(years)`, which repeats the last year's demand, or judge
+  late installations with that in mind.
