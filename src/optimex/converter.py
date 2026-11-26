@@ -708,10 +708,13 @@ class OptimizationModelInputs(BaseModel):
 
                 if len(set(values)) > 1:
                     raise ValueError(
-                        f"{flow_type} ({proc}, {flow}) is not constant over time: "
-                        f"values = {values}. If you want to conduct an optimization "
-                        "with these values, don't flag any as operational and use "
-                        "fixed operation in the optimization later."
+                        f"{flow_type} ({proc}, {flow}) is flagged as operation flow "
+                        f"but not constant over process time: values = {values}. "
+                        "A running unit uses the same amount in every year, so an "
+                        "operation exchange must have the same amount in every "
+                        "process-time step it occurs in. Spread it evenly over the "
+                        "operation window, or split it into an operation part and "
+                        "a non-operation part."
                     )
 
         check_constancy(self.foreground_technosphere, "intermediate flow")
@@ -922,6 +925,8 @@ class OptimizationModelInputs(BaseModel):
 
         Only processes/flows with explicit vintage-specific values are expanded.
         The base 3D tensors remain unchanged - overrides are applied at lookup time.
+        Per (process, flow), explicit vintage amounts take precedence over
+        vintage improvement factors.
 
         This method populates sparse override dictionaries:
         - foreground_technosphere_vintage_overrides
@@ -929,55 +934,34 @@ class OptimizationModelInputs(BaseModel):
         - foreground_production_vintage_overrides
         """
         system_times = list(self.SYSTEM_TIME)
+        improvements = self.vintage_improvements or {}
 
-        # Handle foreground_technosphere - only create overrides if vintage data exists
-        if self.foreground_technosphere_vintages:
-            self.foreground_technosphere_vintage_overrides = expand_foreground_tensor_with_vintages(
-                self.foreground_technosphere_vintages,
-                self.REFERENCE_VINTAGES,
-                system_times,
-            )
-        elif self.vintage_improvements and self.foreground_technosphere:
-            self.foreground_technosphere_vintage_overrides = expand_foreground_tensor_with_evolution(
-                self.foreground_technosphere,
-                self.vintage_improvements,
-                self.REFERENCE_VINTAGES,
-                system_times,
-                "INTERMEDIATE_FLOW",
-            )
-        # else: no overrides, use base 3D tensor directly
+        for tensor_name, vintages_name, flow_type in (
+            ("foreground_technosphere", "foreground_technosphere_vintages", "INTERMEDIATE_FLOW"),
+            ("foreground_biosphere", "foreground_biosphere_vintages", "ELEMENTARY_FLOW"),
+            ("foreground_production", "foreground_production_vintages", "PRODUCT"),
+        ):
+            base_tensor = getattr(self, tensor_name) or {}
+            vintage_tensor = getattr(self, vintages_name) or {}
 
-        # Handle foreground_biosphere
-        if self.foreground_biosphere_vintages:
-            self.foreground_biosphere_vintage_overrides = expand_foreground_tensor_with_vintages(
-                self.foreground_biosphere_vintages,
-                self.REFERENCE_VINTAGES,
-                system_times,
+            # Explicit vintage amounts take precedence per (process, flow); scaling
+            # factors apply to every other (process, flow) pair that has them.
+            explicit_pairs = {(p, f) for (p, f, _, _) in vintage_tensor}
+            scaled_tensor = {
+                key: value
+                for key, value in base_tensor.items()
+                if (key[0], key[1]) not in explicit_pairs
+            }
+            overrides = expand_foreground_tensor_with_evolution(
+                scaled_tensor, improvements, self.REFERENCE_VINTAGES, system_times, flow_type
             )
-        elif self.vintage_improvements and self.foreground_biosphere:
-            self.foreground_biosphere_vintage_overrides = expand_foreground_tensor_with_evolution(
-                self.foreground_biosphere,
-                self.vintage_improvements,
-                self.REFERENCE_VINTAGES,
-                system_times,
-                "ELEMENTARY_FLOW",
+            overrides.update(
+                expand_foreground_tensor_with_vintages(
+                    vintage_tensor, self.REFERENCE_VINTAGES, system_times
+                )
             )
-
-        # Handle foreground_production
-        if self.foreground_production_vintages:
-            self.foreground_production_vintage_overrides = expand_foreground_tensor_with_vintages(
-                self.foreground_production_vintages,
-                self.REFERENCE_VINTAGES,
-                system_times,
-            )
-        elif self.vintage_improvements and self.foreground_production:
-            self.foreground_production_vintage_overrides = expand_foreground_tensor_with_evolution(
-                self.foreground_production,
-                self.vintage_improvements,
-                self.REFERENCE_VINTAGES,
-                system_times,
-                "PRODUCT",
-            )
+            if overrides:
+                setattr(self, f"{tensor_name}_vintage_overrides", overrides)
 
     def get_scaled_copy(self) -> Tuple["OptimizationModelInputs", Dict[str, Any]]:
         """
@@ -1140,13 +1124,13 @@ class ModelInputManager:
     >>> inputs = manager.parse_from_lca_processor(lca_data_processor)
     >>>
     >>> # Optionally override fields
-    >>> inputs = manager.override_inputs(PROCESS=["P1", "P2"], demand={...})
+    >>> inputs = manager.override(cumulative_category_impact_limits={"climate": 1e6})
     >>>
     >>> # Save to disk
-    >>> manager.save("inputs.json")
+    >>> manager.save_inputs("inputs.json")
     >>>
     >>> # Load from disk
-    >>> manager.load("inputs.json")
+    >>> inputs = manager.load_inputs("inputs.json")
     >>>
     >>> # Get a numerically scaled version
     >>> scaled_inputs, scale_factors = inputs.get_scaled_copy()
@@ -1567,7 +1551,9 @@ def expand_foreground_tensor_with_vintages(
         Input tensor mapping (process, flow, process_time, vintage_year) to value.
         Only defined at reference vintages.
     reference_vintages : List[int]
-        List of reference vintage years.
+        All reference vintage years. Kept for API compatibility: each
+        (process, flow, process_time) entry is interpolated between the vintage
+        years it defines itself.
     system_times : List[int]
         List of system time points to expand to.
 
@@ -1588,11 +1574,8 @@ def expand_foreground_tensor_with_vintages(
     >>> expanded[("EV", "electricity", 1, 2025)]  # Interpolated value
     50.0
     """
-    if not vintage_tensor or not reference_vintages:
+    if not vintage_tensor:
         return {}
-
-    # Get vintage mapping
-    vintage_mapping = construct_vintage_mapping(reference_vintages, system_times)
 
     # Group tensor by (process, flow, process_time)
     grouped: Dict[Tuple[str, str, int], Dict[int, float]] = {}
@@ -1602,17 +1585,18 @@ def expand_foreground_tensor_with_vintages(
             grouped[key] = {}
         grouped[key][vintage] = value
 
-    # Expand to all system times
+    # Expand to all system times. Each entry is interpolated between its own
+    # vintage years: interpolating against vintage years defined for other
+    # exchanges would put weight on values that do not exist.
     expanded: Dict[Tuple[str, str, int, int], float] = {}
     for (proc, flow, tau), vintage_values in grouped.items():
+        vintage_mapping = construct_vintage_mapping(list(vintage_values), system_times)
         for install_year in system_times:
-            # Interpolate using vintage mapping
-            interpolated_value = 0.0
-            for vintage in reference_vintages:
-                weight = vintage_mapping.get((vintage, install_year), 0.0)
-                if weight > 0 and vintage in vintage_values:
-                    interpolated_value += weight * vintage_values[vintage]
-            expanded[(proc, flow, tau, install_year)] = interpolated_value
+            expanded[(proc, flow, tau, install_year)] = sum(
+                weight * vintage_values[vintage]
+                for (vintage, year), weight in vintage_mapping.items()
+                if year == install_year
+            )
 
     return expanded
 
@@ -1639,7 +1623,9 @@ def expand_foreground_tensor_with_evolution(
     vintage_improvements : Dict[Tuple[str, str, int], float]
         Scaling factors mapping (process, flow, vintage_year) to multiplier.
     reference_vintages : List[int]
-        List of reference vintage years.
+        All reference vintage years. Kept for API compatibility: each
+        (process, flow) pair is interpolated between the vintage years it
+        defines itself.
     system_times : List[int]
         List of system time points to expand to.
     flow_type : str
@@ -1666,36 +1652,33 @@ def expand_foreground_tensor_with_evolution(
     >>> expanded[("EV", "electricity", 1, 2030)]  # base * 0.667
     40.02
     """
-    if not base_tensor:
+    if not base_tensor or not vintage_improvements:
         return {}
 
-    # Get vintage mapping for interpolating evolution factors
-    vintage_mapping = construct_vintage_mapping(reference_vintages, system_times)
+    # Scaling factors per (process, flow), each interpolated between the vintage
+    # years defined for that pair only. Only these pairs are expanded to 4D.
+    factors_by_pair: Dict[Tuple[str, str], Dict[int, float]] = {}
+    for (proc, flow, vintage), factor in vintage_improvements.items():
+        factors_by_pair.setdefault((proc, flow), {})[vintage] = factor
 
-    # Determine which (process, flow) pairs have evolution factors
-    # Only these pairs should be expanded to 4D
-    evolved_pairs = set((k[0], k[1]) for k in vintage_improvements.keys())
+    interpolated: Dict[Tuple[str, str], Dict[int, float]] = {}
+    for pair, factors in factors_by_pair.items():
+        mapping = construct_vintage_mapping(list(factors), system_times)
+        interpolated[pair] = {
+            year: sum(
+                weight * factors[vintage]
+                for (vintage, y), weight in mapping.items()
+                if y == year
+            )
+            for year in system_times
+        }
 
     expanded: Dict[Tuple[str, str, int, int], float] = {}
     for (proc, flow, tau), base_value in base_tensor.items():
-        # Only expand if this (process, flow) pair has evolution factors
-        if (proc, flow) not in evolved_pairs:
+        factors = interpolated.get((proc, flow))
+        if factors is None:
             continue
-
         for install_year in system_times:
-            # Get interpolated evolution factor
-            factor = 0.0
-            for vintage in reference_vintages:
-                weight = vintage_mapping.get((vintage, install_year), 0.0)
-                if weight > 0:
-                    evo_key = (proc, flow, vintage)
-                    evo_factor = vintage_improvements.get(evo_key, 1.0)
-                    factor += weight * evo_factor
-
-            # If no evolution factors found, use 1.0
-            if factor == 0.0:
-                factor = 1.0
-
-            expanded[(proc, flow, tau, install_year)] = base_value * factor
+            expanded[(proc, flow, tau, install_year)] = base_value * factors[install_year]
 
     return expanded
