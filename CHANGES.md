@@ -14,15 +14,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `discount_reference_year`. Impact limits still apply, and
   `PostProcessor.get_costs()` reports costs by installation/operation driver and
   process for any solved model. `objective_category` is now optional
-  ([#71](https://github.com/RWTH-LTT/optimex/pull/71))
+  ([#72](https://github.com/RWTH-LTT/optimex/pull/72), based on
+  [#71](https://github.com/RWTH-LTT/optimex/pull/71))
 * Restructured the user guide into a workflow overview and four steps (choosing
   an objective, product system modeling, optimization, results), with new pages
   on minimizing impacts, minimizing costs, cost modeling, trade-offs, and
   solving. The guide is written for environmental studies; cost-specific content
   lives on the Cost Modeling and Minimizing Costs pages and is only referenced
-  elsewhere in collapsed boxes. Old page URLs
-  redirect to the new ones. Added a basic cost example ending in a cost-climate Pareto
-  frontier ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
+  elsewhere in collapsed boxes. Old page URLs redirect to the new ones. Added a
+  basic cost example ending in a cost-climate Pareto frontier
+  ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
+* **Changed results**: vintage-dependent parameters are interpolated between the
+  vintage years of each exchange. Before, all exchanges were interpolated
+  between the vintage years of every exchange, so a year missing on one exchange
+  silently became an amount of 0 (`vintage_amounts`) or a factor of 1
+  (`vintage_improvements`). `vintage_amounts` now take precedence over
+  `vintage_improvements` per exchange instead of for all exchanges of the same
+  kind ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
+* **Changed results**: a vintage-year key in `vintage_amounts` (e.g.
+  `{2020: 60}`) is now the exchange total for that vintage, distributed over
+  process time like `amount`, instead of the amount at every process time
+  ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
+* Fixed `ModelInputManager.extend_demand()`, which failed with an `IndexError`
+  ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
 
 ## [0.7.0] - 2026-08-20
 * Fixed under-counting of installation impacts. One installed unit now delivers its
