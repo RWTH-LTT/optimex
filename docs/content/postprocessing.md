@@ -219,23 +219,33 @@ demand_met = (total_production >= df_demand).all().all()
 
 ## Visualization
 
-### Impact Plot
+The plot methods draw the figure with matplotlib and show it; they return nothing.
+The examples below come from the [basic example](examples/basic_example.md).
 
-Stacked area chart of environmental impacts over time:
+**Customization:** layout and colors are set once for all plots via `plot_config`,
+for example `figsize`, the font sizes, `colormap`, or a fixed `color_map` from
+process or product code to color:
 
 ```python
-fig = pp.plot_impacts()
-```
-
-![Impact plot example](../_static/placeholder_impacts.png)
-
-**Customization:**
-```python
-fig = pp.plot_impacts(
-    category="climate_change",  # Specific category (default: all)
-    figsize=(12, 6),
+pp = postprocessing.PostProcessor(
+    solved_model,
+    plot_config={"figsize": (8, 4), "legend_fontsize": 8},
 )
 ```
+
+To plot a subset, pass a filtered DataFrame from the matching `get_*()` method,
+e.g. `pp.plot_impacts(df_impacts=pp.get_impacts()[["climate_change"]])`, and set
+`annotated=False` to label processes by code instead of name.
+
+### Impact Plot
+
+Stacked bars of the impact per process and year, one panel per category:
+
+```python
+pp.plot_impacts()
+```
+
+![Impact plot example](../_static/postprocessing/impacts.png)
 
 ---
 
@@ -244,10 +254,10 @@ fig = pp.plot_impacts(
 Bar chart showing capacity deployment timeline:
 
 ```python
-fig = pp.plot_installation()
+pp.plot_installation()
 ```
 
-![Installation plot example](../_static/placeholder_installation.png)
+![Installation plot example](../_static/postprocessing/installation.png)
 
 ---
 
@@ -256,8 +266,10 @@ fig = pp.plot_installation()
 Shows how many units run over time:
 
 ```python
-fig = pp.plot_operation()
+pp.plot_operation()
 ```
+
+![Operation plot example](../_static/postprocessing/operation.png)
 
 ---
 
@@ -266,10 +278,13 @@ fig = pp.plot_operation()
 Compares actual production with the maximum annual capacity available:
 
 ```python
-fig = pp.plot_capacity_balance()
+pp.plot_capacity_balance()
 ```
 
-![Capacity balance plot](../_static/placeholder_production.png)
+![Capacity balance plot](../_static/postprocessing/capacity_balance.png)
+
+`detailed=True` additionally breaks the capacity down by process, and
+`product=` restricts the plot to one product.
 
 ---
 
@@ -340,11 +355,23 @@ with pd.ExcelWriter("results.xlsx") as writer:
 
 ### Saving Figures
 
+The plot methods show the figure instead of returning it. In a script, use a
+non-interactive matplotlib backend, so the figure stays open after the call, and
+save it with `plt.savefig()`:
+
 ```python
-fig = pp.plot_impacts()
-fig.savefig("impacts.png", dpi=300, bbox_inches="tight")
-fig.savefig("impacts.pdf", bbox_inches="tight")
+import matplotlib
+matplotlib.use("Agg")  # before importing pyplot; draw without displaying
+import matplotlib.pyplot as plt
+
+pp.plot_impacts()
+plt.savefig("impacts.png", dpi=300, bbox_inches="tight")
+plt.savefig("impacts.pdf", bbox_inches="tight")
+plt.close("all")
 ```
+
+In a notebook, the displayed figure is closed once shown; save it from a script
+as above, or plot the DataFrames from the `get_*()` methods yourself.
 
 ---
 
@@ -377,19 +404,16 @@ for proc in df_installation.columns:
     total = df_installation[proc].sum()
     print(f"  {proc}: {total:.2f}")
 
-# Generate all plots
-fig_impacts = pp.plot_impacts()
-fig_install = pp.plot_installation()
-fig_prod = pp.plot_capacity_balance()
+# Show all plots
+pp.plot_impacts()
+pp.plot_installation()
+pp.plot_capacity_balance()
 
 # Save results
 with pd.ExcelWriter("optimization_results.xlsx") as writer:
     df_impacts.to_excel(writer, sheet_name="Impacts")
     df_installation.to_excel(writer, sheet_name="Installation")
     df_operation.to_excel(writer, sheet_name="Operation")
-
-fig_impacts.savefig("impacts.png", dpi=300)
-fig_install.savefig("installation.png", dpi=300)
 ```
 
 ---
