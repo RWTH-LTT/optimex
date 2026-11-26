@@ -16,7 +16,8 @@ Using the same product system, the notebook determines:
 
 1. the cost minimum without an environmental constraint,
 2. the climate-impact minimum as a reference, and
-3. the cost minimum subject to a cumulative climate budget.
+3. the cost minimum subject to a cumulative climate budget, and
+4. the Pareto frontier between cost and climate impact.
 
 Together, these scenarios show how prices, discounting, and a cumulative climate budget affect installation and operation decisions. All quantities, prices, lifetimes, and environmental impacts are synthetic assumptions for demonstration purposes. The example demonstrates the software workflow.
 
@@ -521,7 +522,10 @@ constrained_model, constrained_cost, _ = optimizer.solve_model(
 
 ## 8. Results
 
-The table compares total discounted cost and cumulative climate impact.
+The table compares total discounted cost and cumulative climate impact. The
+climate reference minimizes climate impact, yet its costs are reported too:
+every model with prices computes the costs of its pathway, whatever it
+minimizes.
 `PostProcessor.get_costs()` splits the costs into installation-driven and
 operation-driven purchases, which sum to the reported total. They follow the
 corresponding background purchases and should not be interpreted as complete
@@ -780,19 +784,208 @@ uses the lower-emission advanced process, while the cumulative climate budget
 brings part of this capacity forward relative to the unconstrained cost minimum.
 
 These results illustrate the interaction of installation timing, operation,
-prices, discounting, and a cumulative climate budget. 
+prices, discounting, and a cumulative climate budget.
 
-## 9. Further reading
+
+## 9. Pareto frontier between cost and climate impact
+
+Section 7 solved the cost minimum for one climate budget. Repeating this for a
+range of budgets, from the minimum climate impact up to the impact of the cost
+minimum, traces the **Pareto frontier**: for each budget, the lowest discounted
+cost that respects it. This is the epsilon-constraint method; each point is a
+separate model built from the same inputs, with only the budget changed.
+
+The left end is the cheapest pathway *at* the minimum climate impact. It can be
+cheaper than the climate reference above, which minimizes climate impact without
+looking at costs among equally good pathways.
+
+
+```python
+%%capture
+budgets = np.linspace(minimum_climate, climate_total(cost_model), 9)
+frontier_rows = []
+for budget in budgets:
+    budget_inputs = manager.override(
+        # A tiny tolerance keeps the tightest budget feasible despite rounding.
+        cumulative_category_impact_limits={"climate_change": budget + 1e-6},
+    )
+    budget_model = optimizer.create_model(
+        budget_inputs, name=f"budget_{budget:.0f}", objective="cost",
+    )
+    budget_model, budget_cost, _ = optimizer.solve_model(
+        budget_model, solver_name="glpk", tee=False,
+    )
+    frontier_rows.append({
+        "Climate budget [kg CO2-eq]": budget,
+        "Climate [kg CO2-eq]": climate_total(budget_model),
+        "Total cost [EUR_2025 PV]": budget_cost,
+    })
+frontier = pd.DataFrame(frontier_rows)
+# Extra cost per kg CO2-eq avoided between neighboring points
+frontier["Abatement cost [EUR_2025/kg CO2-eq]"] = (
+    -frontier["Total cost [EUR_2025 PV]"].diff()
+    / frontier["Climate [kg CO2-eq]"].diff()
+)
+```
+
+
+```python
+fig, ax = plt.subplots(figsize=(6.5, 4), layout="constrained")
+ax.plot(frontier["Climate [kg CO2-eq]"], frontier["Total cost [EUR_2025 PV]"],
+        color="#242424", marker="o", markersize=4, linewidth=1.2,
+        label="Pareto frontier (cost minimum per budget)")
+markers = {"Cost minimum": "s", "Climate reference": "^", "Cost + climate budget": "D"}
+for scenario, marker in markers.items():
+    ax.scatter(comparison.loc[scenario, "Climate [kg CO2-eq]"],
+               comparison.loc[scenario, "Total cost [EUR_2025 PV]"],
+               marker=marker, s=60, zorder=3, label=scenario)
+ax.set(xlabel="Cumulative climate impact [kg CO2-eq]",
+       ylabel="Discounted cost [EUR_2025 PV]")
+ax.grid(alpha=0.2)
+ax.legend(frameon=False, fontsize=9)
+plt.show()
+
+frontier.round(2)
+```
+
+
+    
+![png](basic_example_econ_files/output_31_0.png)
+    
+
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Climate budget [kg CO2-eq]</th>
+      <th>Climate [kg CO2-eq]</th>
+      <th>Total cost [EUR_2025 PV]</th>
+      <th>Abatement cost [EUR_2025/kg CO2-eq]</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>240.00</td>
+      <td>240.00</td>
+      <td>551.52</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>263.75</td>
+      <td>263.75</td>
+      <td>544.43</td>
+      <td>0.3</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>287.50</td>
+      <td>287.50</td>
+      <td>537.35</td>
+      <td>0.3</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>311.25</td>
+      <td>311.25</td>
+      <td>530.27</td>
+      <td>0.3</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>335.00</td>
+      <td>335.00</td>
+      <td>523.19</td>
+      <td>0.3</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>358.75</td>
+      <td>358.75</td>
+      <td>516.11</td>
+      <td>0.3</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>382.50</td>
+      <td>382.50</td>
+      <td>509.03</td>
+      <td>0.3</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>406.25</td>
+      <td>406.25</td>
+      <td>501.94</td>
+      <td>0.3</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>430.00</td>
+      <td>430.00</td>
+      <td>494.86</td>
+      <td>0.3</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+
+```python
+# The frontier runs from the cost minimum to the climate minimum and never
+# exceeds the cost of any reference pathway with the same or a lower impact.
+assert np.isclose(frontier["Total cost [EUR_2025 PV]"].iloc[-1], minimum_cost)
+assert np.isclose(frontier["Climate [kg CO2-eq]"].iloc[0], minimum_climate, atol=1e-4)
+assert (frontier["Total cost [EUR_2025 PV]"].diff().dropna() <= 1e-6).all()
+assert (
+    frontier["Total cost [EUR_2025 PV]"].iloc[0]
+    <= comparison.loc["Climate reference", "Total cost [EUR_2025 PV]"] + 1e-6
+)
+```
+
+In this small system the frontier is a straight line: every kilogram of CO2-eq
+avoided comes from the same substitution, shifting production from the
+conventional to the advanced process, at a constant abatement cost of about
+0.30 EUR_2025 per kg CO2-eq. The three scenarios from above lie on it. Systems
+with more technologies typically give a kinked frontier, whose slope steepens
+as the cheaper abatement options are used up.
+
+Here the climate reference is also the cheapest pathway at the minimum climate
+impact. That is not guaranteed in general: when several pathways reach the same
+minimum impact, only the left end of the frontier is sure to be the cheapest.
+
+## 10. Further reading
 
 The essential chain is **Brightway exchanges + background prices -> processed
 inputs -> objective and optional constraint -> results**.
 
-- [Minimizing costs](../objective_cost.md): pricing,
+- [Minimizing costs](../minimizing_costs.md): pricing,
   discounting, and cost interpretation.
 - [Foreground modeling](../foreground_modeling.md) and
   [constraints](../constraints.md): lifecycle timing, existing
   capacity, technology changes, and deployment limits.
-- [Postprocessing](../postprocessing_guide.md): further result views.
+- [Postprocessing](../postprocessing.md): further result views.
 - [Basic example](basic_example.md) and [methanol and iron](methanol_and_iron.md):
   multi-product and connected foreground systems.
 

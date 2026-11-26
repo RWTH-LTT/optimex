@@ -10,7 +10,7 @@ tags:
 
 The environmental objective, the default of `create_model()`, minimizes the
 cumulative impact in one impact category. It needs nothing beyond the LCA model
-described in [Optimization Setup](optimization_setup.md).
+described in [Background Data](background_data.md), [Foreground Modeling](foreground_modeling.md), and [LCA Processing](lca_processing.md).
 
 ```python
 from optimex import optimizer
@@ -63,7 +63,7 @@ With `TemporalConfig.fixed_time_horizon=True` (the default), the time horizon en
 at a fixed date counted from the demand, so an emission late in the transition is
 integrated over a shorter period than an early one and weighs less. The optimizer
 thus sees an incentive to defer emissions or to remove CO~2~ early. See
-[Characterization Methods](optimization_setup.md#characterization-methods) for the
+[Characterization Methods](lca_processing.md#characterization-methods) for the
 configuration and `time_horizon`.
 
 ---
@@ -84,9 +84,8 @@ model = optimizer.create_model(
 )
 ```
 
-To explore the trade-off between two categories, solve the model once per category
-for the two extremes and then sweep a limit on one while minimizing the other, as
-shown for costs in [Objectives](objectives.md#trade-offs-between-objectives).
+To explore the trade-off between two categories, sweep a limit on one while
+minimizing the other, see [Trade-offs](trade_offs.md#two-impact-categories).
 
 ---
 
@@ -105,8 +104,29 @@ pp.plot_impacts()
 ```
 
 All configured categories are evaluated for the solution, not only the objective
-category. If market prices are available (see [Minimizing Costs](objective_cost.md)),
-`pp.get_costs()` also reports what the impact-minimal pathway costs.
+category.
+
+### Costs of the Impact Minimum
+
+You can minimize an impact and still carry the costs through. If the inputs
+contain market prices (see [Market Prices](background_data.md#market-prices)),
+every model computes the costs of its pathway, whatever it minimizes. The
+prices then only enter the reporting, not the decision:
+
+```python
+model = optimizer.create_model(
+    model_inputs, name="impact_minimum", objective_category="climate_change"
+)
+solved_model, total_impact, _ = optimizer.solve_model(model, solver_name="glpk")
+
+pp = PostProcessor(solved_model)
+pp.get_costs()                             # costs per year, driver, and process
+pp.get_costs(discounted=True).sum().sum()  # discounted total cost of this pathway
+```
+
+This tells you what the environmentally optimal pathway costs, for example to
+compare it with the cost minimum or to place it on a
+[trade-off frontier](trade_offs.md).
 
 ---
 
@@ -114,8 +134,8 @@ category. If market prices are available (see [Minimizing Costs](objective_cost.
 
 - **Unbounded models**: if an installation-driven flow has a net negative impact
   (for example, a credit at end-of-life), installing more units always lowers the
-  objective. Set finite `process_deployment_limits_max` for such processes or
-  check the sign of the credit. `solve_model()` points this out when it happens.
+  objective. Set finite `process_deployment_limits_max` for such processes, see
+  [Solving](solving.md#handling-infeasibility).
 - **Ties**: several pathways can reach the same minimal impact, for example when a
   process has no impact in the objective category. The solver returns one of them,
   which is not necessarily the cheapest or otherwise preferable one.

@@ -7,7 +7,7 @@ tags:
 
 # Quick Start
 
-A condensed reference for using `optimex`. For the underlying framework, see the [Theory](theory_how_it_works.md) page. For detailed explanations, see the [User Guide](brightway_setup.md), [Examples](examples/index.md), or the [API Reference](../api/index.md).
+A condensed reference for using `optimex`. For the underlying framework, see the [Theory](theory_how_it_works.md) page. For detailed explanations, see the [User Guide](workflow.md), [Examples](examples/index.md), or the [API Reference](../api/index.md).
 
 ---
 
@@ -61,7 +61,7 @@ lca_data = lca_processor.LCADataProcessor(config)
 manager = converter.ModelInputManager()
 model_inputs = manager.parse_from_lca_processor(lca_data)
 
-# 6. Create and solve model (minimizing an impact category; see "Objectives" for costs)
+# 6. Create and solve model (minimizing an impact; use objective="cost" for costs)
 model = optimizer.create_model(model_inputs, name="my_model", objective_category="climate_change")
 solved, objective, results = optimizer.solve_model(model, solver_name="glpk")
 
@@ -187,10 +187,10 @@ model_inputs.existing_capacity = {("old_plant", 2010): 500.0}
 
 ## Objectives
 
-| Minimize | Call | Guide |
-|----------|------|-------|
-| Impact in one category | `create_model(inputs, name, objective_category="climate_change")` | [Minimizing Impacts](objective_impact.md) |
-| Discounted cost | `create_model(inputs, name, objective="cost")` | [Minimizing Costs](objective_cost.md) |
+| Minimize | Call | Extra data | Guide |
+|----------|------|------------|-------|
+| Impact in one category | `create_model(inputs, name, objective_category="climate_change")` | — | [Minimizing Impacts](minimizing_impacts.md) |
+| Discounted cost | `create_model(inputs, name, objective="cost")` | Prices via `set_market_prices()` and `LCAConfig(price_attribute="market_price")` | [Minimizing Costs](minimizing_costs.md) |
 
 ---
 

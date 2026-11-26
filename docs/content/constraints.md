@@ -7,7 +7,7 @@ tags:
 
 # Optimization Constraints
 
-`optimex` minimizes the [objective](objectives.md) of your choice, an impact category or costs, while meeting the time-specific demand $\mathbf{f}_t$ (see [Theory: Complete Formulation](theory_how_it_works.md)). Real-world optimization problems often require additional constraints to reflect practical limitations, policy requirements, or scenario-specific conditions — such as existing brownfield capacities, resource bottlenecks, or cumulative environmental budgets.
+`optimex` minimizes the [objective](choosing_objective.md) of your choice, an impact category or costs, while meeting the time-specific demand $\mathbf{f}_t$ (see [Theory: Complete Formulation](theory_how_it_works.md)). Real-world optimization problems often require additional constraints to reflect practical limitations, policy requirements, or scenario-specific conditions — such as existing brownfield capacities, resource bottlenecks, or cumulative environmental budgets.
 
 This page documents all available constraint options in `optimex`.
 
@@ -126,7 +126,7 @@ model_inputs.process_operation_limits_min = {
 
 ## Category Impact Limits
 
-Impact limits apply with either objective. Combined with the [cost objective](objective_cost.md), they give the cheapest pathway within an environmental budget; sweeping the limit traces the [trade-off between costs and impacts](objectives.md#trade-offs-between-objectives).
+Impact limits apply with either objective. Combined with the [cost objective](minimizing_costs.md), they give the cheapest pathway within an environmental budget; sweeping the limit traces the [trade-off between costs and impacts](trade_offs.md).
 
 Constrain the environmental impact in specific categories, either at specific times or cumulatively.
 
@@ -241,7 +241,7 @@ model_inputs.cumulative_flow_limits_max = {
     categories are dropped during LCA processing, since they cannot affect any
     impact. To constrain such a flow, list it in
     `LCAConfig.background_inventory.retain_flows`. See
-    [Background Inventory](optimization_setup.md#background-inventory).
+    [Background Inventory](lca_processing.md#background-inventory).
 
     Setting the limit through `ModelInputManager.override()` raises if the flow is
     not in the model. Assigning it to an existing `OptimizationModelInputs`
@@ -373,19 +373,4 @@ solved_model, objective, results = optimizer.solve_model(model)
 
 ## Handling Infeasibility
 
-If constraints are too restrictive, the optimization may become infeasible (no solution exists). To debug:
-
-```python
-# Enable IIS (Irreducible Infeasible Set) generation
-solved_model, objective, results = optimizer.solve_model(
-    model,
-    compute_iis=True
-)
-# Check model_iis.ilp for the conflicting constraints
-```
-
-!!! tip "Common Causes of Infeasibility"
-    - Demand cannot be met with available capacity limits
-    - Impact limits are below the minimum achievable impact
-    - Conflicting min/max constraints
-    - Insufficient existing capacity with restrictive deployment limits
+Constraints that are too restrictive make the problem infeasible. See [Solving: Handling Infeasibility](solving.md#handling-infeasibility) for finding the conflicting constraints and for common causes.

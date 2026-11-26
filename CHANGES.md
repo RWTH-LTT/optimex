@@ -15,9 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PostProcessor.get_costs()` reports costs by installation/operation driver and
   process for any solved model. `objective_category` is now optional
   ([#71](https://github.com/RWTH-LTT/optimex/pull/71))
-* New docs section "Objectives" with an overview of the objectives and how to trace
-  cost-impact trade-offs, and one guide each for minimizing impacts and costs, plus
-  a basic cost example ([#71](https://github.com/RWTH-LTT/optimex/pull/71))
+* Restructured the user guide along the workflow (data, LCA processing,
+  optimization, results), with new pages on choosing an objective, minimizing
+  impacts, minimizing costs, trade-offs, and solving. Old page URLs redirect to
+  the new ones. Added a basic cost example ending in a cost-climate Pareto
+  frontier ([#72](https://github.com/RWTH-LTT/optimex/pull/72))
 
 ## [0.7.0] - 2026-08-20
 * Fixed under-counting of installation impacts. One installed unit now delivers its

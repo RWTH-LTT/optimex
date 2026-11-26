@@ -23,7 +23,7 @@ solved_model, objective, results = optimizer.solve_model(model, solver_name="glp
 pp = postprocessing.PostProcessor(solved_model)
 ```
 
-The `PostProcessor` works the same for every [objective](objectives.md): impacts in all categories, and costs if prices are available, are reported for any solved model.
+The `PostProcessor` works the same for every [objective](choosing_objective.md): impacts in all categories, and costs if prices are available, are reported for any solved model.
 
 ---
 
@@ -66,7 +66,7 @@ climate_impacts = df_impacts["climate_change"].sum().sum()
 
 ### Costs
 
-If the model inputs carry market prices (see [Minimizing Costs](objective_cost.md)), get the cost of the background purchases by driver, process, and time:
+If the model inputs carry market prices (see [Minimizing Costs](minimizing_costs.md)), get the cost of the background purchases by driver, process, and time:
 
 ```python
 df_costs = pp.get_costs()                    # undiscounted
@@ -427,5 +427,6 @@ for name, data in results.items():
 
 ## Next Steps
 
+- [Trade-offs](trade_offs.md): Compare the results of a series of models
 - [Examples](examples/index.md): See complete worked examples
 - [API Reference](../api/postprocessing.md): Full PostProcessor API documentation

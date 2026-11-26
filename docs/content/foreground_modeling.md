@@ -201,6 +201,9 @@ Exchanges marked with `"operation": True` **scale with the operational level** $
 - Production outputs: `"operation": True`
 - Operational inputs/emissions: `"operation": True`
 
+!!! note "The flag also splits costs"
+    With the [cost objective](minimizing_costs.md), the same flag decides how a background purchase is costed: purchases on operation exchanges within the operation phase are **operation-driven** and scale with the units running; all others are **installation-driven** and scale with the installed units, wherever they fall in the lifecycle. `PostProcessor.get_costs()` reports the two separately.
+
 ---
 
 ## Complete Process Example
@@ -468,5 +471,5 @@ fg.register()
 
 ## Next Steps
 
-- [Optimization Setup](optimization_setup.md): Configure demand and run the optimization
+- [LCA Processing](lca_processing.md): Define the demand and build the optimization inputs
 - [Constraints](constraints.md): Add deployment limits and other constraints

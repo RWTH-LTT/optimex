@@ -1,23 +1,23 @@
 ---
-icon: lucide/sliders-horizontal
+icon: lucide/cpu
 tags:
-  - optimization
+  - lca processing
   - setup
 ---
 
-# Optimization Setup
+# LCA Processing
 
-Once your Brightway databases are configured, you need to set up the optimization problem: define the time-specific demand $\mathbf{f}_t$, configure characterization methods (static or [dynamic](theory_scope_and_limits.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and create and solve the optimization model for the [objective](objectives.md) of your choice: an impact category or costs.
+With the [background data](background_data.md) and [foreground](foreground_modeling.md) in place, the second step of the [workflow](workflow.md) turns them into optimization inputs: define the time-specific demand $\mathbf{f}_t$, configure characterization methods (static or [dynamic](theory_scope_and_limits.md#dynamic-characterization)), process the LCA data into time-explicit tensors, and convert them into `OptimizationModelInputs`.
 
 ---
 
 ## Overview
 
-The optimization setup follows this pipeline:
+```
+Demand + LCAConfig → LCADataProcessor → ModelInputManager → OptimizationModelInputs
+```
 
-```
-Demand + Config → LCADataProcessor → ModelInputManager → create_model → solve_model
-```
+This is the slow step of the workflow, so the resulting inputs can be [saved](#saving-and-loading-model-inputs) and reused for any number of optimizations.
 
 ---
 
@@ -100,7 +100,7 @@ Further options:
 |-----------|-------------|
 | `background_inventory` | How background inventories are calculated, see [Background Inventory](#background-inventory) |
 | `foreground_db_name` | Name of the foreground database (default `"foreground"`) |
-| `price_attribute` | Background node attribute holding market prices, needed for the [cost objective](objective_cost.md#reading-prices) (default `None`: no prices are read) |
+| `price_attribute` | Background node attribute holding market prices, needed for the [cost objective](minimizing_costs.md); see [Market Prices](#market-prices) (default `None`: no prices are read) |
 
 ### Temporal Settings
 
@@ -217,6 +217,24 @@ config = lca_processor.LCAConfig(
 
     Notebooks need no guard. Use `"sequential"` if a guard is not an option.
 
+### Market Prices
+
+For the [cost objective](minimizing_costs.md), set `price_attribute` to the node attribute holding the prices written while [setting up the background data](background_data.md#market-prices):
+
+```python
+config = lca_processor.LCAConfig(
+    ...,
+    price_attribute="market_price",  # attribute written by set_market_prices
+)
+```
+
+The processor then resolves each directly purchased background product in every background database, the same way as for the inventories, and interpolates its prices to every system year with the same weights: linearly between database years, with the nearest database used outside that range. The result is available as `lca_data.intermediate_flow_prices`, keyed by `(intermediate flow, year)`, and is passed on to the optimization inputs.
+
+Missing prices are handled conservatively:
+
+- A product without a price in **any** database is left out and treated as free. All such products are listed in a single warning: check it, since a free purchase is rarely intended.
+- A product priced in **some** databases but not in others raises a `ValueError`, because interpolating with the missing price would silently pull the price towards zero.
+
 ---
 
 ## Processing LCA Data
@@ -264,6 +282,15 @@ manager = converter.ModelInputManager()
 model_inputs = manager.parse_from_lca_processor(lca_data)
 ```
 
+To change inputs afterwards, for example to add constraints, discounting, or prices set by hand, use `override()`. It validates the changed inputs and returns them:
+
+```python
+model_inputs = manager.override(
+    discount_rate=0.03,
+    cumulative_category_impact_limits={"climate_change": 1.0e6},
+)
+```
+
 ### Saving and Loading Model Inputs
 
 Avoid reprocessing by saving:
@@ -279,170 +306,12 @@ manager.load_inputs("model_inputs.json")
 model_inputs = manager.model_inputs
 ```
 
-### Adding Constraints
-
-Before creating the model, add any constraints:
-
-```python
-# See Constraints guide for all options
-model_inputs.cumulative_category_impact_limits = {"climate_change": 1000000}
-model_inputs.process_deployment_limits_max = {("coal_plant", 2025): 0}
-```
-
----
-
-## Creating the Optimization Model
-
-```python
-from optimex import optimizer
-
-model = optimizer.create_model(
-    inputs=model_inputs,
-    name="my_optimization",
-    objective_category="climate_change",
-)
-```
-
-| Parameter | Description |
-|-----------|-------------|
-| `inputs` | The `OptimizationModelInputs` object |
-| `name` | Identifier for the model |
-| `objective` | What to minimize: `"environmental"` (default) or `"cost"`, see [Objectives](objectives.md) |
-| `objective_category` | Impact category to minimize; required for `objective="environmental"` |
-| `debug_path` | Optional path of an LP file to write the model to |
-
-To minimize costs instead, pass `objective="cost"` and leave out the category:
-
-```python
-model = optimizer.create_model(model_inputs, name="cost_minimum", objective="cost")
-```
-
-This needs market prices in the model inputs; see [Minimizing Costs](objective_cost.md).
-
-### Debug Output
-
-To inspect the model formulation:
-
-```python
-model = optimizer.create_model(
-    inputs=model_inputs,
-    name="debug_model",
-    objective_category="climate_change",
-    debug_path="model_debug.lp",  # Write LP file
-)
-```
-
----
-
-## Solving the Model
-
-```python
-solved_model, objective_value, results = optimizer.solve_model(
-    model,
-    solver_name="glpk",  # or "gurobi", "cplex", "highs"
-    tee=False,           # Set True for solver output
-)
-```
-
-### Solver Options
-
-| Solver | License | Notes |
-|--------|---------|-------|
-| `glpk` | Open source | Good for small-medium problems |
-| `highs` | Open source | Fast, good for large problems |
-| `gurobi` | Commercial (free academic) | Very fast, robust |
-| `cplex` | Commercial | Enterprise-grade |
-
-### Handling Infeasibility
-
-If the problem is infeasible:
-
-```python
-solved_model, objective_value, results = optimizer.solve_model(
-    model,
-    solver_name="gurobi",
-    compute_iis=True,  # Generate Irreducible Infeasible Set
-)
-# Check model_iis.ilp for conflicting constraints
-```
-
----
-
-## Saving Solved Models
-
-```python
-# Save solved model for later analysis
-optimizer.save_solved_model(
-    solved_model,
-    "solved_model.pkl",
-    objective_value=objective_value,
-)
-
-# Load later
-loaded_model = optimizer.load_solved_model("solved_model.pkl")
-```
-
----
-
-## Complete Example
-
-```python
-from datetime import datetime
-import numpy as np
-import bw2data as bd
-from bw_temporalis import TemporalDistribution
-from optimex import lca_processor, converter, optimizer
-
-# 1. Define demand
-product = bd.get_node(database="foreground", name="hydrogen")
-years = range(2020, 2050)
-td_demand = TemporalDistribution(
-    date=np.array([datetime(y, 1, 1).isoformat() for y in years], dtype='datetime64[s]'),
-    amount=np.array([0]*5 + [1000]*25, dtype=float),
-)
-
-# 2. Configure LCA
-config = lca_processor.LCAConfig(
-    demand={product: td_demand},
-    temporal={
-        "start_date": datetime(2020, 1, 1),
-        "temporal_resolution": "year",
-        "time_horizon": 100,
-    },
-    characterization_methods=[
-        {
-            "category_name": "climate_change",
-            "brightway_method": ("IPCC 2021", "GWP 100a"),
-            "metric": "CRF",
-        },
-    ],
-)
-
-# 3. Process LCA data
-lca_data = lca_processor.LCADataProcessor(config)
-
-# 4. Convert to optimization inputs
-manager = converter.ModelInputManager()
-model_inputs = manager.parse_from_lca_processor(lca_data)
-
-# 5. Add constraints (optional)
-model_inputs.cumulative_category_impact_limits = {"climate_change": 500000}
-
-# 6. Create and solve
-model = optimizer.create_model(
-    model_inputs,
-    name="hydrogen_transition",
-    objective_category="climate_change",
-)
-solved, objective, results = optimizer.solve_model(model, solver_name="glpk")
-
-print(f"Optimal impact: {objective:.2f}")
-```
+The model inputs are the hand-over to the optimization: [constraints](constraints.md) are added to them, and the [objective](choosing_objective.md) is chosen when the model is built from them, see [Solving](solving.md).
 
 ---
 
 ## Next Steps
 
-- [Objectives](objectives.md): Minimize impacts or costs, and trace trade-offs between them
+- [Choosing an Objective](choosing_objective.md): Minimize impacts or costs
 - [Constraints](constraints.md): Add deployment limits, impact budgets, and more
-- [Postprocessing](postprocessing_guide.md): Analyze and visualize results
+- [Solving](solving.md): Build and solve the model

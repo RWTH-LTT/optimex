@@ -10,17 +10,20 @@ tags:
 
 The cost objective minimizes the discounted cost of the background products that
 the foreground system purchases directly. It uses the same installation and
-operation decisions as the [environmental objective](objective_impact.md), so
-impact limits still apply and can constrain the cost-optimal pathway. See
-[Objectives](objectives.md) for how the two compare and how to trace the
-trade-off between them.
+operation decisions as the [environmental objective](minimizing_impacts.md), so
+impact limits still apply and can constrain the cost-optimal pathway.
 
-The cost objective adds three steps to the workflow of
-[Optimization Setup](optimization_setup.md):
+Compared with minimizing impacts, it needs three additions along the
+[workflow](workflow.md):
 
-1. Write market prices to the background nodes with `set_market_prices()`.
-2. Read them by setting `LCAConfig.price_attribute`.
-3. Build the model with `objective="cost"`.
+1. **Data:** write market prices to the background nodes, see
+   [Market Prices](background_data.md#market-prices).
+2. **LCA processing:** read them by setting `LCAConfig.price_attribute`, see
+   [LCA Processing](lca_processing.md#market-prices).
+3. **Optimization:** build the model with `objective="cost"`, optionally with a
+   discount rate (below).
+
+This page explains what the cost objective computes and how to interpret it.
 
 The [basic cost example](examples/basic_example_econ.md) walks through all steps
 with a synthetic one-product system that needs no ecoinvent data.
@@ -61,82 +64,17 @@ a replacement ten years after a 2030 installation is priced and discounted in
 
 A product has one price per year, whichever decision drives its purchase.
 
-## Setting Market Prices
+## Prices
 
-`set_market_prices()` writes a price to the background node of each
-time-specific database. Each price refers to one unit of the node's reference
-product. Use one currency and price basis throughout: 90 EUR/MWh becomes
-0.09 EUR/kWh for a product measured in kilowatt hours. The helper performs no
-unit conversion, currency conversion, or inflation adjustment.
+Prices are data: they are written to the background nodes while
+[setting up the background data](background_data.md#market-prices), one price per
+node and background database. Each price refers to one unit of the node's
+reference product, in one currency and price basis for all prices.
+[LCA Processing](lca_processing.md#market-prices) reads them when
+`LCAConfig.price_attribute` is set, interpolates them to every system year like
+the inventories, and reports products without a price.
 
-```python
-from optimex.economics import set_market_prices
-
-background_databases = {
-    2020: "ei312_REMIND-EU_SSP2_NDC_2020",
-    2030: "ei312_REMIND-EU_SSP2_NDC_2030",
-}
-price_data = [
-    {
-        "name": "market group for electricity, medium voltage",
-        "location": "RER",
-        "product": "electricity, medium voltage",
-        "unit": "kilowatt hour",
-        "year": year,
-        "price": price,  # constant 2020 EUR/kWh
-    }
-    for year, price in [(2020, 0.09), (2030, 0.07)]
-]
-
-set_market_prices(
-    price_data=price_data,
-    background_databases=background_databases,
-    product_col="product",
-    unit_col="unit",
-)
-```
-
-Rows identify nodes by name and location, optionally narrowed by reference
-product and unit. Codes are not used, because premise assigns different codes to
-the same activity in each scenario database. `price_data` can also be a pandas
-DataFrame; `name_col`, `location_col`, `product_col`, `unit_col`, `year_col`, and
-`price_col` map custom column names. `overwrite=False` keeps existing prices, and
-`strict=False` turns unresolved rows into warnings instead of errors.
-
-Prospective databases, for example from `premise`, do not supply market prices
-themselves: set them for every database.
-
-## Reading Prices
-
-Prices are only read when `LCAConfig.price_attribute` names the node attribute
-holding them, so impact-only workflows are unaffected:
-
-```python
-from optimex import lca_processor
-
-config = lca_processor.LCAConfig(
-    demand=...,
-    temporal=...,
-    characterization_methods=...,
-    price_attribute="market_price",  # attribute written by set_market_prices
-)
-processor = lca_processor.LCADataProcessor(config)
-processor.intermediate_flow_prices  # {(intermediate flow, year): price}
-```
-
-The processor resolves each directly purchased product in every background
-database the same way it does for the inventories, and interpolates the prices to
-system time with the same weights: linearly between database years, with the
-nearest database used outside that range.
-
-Missing prices are handled conservatively:
-
-- A product without a price in **any** database is left out and treated as
-  free. All such products are listed in a single warning: check it, since a free
-  purchase is rarely what you want.
-- A product priced in **some** databases but not in others raises a
-  `ValueError`, because interpolating with the missing price would silently pull
-  the price towards zero.
+A product without a price is treated as free, so check the warning listing them.
 
 ## Model Inputs and Discounting
 
@@ -194,11 +132,12 @@ model = optimizer.create_model(model_inputs, name="cost_with_limits", objective=
 ```
 
 Rebuild the model after changing its inputs. See [Constraints](constraints.md)
-for further constraint options.
+for further constraint options, and [Trade-offs](trade_offs.md) for sweeping a
+limit to trace how costs rise as the budget tightens.
 
 ## Results
 
-`PostProcessor.get_costs()` returns the costs in the currency of the input
+[`PostProcessor.get_costs()`](postprocessing.md#costs) returns the costs in the currency of the input
 prices, with one column per driver and process:
 
 ```python
@@ -211,7 +150,8 @@ pp.get_costs(discounted=True).sum().sum()  # equals the discounted total cost
 ```
 
 Costs are built for every model with prices, so the cost of an impact-minimal
-pathway can be read the same way.
+pathway can be read the same way, see
+[Costs of the Impact Minimum](minimizing_impacts.md#costs-of-the-impact-minimum).
 
 The model components behind it are, like the impact expressions, in scaled units
 (multiply by `model.scales["foreground"] * model.scales["cost"]`):

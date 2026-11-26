@@ -23,7 +23,7 @@ Here are some examples on how you can use the `optimex` package.
 
     ---
 
-    A self-contained example of the cost objective. Prices background purchases, minimizes discounted costs, and compares the cost minimum with the climate minimum and a cost minimum under a carbon budget.
+    A self-contained example of the cost objective. Prices background purchases, minimizes discounted costs, compares the cost minimum with the climate minimum and a cost minimum under a carbon budget, and traces the Pareto frontier between cost and climate impact.
 
     [:lucide-arrow-right: View Example](./basic_example_econ.md)
 

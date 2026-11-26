@@ -5,9 +5,9 @@ tags:
   - database
 ---
 
-# Setting Up Brightway
+# Background Data
 
-`optimex` builds on the [Brightway](https://docs.brightway.dev/) LCA framework. Before running an optimization, you need to set up a Brightway project with the required databases: a biosphere database for elementary flows, one or more background databases representing supply chains at different points in time (see [Theory: Background Evolution](theory_how_it_works.md#step-4-modeling-temporal-evolution)), and a foreground database with the candidate processes to optimize.
+`optimex` builds on the [Brightway](https://docs.brightway.dev/) LCA framework. The first step of the [workflow](workflow.md) is a Brightway project with the required data: a biosphere database for elementary flows, one or more background databases representing supply chains at different points in time (see [Theory: Background Evolution](theory_how_it_works.md#step-4-modeling-temporal-evolution)), LCIA methods, and, for the [cost objective](minimizing_costs.md), market prices of the background products. The foreground database with the candidate processes has its own page, [Foreground Modeling](foreground_modeling.md).
 
 ---
 
@@ -161,6 +161,59 @@ bd.Method(("Water use", "m3")).write([
 
 ---
 
+## Market Prices
+
+Only needed for the [cost objective](minimizing_costs.md). Prices are stored on the background nodes, one value per time-specific database, so they can change over time like the inventories. Price the background products that the foreground buys **directly**; their upstream supply chains need no prices.
+
+`set_market_prices()` writes the prices from a table, with one row per node and database year:
+
+```python
+from optimex.economics import set_market_prices
+
+background_databases = {
+    2020: "ei312_REMIND-EU_SSP2_NDC_2020",
+    2030: "ei312_REMIND-EU_SSP2_NDC_2030",
+}
+price_data = [
+    {
+        "name": "market group for electricity, medium voltage",
+        "location": "RER",
+        "product": "electricity, medium voltage",
+        "unit": "kilowatt hour",
+        "year": year,
+        "price": price,  # constant 2020 EUR/kWh
+    }
+    for year, price in [(2020, 0.09), (2030, 0.07)]
+]
+
+set_market_prices(
+    price_data=price_data,
+    background_databases=background_databases,
+    product_col="product",
+    unit_col="unit",
+)
+```
+
+- **Units:** each price refers to one unit of the node's reference product. Use one currency and price basis throughout: 90 EUR/MWh becomes 0.09 EUR/kWh for a product measured in kilowatt hours. No unit, currency, or inflation conversion is applied.
+- **Every database:** set a price in each background database. Prospective databases, for example from `premise`, carry no prices themselves, and a product priced in some databases but not in others is rejected during [LCA processing](lca_processing.md#market-prices).
+- **Matching:** rows identify nodes by name and location, optionally narrowed by reference product and unit. Codes are not used, because premise gives the same activity a different code in each scenario database.
+- **Options:** `price_data` can also be a pandas DataFrame; `name_col`, `location_col`, `product_col`, `unit_col`, `year_col`, and `price_col` map custom column names. `overwrite=False` keeps existing prices, `strict=False` turns unresolvable rows into warnings instead of errors, and `price_attribute` changes the node attribute the price is written to (default `"market_price"`).
+
+To find the products that need a price, list the background inputs of the foreground processes:
+
+```python
+purchased = {
+    (exc.input["name"], exc.input["location"], exc.input["reference product"])
+    for process in bd.Database("foreground")
+    for exc in process.technosphere()
+    if exc.input["database"] != "foreground"
+}
+```
+
+Prices are only read when `LCAConfig.price_attribute` is set, so they do not affect impact-only studies.
+
+---
+
 ## Complete Setup Example
 
 ```python
@@ -226,4 +279,4 @@ assert "foreground" in bd.databases, "Foreground database required!"
 ## Next Steps
 
 - [Foreground Modeling](foreground_modeling.md): Set up foreground processes with temporal distributions, operation flags, and vintage parameters
-- [Optimization Setup](optimization_setup.md): Configure demand, characterization, and run the optimization
+- [LCA Processing](lca_processing.md): Define the demand, configure the time-explicit LCA, and build the optimization inputs

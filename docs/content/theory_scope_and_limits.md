@@ -13,7 +13,7 @@ tags:
 
 ## Economic Costs
 
-The cost objective prices only the background products the foreground buys directly, at given market prices; costs are not propagated through background supply chains, and prices do not react to the decisions taken. Costs scale linearly with installed and operated units, so economies of scale and indivisible plant sizes are not represented. See [Minimizing Costs](objective_cost.md#modeling-assumptions-and-limits).
+The cost objective prices only the background products the foreground buys directly, at given market prices; costs are not propagated through background supply chains, and prices do not react to the decisions taken. Costs scale linearly with installed and operated units, so economies of scale and indivisible plant sizes are not represented. See [Minimizing Costs](minimizing_costs.md#modeling-assumptions-and-limits).
 
 ## Data Requirements
 
