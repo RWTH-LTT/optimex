@@ -18,6 +18,8 @@ import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 
+from optimex.optimizer import expression_value, operation_value
+
 
 class _EngineeringFormatter(mticker.ScalarFormatter):
     """Y-axis formatter that always shows values as X.X with a 10^n offset.
@@ -131,6 +133,51 @@ class PostProcessor:
 
         # Pre-populate cache for code -> name lookups (batch load for performance)
         self._name_cache = self._build_name_cache()
+
+
+    # Lookups shared by the extraction methods. Scanning ACTIVE_VINTAGE_TIME for
+    # every (process, year) is quadratic in the model size, which took days
+    # for systems with thousands of processes.
+    def _vintage_lookup(self) -> dict:
+        """(process, year) -> active vintages, built once."""
+        lookup = getattr(self, "_vintages_by_process_time", None)
+        if lookup is None:
+            lookup = getattr(self.m, "_active_vintages_by_process_time", None)
+            if not lookup:
+                lookup = {}
+                for p, v, t in self.m.ACTIVE_VINTAGE_TIME:
+                    lookup.setdefault((p, t), []).append(v)
+            self._vintages_by_process_time = lookup
+        return lookup
+
+    def _vintages_at(self, p, t):
+        """Vintages of process p that are in operation in year t."""
+        return self._vintage_lookup().get((p, t), ())
+
+    def _vintages_in_year(self, t):
+        """(process, vintage) pairs in operation in year t."""
+        by_year = getattr(self, "_vintages_by_year", None)
+        if by_year is None:
+            by_year = {}
+            for (p, year), vintages in self._vintage_lookup().items():
+                by_year.setdefault(year, []).extend((p, v) for v in vintages)
+            self._vintages_by_year = by_year
+        return by_year.get(t, ())
+
+    def _produced_pairs(self) -> set:
+        """(process, product) pairs with any production entry or override."""
+        pairs = getattr(self, "_production_pairs", None)
+        if pairs is None:
+            production = self.m.foreground_production
+            items = (
+                production.sparse_items()
+                if hasattr(production, "sparse_items")
+                else production.items()
+            )
+            pairs = {(key[0], key[1]) for key, value in items if pyo.value(value)}
+            pairs |= set(getattr(self.m, "_production_overrides_index", ()))
+            self._production_pairs = pairs
+        return pairs
 
     def _create_color_map(self):
         """
@@ -418,7 +465,7 @@ class PostProcessor:
         cat_scales = getattr(self.m, "scales", {}).get("characterization", 1.0)
         fg_scale = getattr(self.m, "scales", {}).get("foreground", 1.0)
         impacts = {
-            (c, p, t): pyo.value(self.m.specific_impact[c, p, t])
+            (c, p, t): expression_value(self.m.specific_impact, (c, p, t))
             * cat_scales[c]
             * fg_scale  # Unscale foreground impacts
             for c in self.m.CATEGORY
@@ -514,14 +561,14 @@ class PostProcessor:
         inventory = {}
         if mapped_inventory is not None:
             for (p, i, t) in self.m.scaled_technosphere_flow:
-                amount = pyo.value(self.m.scaled_technosphere_flow[p, i, t])
+                amount = expression_value(self.m.scaled_technosphere_flow, (p, i, t))
                 if not amount:
                     continue
                 for e, factor in mapped_inventory.get((i, t), ()):
                     key = (p, e, t)
                     inventory[key] = inventory.get(key, 0.0) + amount * factor
             for (p, e, t) in self.m.scaled_biosphere_flow:
-                amount = pyo.value(self.m.scaled_biosphere_flow[p, e, t])
+                amount = expression_value(self.m.scaled_biosphere_flow, (p, e, t))
                 if amount:
                     key = (p, e, t)
                     inventory[key] = inventory.get(key, 0.0) + amount
@@ -763,12 +810,10 @@ class PostProcessor:
             operation_matrix = {}
             for p in self.m.PROCESS:
                 for t in self.m.SYSTEM_TIME:
-                    total_op = sum(
-                        pyo.value(self.m.var_operation[proc, v, time])
-                        for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME
-                        if proc == p and time == t
+                    operation_matrix[(t, p)] = sum(
+                        operation_value(self.m, p, v, t)
+                        for v in self._vintages_at(p, t)
                     )
-                    operation_matrix[(t, p)] = total_op
             df = pd.DataFrame.from_dict(operation_matrix, orient="index", columns=["Value"])
             df.index = pd.MultiIndex.from_tuples(df.index, names=["Time", "Process"])
             df = df.reset_index()
@@ -778,7 +823,7 @@ class PostProcessor:
         else:
             # Return full 3D data with (Process, Vintage) columns
             operation_matrix = {
-                (t, p, v): pyo.value(self.m.var_operation[p, v, t])
+                (t, p, v): operation_value(self.m, p, v, t)
                 for (p, v, t) in self.m.ACTIVE_VINTAGE_TIME
             }
             df = pd.DataFrame.from_dict(operation_matrix, orient="index", columns=["Value"])
@@ -815,17 +860,18 @@ class PostProcessor:
             """Check if any vintage overrides exist for this process/product."""
             return (p, r) in production_overrides_index
 
+        produced = self._produced_pairs()
+        process_times = set(self.m.PROCESS_TIME)
         for p in self.m.PROCESS:
             for f in self.m.PRODUCT:
+                if (p, f) not in produced:
+                    continue  # all zeros, filled in below
                 for t in self.m.SYSTEM_TIME:
                     # Sum production across all active vintages at time t
                     total_production = 0
-                    for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
-                        if proc != p or time != t:
-                            continue
-
+                    for v in self._vintages_at(p, t):
                         tau = t - v  # lifecycle stage of this vintage in year t
-                        if tau not in self.m.PROCESS_TIME:
+                        if tau not in process_times:
                             continue
 
                         # Annual output per running unit at this lifecycle stage
@@ -837,21 +883,27 @@ class PostProcessor:
                             )
 
                         # Production from this vintage
-                        total_production += production_rate * pyo.value(self.m.var_operation[p, v, t])
+                        total_production += production_rate * operation_value(self.m, p, v, t)
 
                     production_tensor[(p, f, t)] = total_production * fg_scale
 
-        df = pd.DataFrame.from_dict(
-            production_tensor, orient="index", columns=["Value"]
+        # Every (process, product) column, zeros for pairs without production,
+        # in process then product order. Filled as one array: going through a
+        # dict and `pivot` for the mostly-zero dense table dominated for large
+        # systems.
+        times = list(self.m.SYSTEM_TIME)
+        columns = pd.MultiIndex.from_tuples(
+            [(p, f) for p in self.m.PROCESS for f in self.m.PRODUCT],
+            names=["Process", "Product"],
         )
-        df.index = pd.MultiIndex.from_tuples(
-            df.index, names=["Process", "Product", "Time"]
+        values = np.zeros((len(times), len(columns)))
+        row = {t: i for i, t in enumerate(times)}
+        column = {key: j for j, key in enumerate(columns)}
+        for (p, f, t), value in production_tensor.items():
+            values[row[t], column[p, f]] = value
+        self.df_production = pd.DataFrame(
+            values, index=pd.Index(times, name="Time"), columns=columns
         )
-        df = df.reset_index()
-        df_pivot = df.pivot(
-            index="Time", columns=["Process", "Product"], values="Value"
-        )
-        self.df_production = df_pivot
         return self.df_production
 
     def get_demand(self) -> pd.DataFrame:
@@ -1156,13 +1208,14 @@ class PostProcessor:
                 return pyo.value(self.m.var_installation[p, v])
             return existing_cap_dict.get((p, v), 0)
 
+        produced = self._produced_pairs()
         for f in self.m.PRODUCT:
             for t in self.m.SYSTEM_TIME:
                 # Sum annual capacity over all vintages active at time t
                 total_capacity = 0
 
-                for (p, v, time) in self.m.ACTIVE_VINTAGE_TIME:
-                    if time != t:
+                for (p, v) in self._vintages_in_year(t):
+                    if (p, f) not in produced:
                         continue
 
                     tau = t - v  # lifecycle stage of this vintage in year t
@@ -1445,12 +1498,8 @@ class PostProcessor:
 
                 # Actual production at time t, summed over all active vintages
                 total_operation = 0
-                for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
-                    if proc != p or time != t:
-                        continue
-                    total_operation += annual_rate(p, product, t - v, v) * pyo.value(
-                        self.m.var_operation[p, v, t]
-                    )
+                for v in self._vintages_at(p, t):
+                    total_operation += annual_rate(p, product, t - v, v) * operation_value(self.m, p, v, t)
 
                 operation[p][t] = total_operation * fg_scale
 
@@ -1917,12 +1966,10 @@ class PostProcessor:
                 # the output per unit and year at each vintage's lifecycle stage
                 capacity = 0
                 operation = 0
-                for (proc, v, time) in self.m.ACTIVE_VINTAGE_TIME:
-                    if proc != p or time != t:
-                        continue
+                for v in self._vintages_at(p, t):
                     rate = annual_rate(p, product, t - v, v)
                     capacity += rate * units_available(p, v)
-                    operation += rate * pyo.value(self.m.var_operation[p, v, t])
+                    operation += rate * operation_value(self.m, p, v, t)
 
                 capacity *= fg_scale
                 operation *= fg_scale

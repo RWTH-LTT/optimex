@@ -58,6 +58,8 @@ nav = [
     { "LCA Processor" = "api/lca_processor.md" },
     { Converter = "api/converter.md" },
     { Optimizer = "api/optimizer.md" },
+    { "Pyomo Backend" = "api/pyomo_backend.md" },
+    { "linopy Backend" = "api/linopy_backend.md" },
     { Economics = "api/economics.md" },
     { Postprocessing = "api/postprocessing.md" },
   ]},

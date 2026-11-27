@@ -984,8 +984,16 @@ class OptimizationModelInputs(BaseModel):
                 - "characterization": Dict mapping each category to its scale factor
                 - "cost": Scale factor for intermediate flow prices
         """
-        # Deep copy to preserve raw data
-        scaled = copy.deepcopy(self)
+        # Copy every container one level deep: keys are tuples and values are
+        # numbers, so this isolates the copy as well as a deep copy, at a fraction
+        # of the cost for large tensors. All scaled fields are replaced below.
+        scaled = self.model_copy(
+            update={
+                name: copy.copy(value)
+                for name, value in self
+                if isinstance(value, (dict, list, set))
+            }
+        )
         scaling_factors: Dict[str, Any] = {}
 
         # Expand vintage parameters to effective 4D tensors

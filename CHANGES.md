@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+* Added `create_model(..., backend="linopy")`, which builds the model with linopy
+  instead of Pyomo (`pip install optimex[linopy]`) and is faster for large
+  systems. `solve_model()` and the `PostProcessor` work with both backends
+  ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
+* Added `create_model(..., aggregate_vintages=True)`, which gives processes with
+  identically operating vintages one operation variable per year instead of one
+  per vintage. Same optimum, much smaller model; read per-vintage operation with
+  `optimizer.operation_value()` ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
+* Model construction and `PostProcessor` methods no longer slow down
+  disproportionately with the number of processes; results are unchanged
+  ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
+* Deployment limits are variable bounds instead of the removed
+  `ProcessDeploymentLimitMax`/`Min` constraints, limits that cannot bind create
+  no constraint, and the objective is normalized by its largest coefficient
+  (`model.scales["objective"]`) ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
+* The per-process flow and impact expressions (`scaled_*_flow`,
+  `specific_impact`, `scaled_inventory`, ...) are no longer Pyomo `Expression`
+  components; indexing them and `pyo.value()` work as before
+  ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
 
 ## [0.8.0] - 2026-11-26
 * Added a cost objective: `create_model(..., objective="cost")` minimizes the
