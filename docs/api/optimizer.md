@@ -17,6 +17,9 @@ This module creates and solves Pyomo optimization models that minimize either an
   chosen backend: a [Pyomo](pyomo_backend.md) `ConcreteModel` (default) or, with
   `backend="linopy"`, a [linopy model](linopy_backend.md)
 - **`solve_model()`**: Solves the model and returns denormalized results
+- **`solve_series()`**: Solves a series of related models (sweeps, Pareto
+  frontiers, scenarios) and returns one table of results, see
+  [Series](series.md)
 
 ## Objectives
 

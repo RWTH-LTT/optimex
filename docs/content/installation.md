@@ -264,11 +264,15 @@ print(optimex.__version__)
 
 | Solver | Install | `solver_name` |
 |---|---|---|
-| [HiGHS](https://highs.dev/) (open source) | `pip install highspy` | `"highs"` |
+| [HiGHS](https://highs.dev/) (open source) | `pip install highspy` or `pip install "optimex[highs]"` | `"highs"` |
 | [GLPK](https://www.gnu.org/software/glpk/) (open source) | `conda install -c conda-forge glpk`, or `brew install glpk` (macOS), or `apt install glpk-utils` (Debian/Ubuntu) | `"glpk"` |
 | [Gurobi](https://www.gurobi.com/) (commercial, free for academics) | `pip install "optimex[gurobi]"`, plus a license | `"gurobi"` |
 
-The examples in this documentation use GLPK. Pass the solver to every solve:
+Most examples in this documentation use GLPK, which is enough for single
+models. For [series of models](solving.md#solving-a-series-of-models) (sweeps,
+scenarios) and [Monte Carlo analyses](uncertainty.md), use HiGHS or Gurobi:
+`optimex` then builds the model once and only updates what changes, which is
+much faster for large systems. Pass the solver to every solve:
 
 ```python
 optimizer.solve_model(model, solver_name="glpk")

@@ -88,7 +88,8 @@ model = optimizer.create_model(
 ```
 
 To explore the trade-off between two categories, sweep a limit on one while
-minimizing the other, see [Trade-offs](trade_offs.md#two-impact-categories).
+minimizing the other with `optimizer.solve_series`, see
+[Trade-offs](trade_offs.md#two-impact-categories).
 
 ---
 

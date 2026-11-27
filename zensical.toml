@@ -39,6 +39,7 @@ nav = [
       { "LCA Processing" = "content/lca_processing.md" },
       { Constraints = "content/constraints.md" },
       { Solving = "content/solving.md" },
+      { Uncertainty = "content/uncertainty.md" },
     ]},
     { "4 · Results" = "content/postprocessing.md" },
   ]},
@@ -46,6 +47,7 @@ nav = [
     { Overview = "content/examples/index.md" },
     { "Basic Example" = "content/examples/basic_example.md" },
     { "Basic Cost Example" = "content/examples/basic_example_econ.md" },
+    { "Uncertainty Example" = "content/examples/uncertainty_example.md" },
     { "Methanol & Pig Iron Case Study" = "content/examples/methanol_and_iron.md" },
   ]},
   { Theory = [
@@ -60,7 +62,9 @@ nav = [
     { Optimizer = "api/optimizer.md" },
     { "Pyomo Backend" = "api/pyomo_backend.md" },
     { "linopy Backend" = "api/linopy_backend.md" },
+    { Series = "api/series.md" },
     { Economics = "api/economics.md" },
+    { Uncertainty = "api/uncertainty.md" },
     { Postprocessing = "api/postprocessing.md" },
   ]},
 ]

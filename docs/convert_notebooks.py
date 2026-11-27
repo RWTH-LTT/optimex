@@ -32,6 +32,10 @@ NOTEBOOK_META: dict[str, tuple[str, list[str]]] = {
         "lucide/badge-euro",
         ["learning", "tutorial", "costs"],
     ),
+    "uncertainty_example": (
+        "lucide/dices",
+        ["learning", "tutorial", "uncertainty"],
+    ),
     "methanol_and_iron": (
         "lucide/flask-conical",
         ["case study", "industry"],
@@ -41,6 +45,7 @@ NOTEBOOK_META: dict[str, tuple[str, list[str]]] = {
 NOTEBOOK_SOURCE_PATHS: dict[str, str] = {
     "basic_example": "notebooks/basic_example.ipynb",
     "basic_example_econ": "notebooks/basic_example_econ.ipynb",
+    "uncertainty_example": "notebooks/uncertainty_example.ipynb",
     "methanol_and_iron": "notebooks/methanol_and_iron.ipynb",
 }
 

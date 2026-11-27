@@ -22,8 +22,9 @@ the optimization inputs and `manager` the `ModelInputManager` that created them.
 
 ## Two Impact Categories
 
-First solve the two extremes, then sweep the limit between them. For example,
-climate change under a tightening water budget:
+First solve the two extremes, then sweep the limit between them with
+`optimizer.solve_series`. For example, climate change under a tightening water
+budget:
 
 ```python
 import numpy as np
@@ -37,34 +38,50 @@ def total(model, category):
 water_minimum = optimizer.create_model(
     model_inputs, name="water_minimum", objective_category="water_use"
 )
-water_minimum, lowest_water, _ = optimizer.solve_model(water_minimum, solver_name="glpk")
+water_minimum, lowest_water, _ = optimizer.solve_model(water_minimum, solver_name="highs")
 
 climate_minimum = optimizer.create_model(
     model_inputs, name="climate_minimum", objective_category="climate_change"
 )
-climate_minimum, lowest_climate, _ = optimizer.solve_model(climate_minimum, solver_name="glpk")
+climate_minimum, lowest_climate, _ = optimizer.solve_model(climate_minimum, solver_name="highs")
 water_of_climate_minimum = total(climate_minimum, "water_use")
 
-# Points in between: lowest climate impact for a range of water budgets
-frontier = []
-for water_budget in np.linspace(lowest_water, water_of_climate_minimum, 5):
-    inputs = manager.override(
-        # A small tolerance keeps the tightest budget feasible despite rounding
-        cumulative_category_impact_limits={"water_use": water_budget * (1 + 1e-6)}
-    )
-    model = optimizer.create_model(
-        inputs, name=f"water_{water_budget:.0e}", objective_category="climate_change"
-    )
-    model, climate_impact, _ = optimizer.solve_model(model, solver_name="glpk")
-    frontier.append((water_budget, climate_impact))
+# Points in between: lowest climate impact for a range of water budgets.
+# A small tolerance keeps the tightest budget feasible despite rounding.
+budgets = np.linspace(lowest_water, water_of_climate_minimum, 10) * (1 + 1e-6)
+frontier = optimizer.solve_series(
+    {
+        budget: model_inputs.model_copy(
+            update={"cumulative_category_impact_limits": {"water_use": budget}}
+        )
+        for budget in budgets
+    },
+    base=model_inputs,
+    objective_category="climate_change",
+    solver_name="highs",
+)
+frontier.objective          # lowest climate impact per water budget
+frontier.impacts            # all categories per budget
+frontier.installation       # installed units per budget and year
 ```
 
-`frontier` holds the lowest climate impact for each water budget. The slope
-between two points shows how much climate impact one unit of water saving costs.
+The results are indexed by the budget. The slope between two points shows how
+much climate impact one unit of water saving costs.
+
+!!! tip "Why `solve_series`"
+    The points of a sweep differ only in one limit. With HiGHS or Gurobi,
+    `solve_series` builds the model once and assembles each point from it, which
+    is much faster than building and solving every point on its own. It also
+    collects objectives, impacts, and installations in one table, and can solve
+    points in parallel (`n_jobs`). Make the points with
+    `model_inputs.model_copy(update=...)`, as above: what they share with
+    `model_inputs` then does not have to be rebuilt. See
+    [Solving a Series of Models](solving.md#solving-a-series-of-models).
 
 !!! tip "Pathways, not only totals"
-    Keep the solved models of the sweep to compare how the technology mix shifts
-    as the budget tightens, e.g. with `PostProcessor.get_installation()`.
+    `frontier.installation` shows how the technology mix shifts as the budget
+    tightens. Pass `outputs=("installation", "operation", "production")` for
+    more tables, or `keep_models=True` to keep every solved model.
 
 ??? cost "Cost objective: costs against an impact"
     With market prices (see [Cost Modeling](cost_modeling.md)), the same pattern
@@ -75,21 +92,26 @@ between two points shows how much climate impact one unit of water saving costs.
     impact_minimum = optimizer.create_model(
         model_inputs, name="impact_minimum", objective_category="climate_change"
     )
-    impact_minimum, lowest_impact, _ = optimizer.solve_model(impact_minimum, solver_name="glpk")
+    impact_minimum, lowest_impact, _ = optimizer.solve_model(impact_minimum, solver_name="highs")
 
     cost_minimum = optimizer.create_model(model_inputs, name="cost_minimum", objective="cost")
-    cost_minimum, lowest_cost, _ = optimizer.solve_model(cost_minimum, solver_name="glpk")
+    cost_minimum, lowest_cost, _ = optimizer.solve_model(cost_minimum, solver_name="highs")
     impact_of_cost_minimum = total(cost_minimum, "climate_change")
 
     # Cheapest pathway for a range of carbon budgets
-    cost_frontier = []
-    for budget in np.linspace(lowest_impact, impact_of_cost_minimum, 5):
-        inputs = manager.override(
-            cumulative_category_impact_limits={"climate_change": budget * (1 + 1e-6)}
-        )
-        model = optimizer.create_model(inputs, name=f"budget_{budget:.0f}", objective="cost")
-        model, cost, _ = optimizer.solve_model(model, solver_name="glpk")
-        cost_frontier.append((budget, cost))
+    budgets = np.linspace(lowest_impact, impact_of_cost_minimum, 10) * (1 + 1e-6)
+    cost_frontier = optimizer.solve_series(
+        {
+            budget: model_inputs.model_copy(
+                update={"cumulative_category_impact_limits": {"climate_change": budget}}
+            )
+            for budget in budgets
+        },
+        base=model_inputs,
+        objective="cost",
+        solver_name="highs",
+    )
+    cost_frontier.objective  # lowest discounted cost per budget
     ```
 
     The slope between two points is the abatement cost of the tighter budget. The
@@ -106,8 +128,12 @@ between two points shows how much climate impact one unit of water saving costs.
 - **Cumulative or annual:** `cumulative_category_impact_limits` limits the total
   over the horizon; `category_impact_limits` limits single years. Both can be
   swept.
-- **Rebuild each model:** every point needs its own `create_model()` call from
-  its own inputs.
+- **Infeasible points:** a point without a feasible pathway does not stop the
+  sweep; its `status` names the solver's termination condition, and its
+  objective is NaN.
+- **Other sweeps:** the same works for any limit, price, or demand assumption,
+  and for comparing scenarios, see
+  [Solving a Series of Models](solving.md#solving-a-series-of-models).
 - **Ties at the extremes:** the minimum of one objective need not be unique, and
   the solver returns one of the tied pathways, which can be worse in the other
   objective. Strictly, each point is therefore only *weakly* Pareto-optimal. To

@@ -57,6 +57,7 @@ tracker = "https://github.com/TimoDiepers/optimex/issues"
 testing = [
     "optimex",
     "linopy",
+    "highspy",
     "pytest",
     "pytest-cov",
     "python-coveralls"
@@ -84,6 +85,11 @@ umfpack = [
 ]
 gurobi = [
     "gurobipy"
+]
+# Free LP solver with an in-memory API: `optimex.uncertainty` solves Monte Carlo
+# samples with one persistent, warm-started HiGHS model
+highs = [
+    "highspy"
 ]
 # Array-based model building (`create_model(..., backend="linopy")`), much faster
 # than Pyomo for large systems

@@ -300,21 +300,7 @@ def compute_db_inventory_entries(
         biosphere_db_name = bd.config.biosphere
 
     logger.info(f"Calculating inventory for database: {db_name}")
-    db = bd.Database(name=db_name)
-
-    activities = {}
-    for key, meta in intermediate_flows.items():
-        try:
-            if isinstance(meta, dict):
-                activities[key] = _resolve_node(db_name, meta)
-            else:
-                activities[key] = db.get(code=key)
-        except Exception as e:  # Catch exceptions (e.g., if activity not found)
-            logger.warning(
-                f"Failed to resolve intermediate flow {meta!r} (code '{key}') "
-                f"in '{db_name}': {e}"
-            )
-
+    activities = _resolve_activities(db_name, intermediate_flows)
     if not activities:
         return {}
 
@@ -328,6 +314,122 @@ def compute_db_inventory_entries(
         f"for: {db_name}"
     )
 
+    row_labels = _biosphere_row_labels(lca, biosphere_db_name)
+    entries = _aggregated_entries(
+        lca, activities, intermediate_flows, row_labels, cutoff, db_name
+    )
+    logger.info(f"Finished calculating inventory for database: {db_name}")
+    return entries
+
+
+def sample_db_inventory_entries(
+    db_name: str,
+    intermediate_flows: dict,
+    n_samples: int,
+    seed: Optional[int] = None,
+    cutoff: Optional[float] = None,
+    biosphere_db_name: Optional[str] = None,
+    datapackages: Optional[List] = None,
+) -> List[dict]:
+    """
+    Sample aggregated background inventories from the uncertainty of a database.
+
+    Like `compute_db_inventory_entries`, but the technosphere and biosphere
+    matrices are drawn from the uncertainty distributions of their exchanges
+    (Brightway Monte Carlo, ``use_distributions=True``), once per sample. All
+    intermediate flows of a sample are solved against the same draw, so their
+    inventories are correlated as in a regular Brightway Monte Carlo run.
+
+    Passing the same `seed` for several databases gives them common random
+    numbers: databases with the same structure, such as the time-specific
+    databases of one premise scenario, then draw the same quantile for the same
+    exchange, so their uncertainties are correlated instead of independent.
+
+    Parameters
+    ----------
+    db_name : str
+        Name of the background database.
+    intermediate_flows : dict
+        As in `compute_db_inventory_entries`.
+    n_samples : int
+        Number of Monte Carlo samples.
+    seed : int, optional
+        Seed of the Brightway random number generators.
+    cutoff : float, optional
+        As in `compute_db_inventory_entries`.
+    biosphere_db_name : str, optional
+        As in `compute_db_inventory_entries`.
+    datapackages : list of Datapackage, optional
+        Extra `bw_processing` datapackages layered over the database, e.g.
+        pre-sampled arrays of correlated exchanges. They keep their own seeds and
+        indexers, so a ``sequential=True`` package walks its columns in order.
+
+    Returns
+    -------
+    list of dict
+        One ``{flow identity: {elementary flow code: (name, amount)}}`` per sample.
+    """
+    if biosphere_db_name is None:
+        biosphere_db_name = bd.config.biosphere
+    activities = _resolve_activities(db_name, intermediate_flows)
+    if not activities:
+        return [{} for _ in range(n_samples)]
+
+    demand, data_objs, _ = bd.prepare_lca_inputs(
+        {activity: 1 for activity in activities.values()}, remapping=False
+    )
+    # Seeding the database packages rather than passing `seed_override` keeps
+    # sequential arrays in extra datapackages sequential.
+    for package in data_objs:
+        package.metadata["seed"] = seed
+    lca = bc.LCA(
+        demand,
+        data_objs=list(data_objs) + list(datapackages or []),
+        use_distributions=True,
+        use_arrays=True,
+    )
+    # `lci()` would also build the full inventory matrix, which `next()` would then
+    # recompute for every sample; only the aggregated columns are needed.
+    lca.load_lci_data()
+    factorize = len(activities) > _FACTORIZE_MIN_FLOWS
+    row_labels = _biosphere_row_labels(lca, biosphere_db_name)
+
+    samples = []
+    for index in range(n_samples):
+        if index:
+            next(lca)
+        if factorize:
+            lca.decompose_technosphere()
+        samples.append(
+            _aggregated_entries(
+                lca, activities, intermediate_flows, row_labels, cutoff, db_name,
+                progress=False,
+            )
+        )
+    logger.info(f"Sampled {n_samples} inventories of database: {db_name}")
+    return samples
+
+
+def _resolve_activities(db_name: str, intermediate_flows: dict) -> dict:
+    """Resolve the intermediate flows to the nodes of a background database."""
+    db = bd.Database(name=db_name)
+    activities = {}
+    for key, meta in intermediate_flows.items():
+        try:
+            if isinstance(meta, dict):
+                activities[key] = _resolve_node(db_name, meta)
+            else:
+                activities[key] = db.get(code=key)
+        except Exception as e:  # Catch exceptions (e.g., if activity not found)
+            logger.warning(
+                f"Failed to resolve intermediate flow {meta!r} (code '{key}') "
+                f"in '{db_name}': {e}"
+            )
+    return activities
+
+
+def _biosphere_row_labels(lca, biosphere_db_name: str) -> Tuple[list, list]:
+    """Codes and names of the biosphere matrix rows of `lca`."""
     bio_meta = _biosphere_metadata(biosphere_db_name)
     reversed_biosphere = lca.dicts.biosphere.reversed
     row_codes = []
@@ -341,9 +443,23 @@ def compute_db_inventory_entries(
             code, name = node["code"], node["name"]
         row_codes.append(code)
         row_names.append(name)
+    return row_codes, row_names
 
+
+def _aggregated_entries(
+    lca,
+    activities: dict,
+    intermediate_flows: dict,
+    row_labels: Tuple[list, list],
+    cutoff: Optional[float],
+    db_name: str,
+    progress: bool = True,
+) -> dict:
+    """Aggregated elementary flows of every activity for the current matrices."""
+    row_codes, row_names = row_labels
     entries = {}
-    for key, activity in tqdm(activities.items()):
+    items = activities.items()
+    for key, activity in tqdm(items) if progress else items:
         # `lci()` is bypassed on purpose: it would build the full
         # (elementary flow x background process) inventory matrix, of which only
         # the row sums are used below.
@@ -367,8 +483,6 @@ def compute_db_inventory_entries(
         entries[_flow_identity(key, intermediate_flows[key])] = {
             row_codes[row]: (row_names[row], float(aggregated[row])) for row in rows
         }
-
-    logger.info(f"Finished calculating inventory for database: {db_name}")
     return entries
 
 

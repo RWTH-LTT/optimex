@@ -39,6 +39,7 @@ import sys
 import warnings
 
 warnings.filterwarnings("ignore", message="No fast sparse solver found")
+warnings.filterwarnings("ignore", message=r"\s*It seems like you have an ARM architecture")
 warnings.filterwarnings(
     "ignore", message=r"urllib3 .* doesn't match a supported version!"
 )
@@ -795,6 +796,13 @@ minimum, traces the **Pareto frontier**: for each budget, the lowest discounted
 cost that respects it. This is the epsilon-constraint method; each point is a
 separate model built from the same inputs, with only the budget changed.
 
+`optimizer.solve_series` solves all points in one call and returns one table,
+indexed by budget. Each point is made with `inputs.model_copy(update=...)`, which
+shares everything except the budget with `inputs`. With HiGHS or Gurobi,
+`solve_series` then builds the model once and only updates the budget for every
+point, which is much faster for large systems; with GLPK, as here, it solves each
+point on its own (`persistent=False` says so without a warning).
+
 The left end is the cheapest pathway *at* the minimum climate impact. It can be
 cheaper than the climate reference above, which minimizes climate impact without
 looking at costs among equally good pathways.
@@ -802,25 +810,26 @@ looking at costs among equally good pathways.
 
 ```python
 %%capture
-budgets = np.linspace(minimum_climate, climate_total(cost_model), 9)
-frontier_rows = []
-for budget in budgets:
-    budget_inputs = manager.override(
-        # A tiny tolerance keeps the tightest budget feasible despite rounding.
-        cumulative_category_impact_limits={"climate_change": budget + 1e-6},
-    )
-    budget_model = optimizer.create_model(
-        budget_inputs, name=f"budget_{budget:.0f}", objective="cost",
-    )
-    budget_model, budget_cost, _ = optimizer.solve_model(
-        budget_model, solver_name="glpk", tee=False,
-    )
-    frontier_rows.append({
-        "Climate budget [kg CO2-eq]": budget,
-        "Climate [kg CO2-eq]": climate_total(budget_model),
-        "Total cost [EUR_2025 PV]": budget_cost,
-    })
-frontier = pd.DataFrame(frontier_rows)
+# A tiny tolerance keeps the tightest budget feasible despite rounding.
+budgets = np.linspace(minimum_climate, climate_total(cost_model), 9) + 1e-6
+sweep = optimizer.solve_series(
+    {
+        budget: inputs.model_copy(
+            update={"cumulative_category_impact_limits": {"climate_change": budget}}
+        )
+        for budget in budgets
+    },
+    base=inputs,
+    objective="cost",
+    solver_name="glpk",
+    persistent=False,
+    progress=False,
+)
+frontier = pd.DataFrame({
+    "Climate budget [kg CO2-eq]": budgets,
+    "Climate [kg CO2-eq]": sweep.impacts["climate_change"].to_numpy(),
+    "Total cost [EUR_2025 PV]": sweep.objective.to_numpy(),
+})
 # Extra cost per kg CO2-eq avoided between neighboring points
 frontier["Abatement cost [EUR_2025/kg CO2-eq]"] = (
     -frontier["Total cost [EUR_2025 PV]"].diff()
@@ -986,6 +995,11 @@ inputs -> objective and optional constraint -> results**.
   [constraints](../constraints.md): lifecycle timing, existing
   capacity, technology changes, and deployment limits.
 - [Postprocessing](../postprocessing.md): further result views.
+- [Trade-offs](../trade_offs.md) and
+  [solving a series of models](../solving.md#solving-a-series-of-models):
+  sweeps, frontiers, and scenario comparisons with `optimizer.solve_series`.
+- [Uncertainty example](uncertainty_example.md): the same system with
+  uncertain data and prices, analyzed with Monte Carlo sampling.
 - [Basic example](basic_example.md) and [methanol and iron](methanol_and_iron.md):
   multi-product and connected foreground systems.
 

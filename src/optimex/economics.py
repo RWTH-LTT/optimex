@@ -9,6 +9,9 @@ time-specific background database, so they evolve over time like the inventories
 2. `LCADataProcessor` reads them when `LCAConfig.price_attribute` is set and
    interpolates them to system time (`intermediate_flow_prices`).
 3. `create_model(..., objective="cost")` minimizes the discounted cost.
+
+Prices can carry an uncertainty distribution, in the same Brightway form as
+exchanges, which `optimex.uncertainty` samples.
 """
 
 import math
@@ -75,6 +78,19 @@ def set_market_prices(
         non-numeric prices raise a `ValueError`. If False, they are logged and
         skipped.
 
+    Notes
+    -----
+    A row can also describe the uncertainty of its price, with the Brightway
+    uncertainty columns ``uncertainty type`` (a `stats_arrays` id, e.g. 2 for
+    lognormal, 3 for normal, 4 for uniform, 5 for triangular) and, as the
+    distribution needs them, ``loc``, ``scale``, ``shape``, ``minimum``, and
+    ``maximum``. A missing ``loc`` is derived from the price: its natural
+    logarithm for a lognormal distribution, the price itself otherwise (the mode
+    of a triangular distribution). The distribution is written to the attribute
+    ``f"{price_attribute}_uncertainty"`` and sampled by `optimex.uncertainty`;
+    the price itself stays the deterministic value. A row without an uncertainty
+    type removes a distribution written earlier.
+
     Raises
     ------
     TypeError
@@ -133,7 +149,17 @@ def set_market_prices(
             )
             continue
 
+        try:
+            uncertainty = _price_uncertainty(record, price)
+        except ValueError as exc:
+            _warn_or_raise(f"Row {index}: {exc}", strict)
+            continue
+
         node[price_attribute] = price
+        if uncertainty is not None:
+            node[f"{price_attribute}_uncertainty"] = uncertainty
+        else:
+            node._data.pop(f"{price_attribute}_uncertainty", None)
         node.save()
         written += 1
 
@@ -163,6 +189,13 @@ def _as_price(value: Any) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return price if math.isfinite(price) else None
+
+
+def _price_uncertainty(record: Mapping[str, Any], price: float) -> Optional[dict]:
+    """The uncertainty distribution described by a price row, or None."""
+    from optimex.uncertainty import uncertainty_from_record
+
+    return uncertainty_from_record(record, price)
 
 
 def _warn_or_raise(message: str, strict: bool) -> None:

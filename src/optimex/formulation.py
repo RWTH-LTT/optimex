@@ -96,10 +96,17 @@ def build_formulation(
     objective_category: Optional[str] = None,
     objective: str = "environmental",
     aggregate_vintages: bool = False,
+    scales: Optional[dict] = None,
 ) -> Formulation:
-    """Build the backend-independent linear program for `inputs`."""
+    """
+    Build the backend-independent linear program for `inputs`.
+
+    `scales` reuses the scaling factors of another formulation (its `scales`,
+    including the objective normalization) instead of computing them.
+    """
     validate_objective(inputs, objective, objective_category)
-    scaled_inputs, scales = inputs.get_scaled_copy()
+    fixed_scales = scales
+    scaled_inputs, scales = inputs.get_scaled_copy(fixed_scales)
 
     system_times = list(scaled_inputs.SYSTEM_TIME)
     system_time_set = set(system_times)
@@ -559,11 +566,19 @@ def build_formulation(
     for p, r in sorted(internal_demand_pairs):
         consumers_by_product.setdefault(r, []).append(p)
 
+    # Production of r by p at t, per producer
+    production_flow = {}
+    for r, producers in producers_by_product.items():
+        for p in producers:
+            for t in system_times:
+                production_flow[p, r, t] = dict(
+                    operation_terms(p, t, lambda v: production_rate(p, r, v, t - v))
+                )
+
     def production_terms(r, t):
         result = {}
         for p in producers_by_product.get(r, ()):
-            for var, rate in operation_terms(p, t, lambda v: production_rate(p, r, v, t - v)):
-                result[var] = result.get(var, 0.0) + rate
+            accumulate(result, production_flow[p, r, t])
         return result
 
     total_product_flow = {
@@ -712,6 +727,8 @@ def build_formulation(
     objective_scale = max((abs(c) for c in objective_raw.values()), default=0.0)
     if not objective_scale or objective_scale == INFINITY:
         objective_scale = 1.0
+    if fixed_scales is not None and "objective" in fixed_scales:
+        objective_scale = fixed_scales["objective"]
     scales["objective"] = objective_scale
     objective_terms = {k: c / objective_scale for k, c in objective_raw.items()}
 
@@ -744,6 +761,7 @@ def build_formulation(
             "scaled_technosphere_flow": technosphere_terms,
             "scaled_biosphere_flow": biosphere_terms,
             "scaled_internal_demand_flow": internal_demand_terms,
+            "scaled_production_flow": production_flow,
             "specific_impact": specific_impact,
             "total_impact": total_impact,
             "time_specific_impact": time_specific_impact,

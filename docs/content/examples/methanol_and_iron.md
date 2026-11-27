@@ -1421,6 +1421,9 @@ The design is fully fixed: every `var_installation` and `var_operation` is locke
 
 Comparing this fixed baseline design against the freely-optimized evolution design (Scenario 2) — both under the same evolution conditions — quantifies the penalty of having designed for the wrong background.
 
+!!! tip "Evaluating a design in one call"
+    `optimex.uncertainty.evaluate_design(m_baseline, [evolution_inputs], fix="pathway", objective_category="climate_change")` evaluates a solved design under other inputs in one call. It fixes the installations and the total operation per year, so which vintages run can still adapt. This notebook fixes the operation of every vintage by hand instead, to keep exactly the baseline dispatch, and loads the baseline design from disk so the baseline model does not have to stay in memory. For sweeps over a limit or scenarios that differ only in data, see `optimizer.solve_series`.
+
 
 ```python
 import json
