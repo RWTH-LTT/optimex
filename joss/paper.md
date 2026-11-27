@@ -31,7 +31,7 @@ bibliography: paper.bib
 # Summary
 
 `optimex` is an open-source Python package for time-explicit Life Cycle Optimization (LCO). 
-LCO extends Life Cycle Assessment (LCA) by treating process selection, capacity installation, and operation as decision variables, determining process portfolios and deployment schedules that minimize an environmental objective subject to system constraints. 
+LCO extends Life Cycle Assessment (LCA) by treating process selection, capacity installation, and operation as decision variables, determining process portfolios and deployment schedules that minimize an environmental or economic objective subject to system constraints. 
 `optimex` makes this optimization *time-explicit*: 
 instead of collapsing each process's life cycle into a single instant, it tracks *when* every flow across its life cycle and supply chain occurs and lets each flow's magnitude reflect the state of technology and the surrounding economy *at that time*. 
 Decisions made today are therefore evaluated against the conditions they will actually encounter in the future, which is what determines whether a transition pathway is genuinely feasible and environmentally sustainable once deployed.
@@ -47,7 +47,7 @@ The package embeds these temporal dimensions directly into the optimization prob
 then determines installation timing, capacities, and operational levels under time-resolved environmental objectives and constraints. 
 `optimex` builds on the `Brightway` LCA ecosystem [@Mutel:2017], 
 sources dynamic characterization factors from `dynamic_characterization` [@DynamicCharacterization:2025], 
-and uses `Pyomo` [@Bynum:2021] as its mathematical programming backend.
+and builds its optimization models with either `Pyomo` [@Bynum:2021] or `linopy` [@Hofmann:2023].
 
 # Statement of need
 
@@ -102,22 +102,26 @@ In addition, a set of time-specific background databases (e.g., generated with `
 For dynamic impact assessment, users can draw from the `Brightway` library `dynamic_characterization`[@DynamicCharacterization:2025]. 
 From these inputs, `optimex` constructs time-explicit tensors that describe the temporalized product system.
 
-Second, **model conversion** validates the temporalized product system and converts it to `Pyomo`-compatible sets. 
+Second, **model conversion** validates the temporalized product system and converts it into the sets and parameters of the optimization model. 
 A `Pydantic` model checks that processes, flows, and time indices are consistent across all tensors. 
 Further, additional constraints can be added, e.g., deployment and operation limits, category impact limits, process coupling, and existing (brownfield) capacities.
 
-Third, **optimization** builds a `Pyomo` model with time-indexed decision variables for installed capacity and operational level. 
-Constraints enforce demand fulfilment, deployment and operation limits, the coupling of operation to installed capacity, and process linkages; the objective minimizes the total impact in a chosen category and metric. 
-The backend is solver-agnostic, defaulting to Gurobi but compatible with open-source solvers.
+Third, **optimization** builds a model with time-indexed decision variables for installed capacity and operational level, either in `Pyomo` or, faster for large systems, in `linopy`. 
+Constraints enforce demand fulfilment, deployment and operation limits, the coupling of operation to installed capacity, and process linkages. 
+The objective minimizes either the total impact in a chosen category and metric or the discounted cost of the purchased background products, with impact limits as constraints. 
+Both backends work with commercial and open-source solvers.
 
 Finally, **post-processing** extracts results as DataFrames and provides visualizations of impacts, installations, operation, and product balances.
+
+`optimex` also solves series of related models efficiently, such as scenario comparisons and Pareto frontiers, by building the model once and updating only the changed data. 
+The same machinery propagates uncertainty: Monte Carlo sampling of the distributions on `Brightway` exchanges, parameters, background databases, and prices shows how often a technology is optimal and how robust a pathway is.
 
 Several design choices were central to the research application. 
 Embedding the time dimension directly into the traditional LCA matrices keeps the formulation within the familiar matrix-based LCA structure [@Heijungs:2002] while allowing flexible temporal resolution. 
 Separating capacity-dependent from operation-dependent flows is what enables vintage-specific, flexible dispatch. 
 Inputs are scaled for numerical stability before being handed to the solver and denormalized during post-processing, improving computational stability. 
 Moreover, the deep `Brightway` integration lets `optimex` work with any `Brightway`-compatible inventory and reuse product systems already built for standard LCA, avoiding data lock-in and facilitating adoption. 
-Finally, `optimex` can export both the processed LCA data and the initialized or solved `Pyomo` model, supporting reproducibility, model sharing, and fast re-optimization without recomputing the LCA inputs.
+Finally, `optimex` can export both the processed LCA data and the initialized or solved model, supporting reproducibility, model sharing, and fast re-optimization without recomputing the LCA inputs.
 
 # Research impact statement
 
