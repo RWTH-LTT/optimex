@@ -87,8 +87,9 @@ model_inputs = manager.override(
 model = optimizer.create_model(model_inputs, name="cost_with_limits", objective="cost")
 ```
 
-This gives the cheapest pathway within the budget. Sweeping the limit traces how
-costs rise as the budget tightens, see [Trade-offs](trade_offs.md).
+This gives the cheapest pathway within the budget. Sweeping the limit with
+`optimizer.solve_series` traces how costs rise as the budget tightens, see
+[Trade-offs](trade_offs.md).
 
 ---
 

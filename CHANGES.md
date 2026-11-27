@@ -25,6 +25,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `specific_impact`, `scaled_inventory`, ...) are no longer Pyomo `Expression`
   components; indexing them and `pyo.value()` work as before
   ([#74](https://github.com/RWTH-LTT/optimex/pull/74))
+* Added `optimex.uncertainty` for Monte Carlo analysis: `UncertaintySampler`
+  draws optimization inputs from the uncertainty of foreground exchanges,
+  Brightway parameters, background databases, and prices; `solve_samples()`
+  optimizes every sample, `evaluate_design()` evaluates a fixed design in every
+  sample. New example: `notebooks/uncertainty_example.ipynb` ([#76](https://github.com/RWTH-LTT/optimex/pull/76))
+* `set_market_prices()` reads price distributions from the Brightway uncertainty
+  columns (`uncertainty type`, `loc`, `scale`, ...) ([#76](https://github.com/RWTH-LTT/optimex/pull/76))
+* Added `optimizer.solve_series()` for sweeps, Pareto frontiers, and scenario
+  comparisons: it solves a dict or list of input variants and returns one table
+  of objectives, impacts, costs, and installations ([#76](https://github.com/RWTH-LTT/optimex/pull/76))
+* With Gurobi or HiGHS, `solve_series()` and the Monte Carlo functions build the
+  base model once and assemble each variant from it, about 45 times faster than
+  a rebuild for large models; `n_jobs` solves variants in parallel ([#76](https://github.com/RWTH-LTT/optimex/pull/76))
+* New documentation pages on uncertainty and on solving series of models; the
+  trade-off, scenario, and Pareto examples use `solve_series()` ([#76](https://github.com/RWTH-LTT/optimex/pull/76))
 
 ## [0.8.0] - 2026-11-26
 * Added a cost objective: `create_model(..., objective="cost")` minimizes the

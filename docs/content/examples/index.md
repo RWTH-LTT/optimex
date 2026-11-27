@@ -27,6 +27,14 @@ Here are some examples on how you can use the `optimex` package.
 
     [:lucide-arrow-right: View Example](./basic_example_econ.md)
 
+-   :lucide-dices:{ style="color: #e599f7; margin-right: 0.25rem;" } **Uncertainty Example**
+
+    ---
+
+    Carries the uncertainty of foreground exchanges, Brightway parameters, background databases, and prices into the optimization with Monte Carlo sampling. Shows how often each technology is optimal, how robust the deterministic design is, and how likely a climate budget is kept.
+
+    [:lucide-arrow-right: View Example](./uncertainty_example.md)
+
 -   :lucide-flask-conical:{ style="color: #69db7c; margin-right: 0.25rem;" } **Methanol & Pig Iron Case Study**
 
     ---

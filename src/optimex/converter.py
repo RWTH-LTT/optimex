@@ -963,7 +963,9 @@ class OptimizationModelInputs(BaseModel):
             if overrides:
                 setattr(self, f"{tensor_name}_vintage_overrides", overrides)
 
-    def get_scaled_copy(self) -> Tuple["OptimizationModelInputs", Dict[str, Any]]:
+    def get_scaled_copy(
+        self, scales: Optional[Dict[str, Any]] = None
+    ) -> Tuple["OptimizationModelInputs", Dict[str, Any]]:
         """
         Create a scaled copy of inputs for numerical stability in optimization.
 
@@ -974,6 +976,14 @@ class OptimizationModelInputs(BaseModel):
 
         If vintage-aware tensors are provided, they are expanded to effective 4D tensors
         for use by the optimizer.
+
+        Parameters
+        ----------
+        scales : dict, optional
+            Scaling factors to use instead of computing them, as returned by an
+            earlier call ("foreground", "characterization", "cost"). Models of
+            slightly different inputs, such as Monte Carlo samples, then share
+            their scaling, so only the coefficients that really differ change.
 
         Returns
         -------
@@ -1014,6 +1024,8 @@ class OptimizationModelInputs(BaseModel):
         fg_scale = max((abs(v) for v in fg_vals), default=1.0)
         if fg_scale == 0:
             fg_scale = 1.0
+        if scales is not None:
+            fg_scale = scales["foreground"]
         scaling_factors["foreground"] = fg_scale
 
         # Apply foreground scaling to base 3D tensors
@@ -1046,6 +1058,8 @@ class OptimizationModelInputs(BaseModel):
             if scale == 0:
                 scale = 1.0
             cat_scales[cat] = scale
+        if scales is not None:
+            cat_scales.update(scales["characterization"])
 
         scaling_factors["characterization"] = cat_scales
 
@@ -1082,6 +1096,8 @@ class OptimizationModelInputs(BaseModel):
         # real_cost = scaled_cost * fg_scale * cost_scale.
         prices = self.intermediate_flow_prices or {}
         cost_scale = max((abs(v) for v in prices.values()), default=1.0) or 1.0
+        if scales is not None and "cost" in scales:
+            cost_scale = scales["cost"]
         scaling_factors["cost"] = cost_scale
         if self.intermediate_flow_prices is not None:
             scaled.intermediate_flow_prices = {

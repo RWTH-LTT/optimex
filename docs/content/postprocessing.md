@@ -440,40 +440,41 @@ with pd.ExcelWriter("optimization_results.xlsx") as writer:
 
 ## Comparing Scenarios
 
-Run multiple scenarios and compare:
+To compare scenarios that differ in their data, such as limits, prices, or
+demand, solve them together with `optimizer.solve_series`. It returns one table
+of objectives, impacts, costs, and installations, indexed by scenario:
 
 ```python
-from optimex import converter, optimizer, postprocessing
+from optimex import optimizer, postprocessing
 
 scenarios = {
-    "baseline": {},
-    "carbon_budget": {"cumulative_category_impact_limits": {"climate_change": 5.0e5}},
+    "baseline": model_inputs,
+    "carbon_budget": model_inputs.model_copy(
+        update={"cumulative_category_impact_limits": {"climate_change": 5.0e5}}
+    ),
+    "cheap_electricity": model_inputs.model_copy(
+        update={"intermediate_flow_prices": {
+            (flow, year): price * (0.5 if flow == "electricity" else 1.0)
+            for (flow, year), price in model_inputs.intermediate_flow_prices.items()
+        }}
+    ),
 }
-base = model_inputs.model_dump()
-results = {}
+results = optimizer.solve_series(
+    scenarios, objective_category="climate_change", solver_name="highs",
+    keep_models=True,  # to analyze each scenario with a PostProcessor
+)
 
-for scenario_name, constraints in scenarios.items():
-    # Validated copy of the inputs with the scenario-specific constraints
-    scenario_inputs = converter.OptimizationModelInputs(**{**base, **constraints})
-
-    # Solve
-    model = optimizer.create_model(
-        scenario_inputs, name=scenario_name, objective_category="climate_change"
-    )
-    solved, obj, _ = optimizer.solve_model(model, solver_name="glpk")
-
-    # Store results
-    pp = postprocessing.PostProcessor(solved)
-    results[scenario_name] = {
-        "objective": obj,
-        "impacts": pp.get_impacts(),
-        "installation": pp.get_installation(),
-    }
-
-# Compare objectives
-for name, data in results.items():
-    print(f"{name}: {data['objective']:.2f}")
+results.objective                          # one value per scenario
+results.impacts                            # cumulative impact per category
+results.installation.loc["carbon_budget"]  # installed units per year
+pp = postprocessing.PostProcessor(results.models[1])  # full analysis of one scenario
 ```
+
+With HiGHS or Gurobi, scenarios made with `model_inputs.model_copy(update=...)`
+are assembled from one model instead of each being built from scratch, see
+[Solving a Series of Models](solving.md#solving-a-series-of-models). Scenarios
+that change the product system itself, e.g. other background databases, need
+their own inputs and are solved one by one.
 
 ---
 

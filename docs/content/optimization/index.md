@@ -38,6 +38,13 @@ LCAConfig → LCADataProcessor → OptimizationModelInputs → (+ constraints) �
     Build the model for the chosen [objective](../choosing_objective/index.md),
     solve it, handle infeasibility, and save the solution.
 
+-   :lucide-dices:{ style="margin-right: 0.25rem;" } **[Uncertainty](../uncertainty.md)**
+
+    ---
+
+    Sample the uncertainty of exchanges, parameters, background data, and
+    prices, and see how robust the optimum and a chosen pathway are.
+
 </div>
 
 Once the inputs exist, constraints and solving are fast: change a limit, rebuild,

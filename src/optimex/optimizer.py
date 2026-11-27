@@ -425,6 +425,30 @@ def validate_operation_bounds(
     }
 
 
+def solve_series(variants, base=None, solver_name: str = "glpk", **kwargs):
+    """
+    Solve a series of related models: a sweep, a Pareto frontier, or scenarios.
+
+    Much faster than calling `create_model` and `solve_model` in a loop when
+    the variants differ only in their data (limits, prices, background data,
+    exchange amounts): with Gurobi or HiGHS, the formulation is built once and
+    each variant is assembled from it. See `optimex.series.solve_series` for all
+    arguments.
+
+    Examples
+    --------
+    >>> sweep = optimizer.solve_series(
+    ...     {b: inputs.model_copy(update={
+    ...         "cumulative_category_impact_limits": {"climate_change": b}})
+    ...      for b in budgets},
+    ...     base=inputs, objective="cost", solver_name="highs",
+    ... )
+    """
+    from optimex.series import solve_series as _solve_series
+
+    return _solve_series(variants, base=base, solver_name=solver_name, **kwargs)
+
+
 def save_solved_model(
     model: pyo.ConcreteModel,
     path: Union[str, Path],
