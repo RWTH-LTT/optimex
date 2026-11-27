@@ -7,67 +7,191 @@ tags:
 
 # Uncertainty
 
-LCA data are uncertain, and Brightway stores that uncertainty as distributions on
-exchanges, parameters, and background data. `optimex.uncertainty` carries those
-distributions into the optimization with Monte Carlo sampling. It draws many
-complete sets of optimization inputs and then either optimizes or evaluates each
-of them.
+LCA data are uncertain. Brightway stores that uncertainty as probability
+distributions on exchanges and parameters, and `optimex` carries them into the
+optimization with Monte Carlo sampling: it draws many complete sets of
+optimization inputs and optimizes, or evaluates a given pathway, for each of
+them. The result is not one optimal pathway but answers to the questions that
+matter for decisions: how often is a technology the best choice, how much does
+the optimum vary, and how likely does a chosen pathway keep a limit?
+
+!!! tip "Distributions you already have are used as they are"
+    Uncertainty in your Brightway project needs no extra modeling for
+    `optimex`. Distributions on foreground exchanges, uncertain Brightway
+    parameters and the formulas that use them, and the distributions of
+    background databases such as ecoinvent are all sampled. Only prices, which
+    are `optimex` attributes, get their distributions through
+    `set_market_prices`.
 
 ```python
 from optimex import uncertainty
 
-sampler = uncertainty.UncertaintySampler(processor, inputs)
+# `processor` and `model_inputs` as in the deterministic workflow
+sampler = uncertainty.UncertaintySampler(processor, model_inputs)
+sampler.summary()                      # what is uncertain
 samples = sampler.sample(200, seed=42)
 
-optima = uncertainty.solve_samples(samples, objective_category="climate_change")
-robustness = uncertainty.evaluate_design(
-    model, samples, fix="pathway", objective_category="climate_change"
+optima = uncertainty.solve_samples(
+    samples, objective_category="climate_change", solver_name="highs"
 )
+optima.summary()                       # spread of the optimum
 ```
 
 The [uncertainty example](examples/uncertainty_example.md) walks through the
-whole workflow, first for an impact objective and then with uncertain prices and
-the cost objective.
+whole workflow: defining the uncertainty, the spread of the climate optimum, the
+robustness of the deterministic design, and, with uncertain prices, the cost
+objective under a climate budget.
 
 ---
 
-## What Is Sampled
+## Defining Uncertainty
+
+Brightway describes a distribution with the same fields everywhere: on
+exchanges, on parameters, and, in `optimex`, on prices. `uncertainty type` is a
+[`stats_arrays`](https://stats-arrays.readthedocs.io) id; the other fields
+depend on the distribution:
+
+| Distribution | `uncertainty type` | Fields | Typical use |
+|---|---|---|---|
+| Lognormal | 2 | `loc` = ln(median), `scale` = ln(geometric standard deviation) | Emission factors and amounts, the ecoinvent default |
+| Normal | 3 | `loc` = mean, `scale` = standard deviation | Measured values with symmetric error |
+| Uniform | 4 | `minimum`, `maximum` | Only a range is known |
+| Triangular | 5 | `loc` = mode, `minimum`, `maximum` | A best guess within a range |
+
+`minimum` and `maximum` also truncate the other distributions. For a lognormal
+distribution of a negative amount, set `"negative": True`. The deterministic
+amount stays what `optimex` optimizes without uncertainty; for a lognormal
+distribution it is the median, so the mean of the samples is higher.
+
+### Exchanges
+
+Add the fields to an exchange, in the foreground or in a background database you
+build yourself:
+
+```python
+import math
+
+{"input": ("biosphere3", "CO2"), "amount": 15.0, "type": "biosphere",
+ "temporal_distribution": operation_td, "operation": True,
+ "uncertainty type": 2, "loc": math.log(15.0), "scale": math.log(1.5)}
+```
+
+To add a distribution to an existing exchange:
+
+```python
+exchange["uncertainty type"] = 3
+exchange["loc"], exchange["scale"] = exchange["amount"], 0.1 * exchange["amount"]
+exchange.save()
+```
+
+A sampled exchange changes by the same factor at every process time and in every
+vintage, including its `vintage_amounts`: the distribution describes the
+exchange, the temporal distribution and vintage parameters its shape.
+
+### Parameters
+
+Brightway parameters describe quantities that several exchanges share, such as
+an efficiency or a lifetime. Uncertain parameters propagate through every
+formula that uses them, so the exchanges move together:
+
+```python
+import bw2data as bd
+
+bd.parameters.new_project_parameters([
+    {"name": "efficiency", "amount": 0.8,
+     "uncertainty type": 5, "loc": 0.8, "minimum": 0.6, "maximum": 0.9},
+])
+bd.parameters.new_activity_parameters([
+    {"name": "fuel_demand", "formula": "5 / efficiency",
+     "database": "foreground", "code": "plant"},
+], group="plant")
+
+# The exchange refers to the parameter through its formula
+plant = bd.get_node(database="foreground", code="plant")
+fuel = next(exc for exc in plant.technosphere() if exc.input["name"] == "fuel")
+fuel["formula"] = "fuel_demand"
+fuel.save()
+bd.parameters.add_exchanges_to_group("plant", plant)
+bd.parameters.recalculate()  # writes the deterministic amounts
+```
+
+Project, database, and activity parameters are evaluated with Brightway's
+scoping. Formulas are evaluated for foreground exchanges; parameterized
+exchanges in background databases keep their amounts. An exchange with a
+formula is sampled through its parameters, not through its own distribution.
+
+### Background Databases
+
+Background databases are sampled with a regular Brightway Monte Carlo LCA, so
+whatever distributions they contain are used. ecoinvent provides distributions
+for most of its exchanges. Prospective databases from premise keep them for the
+exchanges premise leaves unchanged; exchanges it creates or rescales may carry
+none, so check your databases if the background matters. All time-specific
+databases are sampled with the same random numbers, so databases with the same
+structure stay correlated: a sample with a high emission factor in 2030 has it
+in 2040 too.
+
+Sampling the background rebuilds and factorizes the technosphere matrix of
+every database once per sample, and solves all purchased products against it.
+For ecoinvent-sized databases this takes seconds per database and sample, so
+200 samples of five time-specific databases mean about 1,000 factorizations.
+Leave the background out (`sources=["exchanges", "parameters", "prices"]`) for a
+first, quick analysis of the foreground.
+
+### Prices
+
+Prices are attributes of the background nodes, written with
+[`set_market_prices`](cost_modeling.md#setting-market-prices). The same function
+takes the uncertainty columns, one distribution per product and database year:
+
+```python
+from optimex.economics import set_market_prices
+
+set_market_prices(
+    [
+        {"name": "electricity", "location": "DE", "year": 2030, "price": 0.10,
+         "uncertainty type": 2, "scale": 0.2},
+        {"name": "electricity", "location": "DE", "year": 2050, "price": 0.08,
+         "uncertainty type": 2, "scale": 0.4},  # less certain further ahead
+    ],
+    background_databases,
+)
+```
+
+A missing `loc` is derived from the price: its logarithm for a lognormal
+distribution, the price itself otherwise (the mode of a triangular one). A
+price takes one quantile per sample in all databases, so a product that is
+expensive in 2030 is also expensive in 2050, with the spread of each year. The
+processor must read the prices (`LCAConfig.price_attribute`), as for the
+deterministic [cost objective](minimizing_costs.md).
+
+### Checking What Is Found
+
+`sampler.summary()` lists every uncertain quantity the sampler found, with its
+distribution: foreground exchanges, parameters, the exchanges that use them,
+prices per database, and the background databases it samples. A quantity
+missing from the list is treated as certain.
+
+---
+
+## Drawing Samples
 
 `UncertaintySampler(processor, inputs, sources=...)` takes the `LCADataProcessor`
 the inputs were built from and the deterministic inputs, including any limits or
-discounting. Each sample is a copy of `inputs` in which only the uncertain values
-differ. `sampler.summary()` lists every uncertain quantity it found.
+discounting. `sample(n, seed)` returns a `SampleSet`: one copy of `inputs` per
+sample in which only the uncertain values differ, plus a table of the sampled
+values (`samples.values`). `sources` restricts the sampling, e.g. to
+`["exchanges", "parameters"]` to leave the background deterministic.
 
 | Source | Defined by | Drawn with |
 |--------|------------|------------|
 | `"exchanges"` | Uncertainty fields on foreground exchanges | `matrix_utils` on the foreground datapackage, `use_distributions=True` |
 | `"parameters"` | Uncertain project, database, and activity parameters used by foreground exchange formulas | `stats_arrays`, propagated with `bw2parameters`, passed on as a `bw_processing` array datapackage |
 | `"background"` | Uncertainty fields on background exchanges | A `bw2calc` Monte Carlo LCA per background database |
-| `"prices"` | Uncertainty columns in [`set_market_prices`](cost_modeling.md) | `stats_arrays` quantile functions |
-
-Brightway describes a distribution with the fields `uncertainty type` (a
-`stats_arrays` id: 2 lognormal, 3 normal, 4 uniform, 5 triangular), `loc`,
-`scale`, `shape`, `minimum`, and `maximum`:
-
-```python
-{"input": ("biosphere3", "CO2"), "amount": 15.0, "type": "biosphere",
- "uncertainty type": 2, "loc": math.log(15.0), "scale": math.log(1.5)}
-```
-
-Price rows take the same columns. A missing `loc` is derived from the price: its
-logarithm for a lognormal distribution, the price itself otherwise:
-
-```python
-set_market_prices(
-    [{"name": "electricity", "location": "DE", "year": 2030, "price": 0.1,
-      "uncertainty type": 2, "scale": 0.3}],
-    background_databases,
-)
-```
+| `"prices"` | Uncertainty columns in `set_market_prices` | `stats_arrays` quantile functions |
 
 Characterization factors, temporal distributions, and demand stay
-deterministic. Parameterized exchanges in background databases keep their
-amounts.
+deterministic.
 
 ### Correlation
 
@@ -163,6 +287,41 @@ Comparing the evaluated design with the optimum of each sample gives its
 ```python
 regret = robustness.objective - optima.objective
 ```
+
+---
+
+## How Many Samples
+
+Monte Carlo results are estimates; their precision grows with the square root
+of the number of samples. As a rule of thumb:
+
+- **100 to 200 samples** give means, medians, and how often a technology is
+  chosen to within a few percentage points.
+- **500 to 1,000 samples** are needed for tails, such as a 95th percentile or a
+  small probability of missing a limit.
+
+To check, draw a second set with another seed: if the conclusions change, draw
+more. The run time grows linearly with the number of samples, see
+[Run Time and Scope](#run-time-and-scope).
+
+---
+
+## Reading the Results
+
+- **Shares, not mean pathways.** A linear program puts each solution on a vertex,
+  so in each sample one technology usually takes a whole cohort. Report how often
+  each option is chosen, and when, rather than the mean installation, which can
+  describe a mix that is optimal in no sample.
+- **Spread of the optimum vs. robustness of a design.** `solve_samples` shows
+  what is achievable if the data were known; `evaluate_design` shows what a
+  pathway decided now achieves. The gap between the two, the mean regret, is
+  what better data would be worth.
+- **Limits under uncertainty.** A pathway that exactly uses up a budget with the
+  deterministic data misses it in roughly half of the samples. To keep a limit
+  with high probability, plan with a tighter one and evaluate the resulting
+  design, as in the [uncertainty example](examples/uncertainty_example.md).
+- **Medians and means differ.** With lognormal data, the deterministic result
+  corresponds to the medians; the mean of the samples is usually higher.
 
 ---
 

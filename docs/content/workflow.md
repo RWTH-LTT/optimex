@@ -27,7 +27,10 @@ The modeling in step 2 is where most of the work goes, and the LCA processing at
 the start of step 3 is where most of the computing time goes: building the
 inventories of large background databases takes a while. Once the optimization
 inputs exist, constraints, solving, and results are fast, so you can save the
-inputs and solve many variants from them.
+inputs and solve many variants from them: sweeps over a limit and scenario
+comparisons with [`optimizer.solve_series`](solving.md#solving-a-series-of-models),
+and Monte Carlo analyses of the uncertain data with
+[`optimex.uncertainty`](uncertainty.md).
 
 ---
 

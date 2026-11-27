@@ -123,6 +123,9 @@ bg_2040.register()
 !!! info "Using premise"
     The [premise](https://premise.readthedocs.io/) package can automatically generate future versions of ecoinvent based on IAM scenarios. This is the recommended approach for realistic prospective LCA.
 
+!!! note "Uncertainty in background databases"
+    Distributions in the background databases, such as those of ecoinvent, are used by a [Monte Carlo analysis](uncertainty.md#background-databases); the optimization itself uses the deterministic values.
+
 ---
 
 ## Foreground Database
