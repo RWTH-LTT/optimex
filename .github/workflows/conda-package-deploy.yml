@@ -36,17 +36,23 @@ jobs:
           ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
           ANACONDA_USER: ${{ secrets.ANACONDA_USER }}
         run: |
+          # Stop at the first failing command, so a failed upload fails the job
+          set -eo pipefail
+
           # 1. Install necessary tools silently
           conda install -y -q conda-build anaconda-client
-          
-          # 2. Configure conda to NOT attempt automatic uploads 
-          # (We handle the upload explicitly via the build command)
+
+          # 2. Build the package only; uploading from within `conda build`
+          # reports upload errors (e.g. an expired token) but still exits 0
           conda config --set anaconda_upload no
-          
-          # 3. Build and Upload in one command using the Token
           conda build conda/ \
             -c conda-forge \
             -c cmutel \
             -c diepers \
+            --output-folder conda-out
+
+          # 3. Upload explicitly: `anaconda upload` exits non-zero on errors
+          anaconda --token "$ANACONDA_TOKEN" upload \
             --user "$ANACONDA_USER" \
-            --token "$ANACONDA_TOKEN"
+            --force \
+            conda-out/noarch/*.conda
