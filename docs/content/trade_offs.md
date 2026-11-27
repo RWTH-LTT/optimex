@@ -76,7 +76,7 @@ much climate impact one unit of water saving costs.
     points in parallel (`n_jobs`). Make the points with
     `model_inputs.model_copy(update=...)`, as above: what they share with
     `model_inputs` then does not have to be rebuilt. See
-    [Solving a Series of Models](solving.md#solving-a-series-of-models).
+    [Sweeps and Scenarios](series.md).
 
 !!! tip "Pathways, not only totals"
     `frontier.installation` shows how the technology mix shifts as the budget
@@ -133,7 +133,7 @@ much climate impact one unit of water saving costs.
   objective is NaN.
 - **Other sweeps:** the same works for any limit, price, or demand assumption,
   and for comparing scenarios, see
-  [Solving a Series of Models](solving.md#solving-a-series-of-models).
+  [Sweeps and Scenarios](series.md).
 - **Ties at the extremes:** the minimum of one objective need not be unique, and
   the solver returns one of the tied pathways, which can be worse in the other
   objective. Strictly, each point is therefore only *weakly* Pareto-optimal. To

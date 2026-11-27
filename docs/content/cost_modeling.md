@@ -8,10 +8,6 @@ tags:
 
 # Cost Modeling
 
-!!! cost "Only for the cost objective"
-    This page is only needed if you want to [minimize costs](minimizing_costs.md)
-    or report the costs of a pathway. Environmental studies can skip it.
-
 Costs build on the same product system as the impacts: no extra processes or
 exchanges are needed. What the cost objective adds is a **market price** for
 each background product the foreground buys directly. This page covers what
