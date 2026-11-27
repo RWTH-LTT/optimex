@@ -439,6 +439,18 @@ With vintage-dependent parameters, the optimizer considers:
 
 ---
 
+## Uncertain Data
+
+Exchanges and Brightway parameters can carry uncertainty distributions, in the
+usual Brightway fields (`uncertainty type`, `loc`, `scale`, `minimum`,
+`maximum`). The optimization itself uses the deterministic amounts; a
+[Monte Carlo analysis](uncertainty.md) samples the distributions and shows how
+robust the optimal pathway is. Parameters with formulas are sampled as well, so
+exchanges that share a parameter, such as an efficiency, move together. See
+[Defining Uncertainty](uncertainty.md#defining-uncertainty) for examples.
+
+---
+
 ## Common Patterns
 
 ### Immediate Production (No Construction Delay)

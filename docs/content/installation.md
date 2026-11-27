@@ -269,7 +269,7 @@ print(optimex.__version__)
 | [Gurobi](https://www.gurobi.com/) (commercial, free for academics) | `pip install "optimex[gurobi]"`, plus a license | `"gurobi"` |
 
 Most examples in this documentation use GLPK, which is enough for single
-models. For [series of models](solving.md#solving-a-series-of-models) (sweeps,
+models. For [series of models](series.md) (sweeps,
 scenarios) and [Monte Carlo analyses](uncertainty.md), use HiGHS or Gurobi:
 `optimex` then builds the model once and only updates what changes, which is
 much faster for large systems. Pass the solver to every solve:

@@ -59,6 +59,8 @@ Time-explicit LCO reveals transition strategies that are invisible to static app
 - **Strategic overcapacity** — Early investment in clean technologies can offset stranded fossil assets when the net emission savings outweigh the embodied impacts of idle infrastructure
 - **Cumulative budget compliance** — By tracking exact emission timing alongside dynamic characterization, pathways can be verified against carbon budgets and other absolute limits
 - **Cost-optimal pathways within budgets** — Minimizing economic costs instead of an impact, with impact limits as constraints, shows the cheapest transition that respects a carbon budget and how costs rise as the budget tightens ([Trade-offs](content/trade_offs.md))
+- **Robust decisions under uncertainty** — Monte Carlo sampling of the uncertain LCA data and prices shows how often a technology is optimal and how likely a pathway keeps a budget ([Uncertainty](content/uncertainty.md))
+- **Sweeps and scenarios** — Ranges of limits, prices, or other assumptions are solved together and compared in one table ([Sweeps and Scenarios](content/series.md))
 
 ---
 

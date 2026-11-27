@@ -472,7 +472,7 @@ pp = postprocessing.PostProcessor(results.models[1])  # full analysis of one sce
 
 With HiGHS or Gurobi, scenarios made with `model_inputs.model_copy(update=...)`
 are assembled from one model instead of each being built from scratch, see
-[Solving a Series of Models](solving.md#solving-a-series-of-models). Scenarios
+[Sweeps and Scenarios](series.md). Scenarios
 that change the product system itself, e.g. other background databases, need
 their own inputs and are solved one by one.
 

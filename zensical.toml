@@ -12,45 +12,51 @@ copyright = "Copyright &copy; 2026 Institute of Technical Thermodynamics, RWTH A
 
 nav = [
   { Home = [
-    { Overview = "index.md" },
+    "index.md",
     { Changelog = "content/changelog.md" },
     { License = "content/license.md" },
     { Contributing = "content/contributing.md" },
     { "Code of Conduct" = "content/codeofconduct.md" },
   ]},
   { "User Guide" = [
+    "content/guide/index.md",
     { Installation = "content/installation.md" },
     { "Quick Start" = "content/quickstart.md" },
     { "Workflow Overview" = "content/workflow.md" },
-    { "1 · Choosing an Objective" = [
+    { Objectives = [
       "content/choosing_objective/index.md",
       { "Minimizing Impacts" = "content/minimizing_impacts.md" },
       { "Minimizing Costs" = "content/minimizing_costs.md" },
-      { "Trade-offs" = "content/trade_offs.md" },
     ]},
-    { "2 · Product System Modeling" = [
+    { "Product System" = [
       "content/product_system/index.md",
       { "Background Data" = "content/background_data.md" },
       { "Foreground Modeling" = "content/foreground_modeling.md" },
       { "Cost Modeling" = "content/cost_modeling.md" },
     ]},
-    { "3 · Optimization" = [
+    { Optimization = [
       "content/optimization/index.md",
       { "LCA Processing" = "content/lca_processing.md" },
       { Constraints = "content/constraints.md" },
       { Solving = "content/solving.md" },
+    ]},
+    { Results = "content/postprocessing.md" },
+    { Analyses = [
+      "content/analyses/index.md",
+      { "Sweeps and Scenarios" = "content/series.md" },
+      { "Trade-offs" = "content/trade_offs.md" },
       { Uncertainty = "content/uncertainty.md" },
     ]},
-    { "4 · Results" = "content/postprocessing.md" },
   ]},
   { Examples = [
-    { Overview = "content/examples/index.md" },
+    "content/examples/index.md",
     { "Basic Example" = "content/examples/basic_example.md" },
     { "Basic Cost Example" = "content/examples/basic_example_econ.md" },
     { "Uncertainty Example" = "content/examples/uncertainty_example.md" },
     { "Methanol & Pig Iron Case Study" = "content/examples/methanol_and_iron.md" },
   ]},
   { Theory = [
+    "content/theory/index.md",
     { "Why Time Matters" = "content/theory_why_time_matters.md" },
     { "How It Works" = "content/theory_how_it_works.md" },
     { "Scope and Limits" = "content/theory_scope_and_limits.md" },

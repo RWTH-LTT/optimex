@@ -18,16 +18,24 @@ flowchart LR
 
 | Step | What you do | Pages |
 |---|---|---|
-| **1 · [Choosing an Objective](choosing_objective/index.md)** | Decide what to minimize: an impact category (the default) or costs | [Minimizing Impacts](minimizing_impacts.md), [Minimizing Costs](minimizing_costs.md), [Trade-offs](trade_offs.md) |
-| **2 · [Product System Modeling](product_system/index.md)** | Set up the Brightway project: time-specific background databases, LCIA methods, and the foreground processes with temporal information | [Background Data](background_data.md), [Foreground Modeling](foreground_modeling.md), optionally [Cost Modeling](cost_modeling.md) |
+| **1 · [Objectives](choosing_objective/index.md)** | Decide what to minimize: an impact category (the default) or costs | [Minimizing Impacts](minimizing_impacts.md), [Minimizing Costs](minimizing_costs.md) |
+| **2 · [Product System](product_system/index.md)** | Set up the Brightway project: time-specific background databases, LCIA methods, and the foreground processes with temporal information | [Background Data](background_data.md), [Foreground Modeling](foreground_modeling.md), optionally [Cost Modeling](cost_modeling.md) |
 | **3 · [Optimization](optimization/index.md)** | Turn the product system into optimization inputs, add constraints, build and solve the model | [LCA Processing](lca_processing.md), [Constraints](constraints.md), [Solving](solving.md) |
 | **4 · [Results](postprocessing.md)** | Extract and plot installations, operation, impacts, and costs | [Postprocessing](postprocessing.md) |
+
+Beyond a single optimum, [Analyses](analyses/index.md) solve the same product
+system many times: [sweeps and scenarios](series.md),
+[trade-offs](trade_offs.md) between objectives, and the
+[uncertainty](uncertainty.md) of the data.
 
 The modeling in step 2 is where most of the work goes, and the LCA processing at
 the start of step 3 is where most of the computing time goes: building the
 inventories of large background databases takes a while. Once the optimization
 inputs exist, constraints, solving, and results are fast, so you can save the
-inputs and solve many variants from them.
+inputs and solve many variants from them: sweeps over a limit and scenario
+comparisons with [`optimizer.solve_series`](series.md),
+and Monte Carlo analyses of the uncertain data with
+[`optimex.uncertainty`](uncertainty.md).
 
 ---
 

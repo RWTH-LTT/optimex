@@ -8,10 +8,6 @@ tags:
 
 # Cost Modeling
 
-!!! cost "Only for the cost objective"
-    This page is only needed if you want to [minimize costs](minimizing_costs.md)
-    or report the costs of a pathway. Environmental studies can skip it.
-
 Costs build on the same product system as the impacts: no extra processes or
 exchanges are needed. What the cost objective adds is a **market price** for
 each background product the foreground buys directly. This page covers what
@@ -100,7 +96,7 @@ set_market_prices(
 - **Every database:** set a price in each background database. Prospective databases, for example from `premise`, carry no prices themselves, and a product priced in some databases but not in others is rejected when the prices are [read](#reading-prices).
 - **Matching:** rows identify nodes by name and location, optionally narrowed by reference product and unit. Codes are not used, because premise gives the same activity a different code in each scenario database.
 - **Options:** `price_data` can also be a pandas DataFrame; `name_col`, `location_col`, `product_col`, `unit_col`, `year_col`, and `price_col` map custom column names. `overwrite=False` keeps existing prices, `strict=False` turns unresolvable rows into warnings instead of errors, and `price_attribute` changes the node attribute the price is written to (default `"market_price"`).
-- **Uncertainty:** the Brightway uncertainty columns `uncertainty type`, `loc`, `scale`, `shape`, `minimum`, and `maximum` add a price distribution, sampled by [`optimex.uncertainty`](uncertainty.md). A missing `loc` is derived from the price.
+- **Uncertainty:** the Brightway uncertainty columns `uncertainty type`, `loc`, `scale`, `shape`, `minimum`, and `maximum` add a price distribution, e.g. `"uncertainty type": 2, "scale": 0.2` for a lognormal spread around the price. A missing `loc` is derived from the price. The optimization uses the prices themselves; a [Monte Carlo analysis](uncertainty.md#prices) samples the distributions.
 
 To find the products that need a price, list the background inputs of the foreground processes:
 
